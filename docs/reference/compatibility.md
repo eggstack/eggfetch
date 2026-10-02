@@ -5,13 +5,13 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` (2026-09-30, requalification
-after the post-freeze `bugs.md` corrective),
+`3fc58fbd99ecb496749b833ee7b27436fe3b412d` (2026-10-02, requalification
+after the M007 native transport failure classification),
 profiles in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`;
 the live ledger is `plans/httpx-parity-correction-status.md`). The prior
-`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` binding is historical (with
-`d4979f1d...`, `18c1f96c...`, `bc4800ee...` and `df2549f7...` retained as prior maintenance evidence);
+`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` binding is historical (with
+`5247ff0e...`, `d4979f1d...`, `18c1f96c...`, `bc4800ee...` and `df2549f7...` retained as prior maintenance evidence);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
 with no parity claim.
@@ -130,11 +130,11 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   lifecycle hardening, observability cleanup. Historical evidence only.
 - **Current qualification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
   qualified on executable SHA
-  `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` (2026-09-30,
-  requalification after the post-freeze `bugs.md` corrective, which fixed
-  one trace-callback precedence regression with no public compatibility
-  drift). The prior
-  `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` binding is historical; earlier
+  `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (2026-10-02,
+  requalification after the M007 native transport failure classification,
+  which added the additive `TransportFailureKind` error-domain API with no
+  public compatibility drift). The prior
+  `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` binding is historical; earlier
   maintenance freezes remain historical implementation evidence, not live
   Stage C bindings.
   Full status is in

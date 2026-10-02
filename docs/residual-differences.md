@@ -1,10 +1,11 @@
 # Residual Differences from HTTPX 0.28.1
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` (2026-09-30,
-requalification after the post-freeze `bugs.md` corrective, which fixed one
-trace-callback precedence regression with no public compatibility drift). The
-prior `5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa` and
+executable SHA `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (2026-10-02,
+requalification after the M007 native transport failure classification, which
+added the additive `TransportFailureKind` error-domain API with no public
+compatibility drift). The prior `bb6e07320f61736702e37f335fd1d48c7c3dfbaf`,
+`5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa`, and
 `d4979f1dac53f30f07900f54b01a88de06956c1c` bindings are historical; earlier
 maintenance freezes remain historical implementation evidence. The
 private-architecture campaign changed implementation ownership while

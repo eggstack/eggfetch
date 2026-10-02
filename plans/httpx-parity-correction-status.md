@@ -4,6 +4,59 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after M007 native transport failure classification (2026-10-02)
+
+Recorded designation: **Stage C qualified** for both documented facades, bound
+to executable freeze `3fc58fbd99ecb496749b833ee7b27436fe3b412d`. The preceding
+`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` binding is historical because
+executable inputs changed: `eggfetch-core` gains the additive
+`TransportFailureKind` error-domain API (`Error::transport_failure_kind()`;
+no `Error` variant/kind/Display change, no policy change) with deterministic
+dispatch/body fixtures, regenerated six-profile Rust API snapshots (additive
++12 lines each), and error-architecture documentation. The binding sits on the
+third of three implementation commits because the floating stable toolchain
+drifted 1.98.1 → 1.99.0 mid-qualification: the two `chore:` commits that follow
+the feature commit are test/lint-only (`assert_is_empty`, `mut_mut`,
+`unnecessary_lazy_evaluations`, and an MSRV-blocked `fetch_update` deprecation
+allow) plus one real validation-script fix
+(`scripts/check_rust_public_api.py` pinned the oracle toolchain for its
+snapshot half only, leaving `cargo-semver-checks 0.49.0` on an ambient stable
+that emitted an unreadable rustdoc JSON format). No engine, adapter, policy, or
+dependency behavior changed in either. The canonical qualification records
+(`docs/residual-differences.md`, `docs/reference/compatibility.md`,
+`docs/reference/compatibility-stage-decision.md`, both `compat/*/profile.toml`)
+are renewed together here and the previous SHA is demoted to historical.
+
+Qualification evidence on the M007 freeze:
+
+- Tier 1 (`./scripts/check.sh`) and Tier 2 (`./scripts/check.sh extended`)
+  green on `3fc58fbd99ecb496749b833ee7b27436fe3b412d`. The only skips are the
+  policy-defined optional ones: the Node JS surface (native `eggfetch.node`
+  artifact absent) and downstream fixtures (artifact manifest absent).
+- Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility suites: **1934
+  passed, 0 failed** (`EGGFETCH_COMPAT_REQUIRED=1`, `--strict-markers`).
+- Six-profile Rust public API oracle and semver cross-check passed on the
+  regenerated snapshots (additive delta only; `223 checks pass, 30 skip; no
+  semver update required` against planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`); Rust 1.89.0 MSRV matrix,
+  feature matrix (including `native-http1`/`standard-http1` lean profiles),
+  FFI, lifecycle, soak, lossless-merge, benchmark, and wheel build/smoke/
+  typing gates all green. No new residual difference.
+- Live security preflight (`./scripts/check_security.sh`): `advisories ok,
+  bans ok, licenses ok, sources ok`.
+- One Criterion micro-benchmark (`request_building/build_post_json_request`,
+  ~750 ns, 12% outliers) printed a +20% timing note inside the otherwise
+  green Tier 2 run; request-building code is untouched by M007 (the
+  classifier runs only on error paths). Recorded as timing noise, not a
+  product defect. No code was changed for it.
+- Full M007 evidence (category precedence and route/phase coverage table,
+  dispatch and `NativeResponseBody` fixture results, TLS/cancellation/
+  protocol/connect proofs, dialer/timeout/admission/`NetworkFailureKind`
+  non-regression, retained-walk rationale, redaction review) is in
+  `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`.
+  Publication/version selection is explicitly out of scope and routes through
+  the release-verification M003 standing intake.
+
 ## Recorded state — Stage C renewed after bugs.md corrective + docs hygiene requalification (2026-09-30)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

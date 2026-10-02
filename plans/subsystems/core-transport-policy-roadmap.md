@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active — M007 native transport failure classification is ready
+Status: active — M007 native transport failure classification is closed
 
 Long-term references:
 
@@ -257,7 +257,7 @@ and M001/M002 return to ready. Met.
 
 ### Milestone 7 — Native transport failure classification
 
-Class: capability / invariant. Status: ready.
+Class: capability / invariant. Status: closed.
 
 Accepted ADR:
 
@@ -266,6 +266,10 @@ Accepted ADR:
 Implementation plan:
 
 - `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md`
+
+Closure record:
+
+- `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`
 
 Objective: extend the existing error domain with one non-exhaustive,
 evidence-backed transport-failure classifier so native frame embedders can
@@ -309,11 +313,10 @@ exhaustive by construction; review must reject inline hop construction.
 
 ## 11. Completion definition
 
-M001–M006, M006C1, and M006C2 are closed. M007 is ready and reopens the
-subsystem only for the contained ADR-0006 error-classification capability.
-M007 closure requires Tier 2/public-API/exact-SHA evidence and then hands
-publication to release-verification. Live Stage C truth remains owned by the
-canonical qualification ledger rather than this roadmap.
+M001–M007, M006C1, and M006C2 are closed. M007 added the contained ADR-0006
+error-classification capability with Tier 2/public-API/exact-SHA evidence
+and handed publication to release-verification. Live Stage C truth remains
+owned by the canonical qualification ledger rather than this roadmap.
 
 ## 12. Milestone status
 
@@ -327,4 +330,4 @@ canonical qualification ledger rather than this roadmap.
 | M006 Windows TLS response completeness | closed | `plans/implementation/core-transport-policy/006-windows-tls-response-completeness-corrective.md` | `plans/closure/core-transport-policy/006-windows-tls-response-completeness.md` | Historical diagnosis; release evidence completed by M006C1 |
 | M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
 | M006C2 post-closure reconciliation/workflow retirement | closed | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | — |
-| M007 native transport failure classification | ready | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | — | Publication deferred to release-verification after closure |
+| M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md` | Publication deferred to release-verification M003 intake (exact-pin downstream adoption blocked until then) |

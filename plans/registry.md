@@ -40,7 +40,7 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Status | Roadmap | Current milestone | Dependencies or blockers |
 |---|---|---|---|---|
-| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M007 native transport failure classification ready | ADR-0006 accepted; publication follows only after implementation/qualification closure. |
+| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M007 native transport failure classification closed | ADR-0006 implemented and qualified; publication follows only through the release-verification M003 standing intake. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
 | TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
 | Release and verification | closed | `plans/subsystems/release-verification-roadmap.md` | M001/M004 coordinated 0.2.1 publication closed | No active release task; M003 remains standing proposed intake. |
@@ -50,7 +50,7 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
-| Core transport and request policy | M007 native transport failure classification | ready | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | ADR-0006 accepted; M005 closed. Publication/version selection is a later release-verification M003 intake. |
+| Core transport and request policy | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`. Publication/version selection is a later release-verification M003 intake; exact-pin downstream adoption remains blocked until then. |
 | Release and verification | M001 coordinated 0.2.x publication umbrella | closed | `plans/archive/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` |
 | Release and verification | M001A 0.2.1 release-candidate preparation | closed | `plans/implementation/release-verification/001a-0-2-1-release-candidate-preparation.md` | Closed on original candidate `41757569123c0b8038550b956d8b244ab55094a6`. |
 | Release and verification | M002 Python 3.15 wheel rehearsal | closed | `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` | Run `36223505399` green: 18 wheels + 1 sdist, `publish=false`. |
@@ -64,10 +64,10 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 `fe4d596ca8d91694fc887566acaa7875b918d25a`. Historical `v0.2.0` remains
 immutable; no active release task remains.
 
-**Core transport gate:** M007 is ready under accepted ADR-0006. It may change
+**Core transport gate:** M007 is closed under accepted ADR-0006. It changed
 the public Rust error-classification surface only within the contained
-Error-domain contract in its plan. Publication is not part of M007 and must
-return through release-verification after closure.
+Error-domain contract in its plan. Publication was not part of M007 and must
+return through the release-verification M003 standing intake.
 
 **Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta),
 H3 graduation (independent interop/drain/impairment/upstream evidence), Node
@@ -83,15 +83,17 @@ active work.
 
 ## Closure work and current control points
 
-Core transport M007 is the only new dependency-ready implementation milestone.
-It is an additive native Rust error-classification change governed by
-ADR-0006; exact-pin downstream adoption remains operationally blocked until a
-later publication.
+Core transport M007 is closed. It was an additive native Rust
+error-classification change governed by ADR-0006; exact-pin downstream
+adoption remains operationally blocked until a later publication through the
+release-verification M003 standing intake. No dependency-ready implementation
+milestone remains; the gated futures (HTTPX 1.0, H3 graduation, Node
+maturation) are unregistered and unaffected by M007.
 
 M001A and M002 are closed historical release evidence. M002 run
 `36223505399` proved the original candidate's 18-wheel + 1-sdist matrix with
 `publish=false`; M004 run `36253723990` renewed the rehearsal on the final
 candidate before publication. M004 publish run `36255517733` completed
 successfully. All M006-family work is also closed. Stage C remains bound to
-`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` unless executable or
+`3fc58fbd99ecb496749b833ee7b27436fe3b412d` unless executable or
 qualification inputs change.

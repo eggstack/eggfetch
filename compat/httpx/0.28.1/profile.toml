@@ -120,11 +120,17 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # `5247ff0e...` live binding (whose profile renewal was missed, leaving this
 # file at `d4979f1d...`) is historical; the immediately preceding live binding
 # is retained as `previous-qualification-sha`.
+# The M007 native transport failure classification then added the additive
+# `TransportFailureKind` error-domain API with dispatch/body fixtures and
+# regenerated API snapshots; this profile was renewed after Tier 1, extended
+# (incl. Rust 1.89.0 MSRV and API/semver oracles), security, and the full
+# pinned compatibility suites on the executable freeze below. The immediately
+# preceding `bb6e0732...` binding is historical only.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "bb6e07320f61736702e37f335fd1d48c7c3dfbaf"
-qualification-date = "2026-09-30"
-previous-qualification-sha = "5247ff0e01e309d9b408b8b4b4c90151ee5ce9fa"
+qualification-sha = "3fc58fbd99ecb496749b833ee7b27436fe3b412d"
+qualification-date = "2026-10-02"
+previous-qualification-sha = "bb6e07320f61736702e37f335fd1d48c7c3dfbaf"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 historical-qualification-sha = "cc90f5ed561bbe10d4c26accc54ed3b916518f98, d034a1005857a7f403222dda4bda5f2f204a44fe, d24101be6ed7be64463813750da5b4043d9905ec, 5c7899fefb6df087dfa1b3578fbef9ba64f87742, 9ffa6cd85848fd16a424b65f73254351911777c4, c44d4f25ffebc1a792335163ae4bc106076b3963"
 reference = "httpx==0.28.1"
