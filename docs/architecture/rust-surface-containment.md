@@ -31,6 +31,14 @@ record, not a proposal to hide or redesign existing public items.
   neighboring public mutators.
 - `eggfetch_core::transport::dialer`: the caller-owned raw-stream seam and
   `Dialer`/`SocketOption` exposure remain feature-gated as before.
+- `eggfetch_core::transport::datagram` (under `http3`): the caller-owned
+  fixed-target datagram seam (ADR-0007) is the one authorized addition beside
+  `dialer`. Its public surface is exactly `DatagramDialer`, `DatagramRoute`,
+  their three boxed-future aliases, the `Arc<T>` blanket impl, and
+  `ClientBuilder::datagram_dialer`. The Quinn bridge is the only private
+  implementation and gains no public re-export: no socket type, no carrier,
+  no per-generation handle, and no second endpoint accessor. No new trait may
+  be added beside these without a separate versioned API plan.
 - `Pool`, `PoolConfig`, `PoolMetrics`, and `PoolGuard`: existing public types
   and lifecycle/metrics observations remain frozen; route/cache refactors do
   not introduce a second pool or expose its private keys.

@@ -175,6 +175,40 @@ routing-only, never policy:
 - Full policy lives in `core-tls-proxy-protocols.md` (§ Alt-Svc
   Discovery, Suppression, Safe Fallback).
 
+### Malicious Datagram Route (HTTP/3 caller-owned routing, experimental)
+
+A caller-supplied `DatagramDialer` is trusted infrastructure, not an
+attacker boundary, but a buggy or compromised provider must not be able to
+corrupt the QUIC connection it carries. eggfetch mitigates this by keeping the
+seam as narrow as the contract allows:
+
+- **Single fixed peer.** The bridge refuses any transmit whose destination is
+  not the route's reported peer, so a provider cannot redirect a QUIC
+  connection. Providers are required to reject datagrams from an unverified
+  source, which is what stops an off-path host injecting packets.
+- **Eggfetch keeps the crypto.** The bridge builds the QUIC/TLS client
+  configuration. A provider supplies datagrams and never sees the opening
+  handshake, certificate material, or QUIC frames, so it cannot downgrade
+  authentication. SNI and certificate validation stay bound to the logical
+  origin even when the physical peer is a relay.
+- **No silent corruption.** Receive queues are hard-bounded and a saturated
+  receive pauses the route rather than dropping packets, so a lossy provider
+  degrades to QUIC retransmission instead of injecting or discarding
+  authenticated packets.
+- **No silent downgrade.** Configuring a dialer means no direct QUIC endpoint
+  exists, so a failing or refusing route cannot fall back to a direct UDP
+  socket the caller did not choose.
+- **No diagnostic leakage.** The bridge never renders a `DatagramRoute`;
+  Quinn-facing I/O errors use fixed text, and provider messages are not
+  re-exposed. Classification uses the typed `DialErrorKind`, never parsed text.
+- **Bounded termination.** A terminal route I/O error closes the QUIC
+  connection with a transport error, so a dead provider cannot park requests
+  until an idle timeout.
+
+The caller owns the provider's own trust decisions; eggfetch's guarantee is
+that the provider cannot weaken the QUIC connection's authentication or
+identity.
+
 ### SSE / WebSocket Abuse (httpx2 facade)
 
 A malicious server can send unbounded SSE events or WebSocket frames to

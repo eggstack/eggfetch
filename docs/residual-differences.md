@@ -145,6 +145,31 @@ residuals:
 - Native `max_in_flight_requests*` (logical permits) preferred;
   `max_connections*` are pre-1.0 aliases. Facade `Limits` naming unchanged.
 
+## Caller-owned HTTP/3 datagram routing (native-only)
+
+- `ClientBuilder::datagram_dialer` installs a `DatagramDialer` so every HTTP/3
+  generation (explicit `Http3Only` or Alt-Svc discovered) is established over
+  one caller-owned fixed-target `DatagramRoute` instead of a direct QUIC
+  endpoint. HTTPX has no equivalent concept, so there is no facade counterpart
+  and no parity claim either way.
+- Rust-only: the Python, FFI, and Node adapters expose nothing here, so no
+  generated API manifest or typing surface changes.
+- Configuring a dialer means Eggfetch creates no direct QUIC socket, so a
+  failing or refusing route cannot silently downgrade. That is a deliberate
+  behavioral difference from a default H3 client and is asserted directly.
+- Eggfetch retains the whole QUIC/TLS stack: the seam carries datagrams only,
+  and SNI and certificate validation stay bound to the logical origin even when
+  the route's physical peer is a relay. No MASQUE/CONNECT-UDP protocol is
+  implemented — a future provider may implement this generic contract without
+  moving MASQUE policy into eggfetch.
+- `H3RouteKind` still describes discovery (`Explicit`/`AltSvc`), not physical
+  routing, so no public enum changed. Route identity is observable only through
+  `H3ConnectionDiagnostic::remote_address`, which reports the physical peer as
+  path metadata.
+- Detailed design, invariants, and evidence: `core-tls-proxy-protocols.md` §
+  "Caller-owned datagram routing (experimental)", `threat-model.md` §
+  "Malicious Datagram Route", and ADR-0007.
+
 ## Historical closures and exclusions
 
 Corrective 04 closed the prior H2-only TLS, cleartext prior-knowledge, and

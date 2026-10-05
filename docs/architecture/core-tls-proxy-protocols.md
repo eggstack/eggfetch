@@ -567,14 +567,86 @@ authorize callers to connect to arbitrary addresses.
 ### Feature Gating
 
 Behind the `http3` Cargo feature. Experimental — the label is retained
-while the QUIC/h3 ecosystem matures (no 0-RTT, WebTransport, datagrams,
-connection migration, MASQUE, or Happy Eyeballs in this milestone).
-Authenticated Alt-Svc discovery, broken-route suppression, safe fallback,
-and draining are implemented; see below.
+while the QUIC/h3 ecosystem matures (no 0-RTT, WebTransport, QUIC datagrams,
+connection migration, or Happy Eyeballs in this milestone). MASQUE is
+reachable only as far as the caller-owned datagram seam below, which carries
+no MASQUE protocol of its own. Authenticated Alt-Svc discovery,
+broken-route suppression, safe fallback, draining, and caller-owned datagram
+routing are implemented; see below.
 
 ### Transport
 
 Uses `quinn` for QUIC transport and `h3` for the HTTP/3 protocol layer. QUIC mandates TLS 1.3; 0-RTT is disabled.
+
+Every generation's QUIC endpoint comes from one of two places: the
+connector's single shared direct endpoint (default), or a *route-owned*
+abstract endpoint built over a caller-owned datagram route (see
+[Caller-owned datagram routing](#caller-owned-datagram-routing-experimental)
+below). Configuring a datagram dialer means **no direct endpoint is created
+at all**.
+
+### Caller-owned datagram routing (experimental)
+
+`ClientBuilder::datagram_dialer` installs a `DatagramDialer`. Every HTTP/3
+connection generation — explicit `Http3Only` or Alt-Svc discovered — is then
+established over one fixed-target `DatagramRoute` the dialer returns. TCP
+requests are unaffected; `ClientBuilder::dialer` still governs H1/H2.
+
+This is the first and only step toward QUIC-over-a-proxy (ADR-0007). The
+contract is intentionally narrow and lives entirely in
+`transport/datagram.rs`:
+
+- `DatagramDialer::connect(DialTarget) -> Result<Arc<dyn DatagramRoute>, DialError>`.
+  The `DialTarget` carries the original **logical** origin host/port, never a
+  physical path. Choosing a carrier — including choosing a relay — is the
+  provider's job.
+- `DatagramRoute` supplies one datagram `send`, one `recv`, and the fixed
+  `local_addr`/`peer_addr`. The peer is fixed by construction; the bridge
+  refuses any other transmit destination, and a route that forwarded datagrams
+  from an unverified source would be injecting packets into the connection, so
+  providers must reject those.
+- Failures are typed `DialError`/`DialErrorKind`. Nothing is inferred from
+  `Display` text anywhere in the H3 stack.
+
+Eggfetch still owns the whole QUIC stack. The bridge builds the QUIC/TLS client
+configuration, so a caller supplies a datagram carrier and can never take over
+authentication. SNI and certificate validation always use the logical origin,
+even when the route's physical peer is a relay.
+
+**Bridge invariants** (crate-private `RouteUdpSocket`):
+
+| Property | How |
+|---|---|
+| One datagram per `send`/`recv` | `mpsc` channels used directly as bounded queues; `try_send`/`try_recv` are the synchronous halves Quinn needs, `recv`/`reserve` the awaiting halves the workers need |
+| Constant memory per generation | Both queues are hard-bounded at 64 datagrams |
+| No silent packet loss | A saturated send surfaces as `WouldBlock`; a saturated receive **pauses the route receive loop** until capacity exists, so a slow carrier back-pressures QUIC |
+| 1200-byte ceiling, no PMTUD | `max_udp_payload_size` is pinned to `ROUTE_MTU` (1200) and `may_fragment()` returns `true`, which clears Quinn's `allow_mtud` |
+| No ECN claims | Receive metadata reports no ECN codepoint and no destination IP, because neither is observable through this contract |
+| Terminal I/O ends the generation promptly | The bridge reports the error to Quinn *and* closes the QUIC connection with a transport error, so a request never parks until the idle timeout |
+| No leaked workers | Dropping the socket aborts both worker tasks; workers hold only the bridge's shared state, never the socket, so there is no handle cycle |
+| No provider text escapes | The bridge never formats a `DatagramRoute`; Quinn-facing I/O errors use a fixed string, and the typed `DialErrorKind` is what reaches the connector |
+
+**Error mapping.** Route failures are reclassified from the caller's typed
+evidence, never from text: `Connection` becomes connect-class `H3Connect`
+(so `Auto` fallback and Alt-Svc suppression stay safe pre-commit), `Timeout`
+becomes `Timeout { phase: Connect }`, and `Authentication`/`Rejected`/`Other`
+are preserved verbatim as `Error::CustomTransport` because Eggfetch has no
+evidence of its own about why a provider refused.
+
+**Not in scope.** Concrete carriers. A MASQUE CONNECT-UDP datagram stream, a
+process-local UDP socket, and an inter-process channel are all follow-on work.
+The library owns none of them; the test harness supplies a loopback UDP carrier
+because a seam with no carrier cannot be exercised end to end.
+
+**Diagnostics.** `H3ConnectionDiagnostic::remote_address` reports the route's
+physical peer as path metadata for a routed generation, while SNI, `Host`,
+cookies, auth, and certificate validation stay bound to the logical origin.
+`H3RouteKind` continues to describe *discovery* (`Explicit` vs `AltSvc`), not
+physical routing, so it is unchanged.
+
+Evidence: `crates/eggfetch-core/tests/h3_datagram_route.rs` (loopback
+fixtures only) and the crate-private `transport::datagram` unit tests. Compile
+coverage lives in `tests/public_api_contracts.rs`.
 
 ### Version Policy
 
@@ -728,7 +800,7 @@ is retryable; `H3ConnectionClosed` / `H3Stream` / `H3Protocol` are not.
 
 | Error | Meaning |
 |-------|---------|
-| `H3Connect` | QUIC connection failed (retryable for replayable requests) |
+| `H3Connect` | QUIC connection failed, including caller-owned route establishment and route I/O during the handshake (retryable for replayable requests) |
 | `H3ConnectionClosed` | Peer closed the connection (not retried) |
 | `H3Stream` | Stream error (not retried) |
 | `H3Protocol` | HTTP/3 protocol error (not retried) |
@@ -740,6 +812,13 @@ precedence, stalled-body read timeout, shared concurrent init, per-host
 pool gating, failure non-poisoning, distinct-origin stabilization,
 fail/reconnect cycles, partial-body drop reuse, client-drop release, and
 prompt cancellation with continued usability.
+
+`crates/eggfetch-core/tests/h3_datagram_route.rs` (loopback only): explicit H3
+and Alt-Svc H3 over a caller route, generation reuse, refused/rejected/
+unauthenticated route classification, connect-budget bounding, undersized
+carrier refusal at establishment, `Http3Only` strictness, Alt-Svc suppression
+of a repeated pre-commit route failure, per-generation eviction, client-drop
+release, back-pressure under a slow carrier, and provider `Debug` redaction.
 
 `crates/eggfetch-core/tests/h3_alt_svc_discovery.rs` (loopback only): explicit strictness,
 Auto discovery (learn-then-H3), suppression with fast skip and new-generation

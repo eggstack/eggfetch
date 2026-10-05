@@ -108,6 +108,11 @@ pub use service::NativeHttpService;
 pub use timeout::{Timeout, TimeoutBuilder, TimeoutPhase};
 #[cfg(feature = "tls-rustls")]
 pub use tls::{ClientIdentity, TlsConfig, TlsConfigBuilder, TlsVersion, TrustStore};
+/// Caller-owned fixed-target datagram routing for experimental HTTP/3.
+#[cfg(feature = "http3")]
+pub use transport::datagram::{
+    DatagramDialFuture, DatagramDialer, DatagramRecvFuture, DatagramRoute, DatagramSendFuture,
+};
 #[cfg(feature = "advanced-routing")]
 pub use transport::dialer::{DialError, DialErrorKind, DialFuture, DialStream, DialTarget, Dialer};
 /// Socket option for direct TCP connections (advanced-routing only).

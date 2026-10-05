@@ -128,6 +128,7 @@ pub fn eggfetch_core::client::ClientBuilder::automatic_decompression(self, bool)
 pub fn eggfetch_core::client::ClientBuilder::build(self) -> eggfetch_core::client::Client
 pub fn eggfetch_core::client::ClientBuilder::cookie_jar(self, eggfetch_core::cookie::CookieJar) -> Self
 pub fn eggfetch_core::client::ClientBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::datagram_dialer<D>(self, D) -> Self where D: eggfetch_core::transport::datagram::DatagramDialer
 pub fn eggfetch_core::client::ClientBuilder::default_header(self, &str, &str) -> eggfetch_core::error::Result<Self>
 pub fn eggfetch_core::client::ClientBuilder::default_headers(self, eggfetch_core::headers::Headers) -> Self
 pub fn eggfetch_core::client::ClientBuilder::dialer<D>(self, D) -> Self where D: eggfetch_core::transport::dialer::Dialer
@@ -1064,6 +1065,19 @@ pub const eggfetch_core::transport::alt_svc::ALTSVC_MAX_HEADER_BYTES: usize
 pub const eggfetch_core::transport::alt_svc::SUPPRESSION_BASE: core::time::Duration
 pub const eggfetch_core::transport::alt_svc::SUPPRESSION_MAX: core::time::Duration
 pub const eggfetch_core::transport::alt_svc::SUPPRESSION_MAX_ENTRIES: usize
+pub mod eggfetch_core::transport::datagram
+pub trait eggfetch_core::transport::datagram::DatagramDialer: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::transport::datagram::DatagramDialer::connect(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::datagram::DatagramDialFuture<'_>
+impl<T> eggfetch_core::transport::datagram::DatagramDialer for alloc::sync::Arc<T> where T: eggfetch_core::transport::datagram::DatagramDialer + ?core::marker::Sized
+pub fn alloc::sync::Arc<T>::connect(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::datagram::DatagramDialFuture<'_>
+pub trait eggfetch_core::transport::datagram::DatagramRoute: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::transport::datagram::DatagramRoute::local_addr(&self) -> core::net::socket_addr::SocketAddr
+pub fn eggfetch_core::transport::datagram::DatagramRoute::peer_addr(&self) -> core::net::socket_addr::SocketAddr
+pub fn eggfetch_core::transport::datagram::DatagramRoute::recv<'a>(&'a self, &'a mut [u8]) -> eggfetch_core::transport::datagram::DatagramRecvFuture<'a>
+pub fn eggfetch_core::transport::datagram::DatagramRoute::send<'a>(&'a self, &'a [u8]) -> eggfetch_core::transport::datagram::DatagramSendFuture<'a>
+pub type eggfetch_core::transport::datagram::DatagramDialFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<alloc::sync::Arc<dyn eggfetch_core::transport::datagram::DatagramRoute>, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::transport::datagram::DatagramRecvFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<usize, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::transport::datagram::DatagramSendFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
 pub mod eggfetch_core::transport::dialer
 pub enum eggfetch_core::transport::dialer::DialErrorKind
 pub eggfetch_core::transport::dialer::DialErrorKind::Authentication
@@ -1623,6 +1637,7 @@ pub fn eggfetch_core::client::ClientBuilder::automatic_decompression(self, bool)
 pub fn eggfetch_core::client::ClientBuilder::build(self) -> eggfetch_core::client::Client
 pub fn eggfetch_core::client::ClientBuilder::cookie_jar(self, eggfetch_core::cookie::CookieJar) -> Self
 pub fn eggfetch_core::client::ClientBuilder::danger_accept_invalid_certs(self, bool) -> Self
+pub fn eggfetch_core::client::ClientBuilder::datagram_dialer<D>(self, D) -> Self where D: eggfetch_core::transport::datagram::DatagramDialer
 pub fn eggfetch_core::client::ClientBuilder::default_header(self, &str, &str) -> eggfetch_core::error::Result<Self>
 pub fn eggfetch_core::client::ClientBuilder::default_headers(self, eggfetch_core::headers::Headers) -> Self
 pub fn eggfetch_core::client::ClientBuilder::dialer<D>(self, D) -> Self where D: eggfetch_core::transport::dialer::Dialer
@@ -2268,6 +2283,15 @@ pub fn eggfetch_core::network_stream::UpgradedStream::poll_flush(core::pin::Pin<
 pub fn eggfetch_core::network_stream::UpgradedStream::poll_shutdown(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>) -> core::task::poll::Poll<std::io::error::Result<()>>
 pub fn eggfetch_core::network_stream::UpgradedStream::poll_write(core::pin::Pin<&mut Self>, &mut core::task::wake::Context<'_>, &[u8]) -> core::task::poll::Poll<std::io::error::Result<usize>>
 pub const eggfetch_core::SENSITIVE_HEADERS: &[&str]
+pub trait eggfetch_core::DatagramDialer: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::DatagramDialer::connect(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::datagram::DatagramDialFuture<'_>
+impl<T> eggfetch_core::transport::datagram::DatagramDialer for alloc::sync::Arc<T> where T: eggfetch_core::transport::datagram::DatagramDialer + ?core::marker::Sized
+pub fn alloc::sync::Arc<T>::connect(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::datagram::DatagramDialFuture<'_>
+pub trait eggfetch_core::DatagramRoute: core::marker::Send + core::marker::Sync + 'static
+pub fn eggfetch_core::DatagramRoute::local_addr(&self) -> core::net::socket_addr::SocketAddr
+pub fn eggfetch_core::DatagramRoute::peer_addr(&self) -> core::net::socket_addr::SocketAddr
+pub fn eggfetch_core::DatagramRoute::recv<'a>(&'a self, &'a mut [u8]) -> eggfetch_core::transport::datagram::DatagramRecvFuture<'a>
+pub fn eggfetch_core::DatagramRoute::send<'a>(&'a self, &'a [u8]) -> eggfetch_core::transport::datagram::DatagramSendFuture<'a>
 pub trait eggfetch_core::Dialer: core::marker::Send + core::marker::Sync + 'static
 pub fn eggfetch_core::Dialer::dial(&self, eggfetch_core::transport::dialer::DialTarget) -> eggfetch_core::transport::dialer::DialFuture<'_>
 impl<T> eggfetch_core::transport::dialer::Dialer for alloc::sync::Arc<T> where T: eggfetch_core::transport::dialer::Dialer + ?core::marker::Sized
@@ -2281,6 +2305,9 @@ pub fn eggfetch_core::redact_headers(&http::header::map::HeaderMap) -> http::hea
 pub fn eggfetch_core::redact_url(&url::Url) -> alloc::string::String
 pub fn eggfetch_core::redact_url_string(&str) -> alloc::string::String
 pub type eggfetch_core::BoxBytesStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = eggfetch_core::error::Result<bytes::bytes::Bytes>> + core::marker::Send)>>
+pub type eggfetch_core::DatagramDialFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<alloc::sync::Arc<dyn eggfetch_core::transport::datagram::DatagramRoute>, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::DatagramRecvFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<usize, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
+pub type eggfetch_core::DatagramSendFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<(), eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
 pub type eggfetch_core::DialFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<eggfetch_core::transport::dialer::DialStream, eggfetch_core::transport::dialer::DialError>> + core::marker::Send + 'a)>>
 pub type eggfetch_core::DialStream = alloc::boxed::Box<dyn eggfetch_core::transport::dialer::DialStreamTrait>
 pub type eggfetch_core::Result<T> = core::result::Result<T, eggfetch_core::error::Error>

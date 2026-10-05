@@ -514,6 +514,9 @@ pub struct ClientBuilder {
     /// Unix domain socket path. When set, all requests use UDS transport.
     #[cfg(feature = "advanced-routing")]
     uds_path: Option<String>,
+    /// Caller-owned datagram dialer for experimental HTTP/3 routing.
+    #[cfg(feature = "http3")]
+    datagram_dialer: Option<Arc<dyn crate::transport::datagram::DatagramDialer>>,
 }
 
 impl Default for ClientBuilder {
@@ -558,6 +561,8 @@ impl ClientBuilder {
             direct_connector_config: None,
             #[cfg(feature = "advanced-routing")]
             uds_path: None,
+            #[cfg(feature = "http3")]
+            datagram_dialer: None,
         }
     }
 
@@ -951,6 +956,36 @@ impl ClientBuilder {
         self
     }
 
+    /// Install a caller-owned datagram dialer for experimental HTTP/3 routing.
+    ///
+    /// Every HTTP/3 connection generation, whether it comes from an explicit
+    /// `Http3Only` request or from an Alt-Svc alternative, is established over
+    /// one fixed-target [`DatagramRoute`](crate::DatagramRoute) returned by this
+    /// dialer. TCP requests are unaffected: [`Self::dialer`] still governs
+    /// HTTP/1.1 and HTTP/2.
+    ///
+    /// Configuring a dialer means Eggfetch creates **no** direct QUIC UDP
+    /// socket. A route that fails or refuses can therefore never fall back to
+    /// silently opening one; the request fails with the dialer's typed
+    /// [`DialErrorKind`](crate::DialErrorKind) instead.
+    ///
+    /// Eggfetch still owns the whole QUIC stack. The dialer supplies a datagram
+    /// carrier only: no handshake, no certificate material, and no QUIC frames
+    /// cross this boundary. SNI and certificate validation always use the
+    /// logical origin, even when the route's physical peer is a relay.
+    ///
+    /// Requires `http3` plus `advanced-routing`, which `http3` always enables.
+    /// Lean profiles without `http3` omit this hook entirely.
+    #[cfg(feature = "http3")]
+    #[must_use]
+    pub fn datagram_dialer<D>(mut self, dialer: D) -> Self
+    where
+        D: crate::transport::datagram::DatagramDialer,
+    {
+        self.datagram_dialer = Some(Arc::new(dialer));
+        self
+    }
+
     /// Install a shared caller-scoped live physical-connection policy.
     ///
     /// This controls established Hyper connections, including idle pooled
@@ -1183,10 +1218,11 @@ impl ClientBuilder {
         };
         #[cfg(feature = "http3")]
         let h3_connector = if enabler.use_http3() {
-            crate::transport::http3::H3Connector::with_metrics(
+            crate::transport::http3::H3Connector::with_datagram_route(
                 self.tls_config.clone(),
                 &pool_config,
                 Some(transport_metrics.clone()),
+                self.datagram_dialer.clone(),
             )
             .ok()
         } else {

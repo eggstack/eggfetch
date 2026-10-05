@@ -92,6 +92,8 @@ use crate::error::{Error, Result};
 use crate::pool::PoolConfig;
 use crate::response::Response;
 use crate::timeout::TimeoutPhase;
+use crate::transport::datagram::{DatagramDialer, RouteUdpSocket, ROUTE_IO_ERROR_CODE, ROUTE_MTU};
+use crate::transport::dialer::{DialError, DialErrorKind};
 use crate::transport::metrics::{H3CloseKind, H3CloseSummary, H3ConnectionDiagnostic, H3RouteKind};
 
 /// Upper bound on cached H3 origin entries.
@@ -147,6 +149,16 @@ struct CachedH3Sender {
     /// Alt-Svc generation this session was built for (`None` = explicit
     /// `Http3Only` direct route, no discovery).
     alt_generation: Option<u64>,
+    /// Route-owned QUIC endpoint for a caller-routed generation.
+    ///
+    /// Held purely for ownership: dropping it releases the abstract endpoint,
+    /// which releases the caller's [`DatagramRoute`] and aborts the two bridge
+    /// worker tasks. `None` for direct generations, which share the connector's
+    /// single long-lived endpoint.
+    _route_endpoint: Option<quinn::Endpoint>,
+    /// Bridge handle for a caller-routed generation, used to read typed route
+    /// failure evidence after the QUIC layer has already reported a symptom.
+    route_socket: Option<Arc<RouteUdpSocket>>,
 }
 
 /// Explicit H3 dispatch failure.
@@ -286,7 +298,12 @@ fn h3_cache_get_or_insert_default(cache: &H3SenderCache, key: String) -> CachedH
 
 #[derive(Clone)]
 pub(crate) struct H3Connector {
-    endpoint: quinn::Endpoint,
+    /// Shared direct QUIC endpoint. `None` when a caller-owned datagram dialer
+    /// is configured: routed generations never share a direct endpoint and
+    /// configuring a dialer must not open a direct UDP socket at all.
+    endpoint: Option<quinn::Endpoint>,
+    /// Caller-owned datagram dialer, when configured.
+    datagram_dialer: Option<Arc<dyn DatagramDialer>>,
     tls_config: Option<crate::tls::TlsConfig>,
     sender_cache: H3SenderCache,
     /// Effective QUIC idle timeout derived from pool keepalive configuration.
@@ -393,6 +410,81 @@ fn h3_close_label(error: &quinn::ConnectionError, graceful: bool) -> String {
     }
 }
 
+/// Closes the QUIC connection because its caller-owned route terminated.
+///
+/// `h3_quinn::Connection` takes ownership of the `quinn::Connection`, so the
+/// driver task cannot reach it directly; a clone taken before the h3 session
+/// was built can.
+fn route_close(conn: Option<&quinn::Connection>) {
+    if let Some(conn) = conn {
+        conn.close(
+            quinn::VarInt::from_u32(ROUTE_IO_ERROR_CODE),
+            b"datagram route",
+        );
+    }
+}
+
+/// Builds the abstract Quinn endpoint that owns one caller-routed generation.
+///
+/// `max_udp_payload_size` is pinned to [`ROUTE_MTU`] so the stack never emits a
+/// datagram larger than the IPv6 minimum and never attempts path-MTU discovery
+/// over a carrier whose real MTU cannot be measured from here. The caller's
+/// runtime requirement is resolved through Quinn's own runtime lookup, so the
+/// timer half stays on the tokio runtime the request already runs on.
+fn build_route_endpoint(socket: Arc<RouteUdpSocket>) -> std::io::Result<quinn::Endpoint> {
+    let runtime = quinn::default_runtime().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "no QUIC runtime available for datagram route",
+        )
+    })?;
+    let mut endpoint_config = quinn::EndpointConfig::default();
+    // `max_udp_payload_size` is fallible because it validates the range; a
+    // fixed 1200 is always in range, so an error here would be a Quinn
+    // contract change rather than a runtime condition.
+    endpoint_config
+        .max_udp_payload_size(u16::try_from(ROUTE_MTU).unwrap_or(u16::MAX))
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+    quinn::Endpoint::new_with_abstract_socket(endpoint_config, None, socket, runtime)
+}
+
+/// Maps a typed caller dial error onto Eggfetch's error taxonomy.
+///
+/// The mapping preserves the caller's broad kind instead of collapsing it:
+/// connect-class for transport failures so `Auto` fallback and Alt-Svc
+/// suppression remain safe pre-commit, timeout class for provider-observed
+/// timeouts, and the verbatim typed error for explicit rejection and
+/// authentication so that evidence is never discarded.
+fn route_dial_error(failure: DialError) -> Error {
+    match failure.kind() {
+        DialErrorKind::Connection => {
+            Error::H3Connect(format!("QUIC handshake failed: {}", failure.message()))
+        }
+        DialErrorKind::Timeout => Error::Timeout {
+            phase: TimeoutPhase::Connect,
+            elapsed: Duration::ZERO,
+        },
+        DialErrorKind::Authentication | DialErrorKind::Rejected | DialErrorKind::Other => {
+            Error::CustomTransport(Arc::new(failure))
+        }
+    }
+}
+
+/// The route-owned resource chain for one caller-routed generation.
+///
+/// Kept as a single value so the whole chain is created once, handed to the
+/// h3 driver exactly once, and released as one unit when the generation is
+/// evicted, terminates, or is dropped.
+struct RouteOwnedChain {
+    /// Bounded Quinn bridge over the caller's route.
+    socket: Arc<RouteUdpSocket>,
+    /// Abstract QUIC endpoint. Held for ownership: dropping it releases the
+    /// bridge, the caller's [`crate::DatagramRoute`], and the two workers.
+    endpoint: quinn::Endpoint,
+    /// Terminal-state watcher handed to the h3 driver task.
+    watcher: tokio::sync::watch::Receiver<bool>,
+}
+
 impl H3Connector {
     /// Create a new H3 connector.
     ///
@@ -416,14 +508,36 @@ impl H3Connector {
         pool_config: &PoolConfig,
         metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
     ) -> Result<Self> {
-        let bind_addr = "0.0.0.0:0"
-            .parse()
-            .map_err(|e| Error::Connect(format!("invalid QUIC bind address: {e}")))?;
-        let endpoint = quinn::Endpoint::client(bind_addr)
-            .map_err(|e| Error::Connect(format!("failed to create QUIC endpoint: {e}")))?;
+        Self::with_datagram_route(tls_config, pool_config, metrics, None)
+    }
+
+    /// Create a new H3 connector, optionally routing every QUIC generation
+    /// through a caller-owned datagram dialer.
+    ///
+    /// When `datagram_dialer` is `Some`, no direct QUIC endpoint is created at
+    /// all. That is the whole point of the seam: a route that fails or refuses
+    /// must never be able to fall back to silently opening a direct UDP socket.
+    pub(crate) fn with_datagram_route(
+        tls_config: Option<crate::tls::TlsConfig>,
+        pool_config: &PoolConfig,
+        metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
+        datagram_dialer: Option<Arc<dyn DatagramDialer>>,
+    ) -> Result<Self> {
+        let endpoint = if datagram_dialer.is_some() {
+            None
+        } else {
+            let bind_addr = "0.0.0.0:0"
+                .parse()
+                .map_err(|e| Error::Connect(format!("invalid QUIC bind address: {e}")))?;
+            Some(
+                quinn::Endpoint::client(bind_addr)
+                    .map_err(|e| Error::Connect(format!("failed to create QUIC endpoint: {e}")))?,
+            )
+        };
 
         Ok(Self {
             endpoint,
+            datagram_dialer,
             tls_config,
             sender_cache: Arc::new(RwLock::new(HashMap::new())),
             quinn_idle_timeout: derive_quinn_idle_timeout(pool_config),
@@ -566,6 +680,7 @@ impl H3Connector {
     /// leaking sensitive detail beyond the transport error itself.
     async fn connect_with_fallback(
         &self,
+        endpoint: &quinn::Endpoint,
         addrs: &[SocketAddr],
         host: &str,
         deadline: Option<std::time::Instant>,
@@ -588,7 +703,10 @@ impl H3Connector {
                     elapsed: started.elapsed(),
                 }));
             }
-            match self.connect_single(*addr, host, remaining, started).await {
+            match self
+                .connect_single(endpoint, *addr, host, remaining, started)
+                .await
+            {
                 Ok(conn) => return Ok(conn),
                 Err(e) => {
                     // Per-attempt timeouts fall through to the next address
@@ -605,6 +723,7 @@ impl H3Connector {
     /// Establish a single QUIC connection under the remaining budget.
     async fn connect_single(
         &self,
+        endpoint: &quinn::Endpoint,
         addr: SocketAddr,
         host: &str,
         remaining: Option<Duration>,
@@ -615,8 +734,7 @@ impl H3Connector {
             self.quinn_idle_timeout,
             self.max_bidi_streams,
         )?;
-        let connecting = self
-            .endpoint
+        let connecting = endpoint
             .connect_with(quic_config, addr, host)
             .map_err(|e| Error::Connect(format!("QUIC connect: {e}")))?;
         let conn = match remaining {
@@ -634,6 +752,90 @@ impl H3Connector {
         Ok(conn)
     }
 
+    /// Establish a complete caller-routed QUIC + h3 generation.
+    ///
+    /// The whole route-owned resource chain is created here and nowhere else:
+    /// the caller's [`DatagramRoute`], the bounded Quinn bridge, the abstract
+    /// endpoint, and the h3 driver. Everything is returned inside the
+    /// [`CachedH3Sender`] so eviction, terminal close, and drop all release the
+    /// same chain together.
+    ///
+    /// `sni_host` is always the logical origin, never the route's physical
+    /// peer, so SNI and certificate validation stay bound to the origin even
+    /// when the route is a relay.
+    async fn establish_routed_generation(
+        &self,
+        target: crate::transport::dialer::DialTarget,
+        sni_host: &str,
+        deadline: Option<std::time::Instant>,
+        started: std::time::Instant,
+        alt_generation: Option<u64>,
+        route_kind: H3RouteKind,
+    ) -> Result<CachedH3Sender> {
+        let dialer = self
+            .datagram_dialer
+            .as_ref()
+            .ok_or_else(|| Error::Connect("no datagram dialer configured".into()))?;
+
+        // Route establishment runs inside the request's own remaining connect
+        // budget. A route that never completes is bounded by the caller rather
+        // than becoming a hang, and the total deadline is never restarted.
+        let route = match remaining_connect_budget(deadline) {
+            Some(remaining) => tokio::time::timeout(remaining, dialer.connect(target))
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Connect,
+                    elapsed: started.elapsed(),
+                })?,
+            None => dialer.connect(target).await,
+        }
+        .map_err(route_dial_error)?;
+
+        let socket = RouteUdpSocket::from_route(route);
+        let watcher = socket.failure_watcher();
+        let endpoint = build_route_endpoint(Arc::clone(&socket))
+            .map_err(|e| Error::Connect(format!("datagram route endpoint: {e}")))?;
+        let quic_config = build_quic_client_config(
+            self.tls_config.as_ref(),
+            self.quinn_idle_timeout,
+            self.max_bidi_streams,
+        )?;
+        // Quinn always addresses the route's own peer; the bridge refuses any
+        // other destination, so the connection cannot be redirected.
+        let peer = socket.peer_addr();
+        let connecting = endpoint
+            .connect_with(quic_config, peer, sni_host)
+            .map_err(|e| Error::Connect(format!("QUIC connect: {e}")))?;
+        let conn = match remaining_connect_budget(deadline) {
+            Some(remaining) => tokio::time::timeout(remaining, connecting)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Connect,
+                    elapsed: started.elapsed(),
+                })?
+                .map_err(|e| Error::H3Connect(format!("QUIC handshake failed: {e}")))?,
+            None => connecting
+                .await
+                .map_err(|e| Error::H3Connect(format!("QUIC handshake failed: {e}")))?,
+        };
+
+        let sender = Self::establish_h3_sender(
+            conn,
+            deadline,
+            started,
+            alt_generation,
+            route_kind,
+            self.metrics.clone(),
+            Some(RouteOwnedChain {
+                socket,
+                endpoint,
+                watcher,
+            }),
+        )
+        .await?;
+        Ok(sender)
+    }
+
     /// Establish the h3 client session under the remaining connect budget.
     async fn establish_h3_sender(
         quinn_conn: quinn::Connection,
@@ -642,8 +844,18 @@ impl H3Connector {
         alt_generation: Option<u64>,
         route: H3RouteKind,
         metrics: Option<Arc<crate::transport::metrics::TransportMetrics>>,
+        route_chain: Option<RouteOwnedChain>,
     ) -> Result<CachedH3Sender> {
         let diagnostic_conn = quinn_conn.clone();
+        let diagnostic_conn_for_route = quinn_conn.clone();
+        // Direct generations get `None` for all three: they share the
+        // connector's single endpoint and have no caller-owned chain to
+        // release. Only a routed generation owns a chain.
+        let route_socket: Option<Arc<RouteUdpSocket>> =
+            route_chain.as_ref().map(|chain| Arc::clone(&chain.socket));
+        let route_watcher: Option<tokio::sync::watch::Receiver<bool>> =
+            route_chain.as_ref().map(|chain| chain.watcher.clone());
+        let route_endpoint: Option<quinn::Endpoint> = route_chain.map(|chain| chain.endpoint);
         let init = async {
             let h3_conn = h3_quinn::Connection::new(quinn_conn);
             h3::client::new(h3_conn)
@@ -678,7 +890,36 @@ impl H3Connector {
         }
         let driver_handle = tokio::spawn(async move {
             use futures_util::future;
-            let close_err = future::poll_fn(|cx| driver.poll_close(cx)).await;
+            // A dead route must not leave a request parked until the QUIC idle
+            // timeout. The bridge already reports the I/O error to Quinn, so
+            // this task's job is to make the connection terminal immediately:
+            // close it with a transport error and then observe the ordinary
+            // close path so metrics and drain state stay in one place.
+            let close_err = match route_watcher {
+                Some(mut watcher) => {
+                    if *watcher.borrow() {
+                        route_close(Some(&diagnostic_conn_for_route));
+                    }
+                    tokio::select! {
+                        biased;
+                        () = async {
+                            // `watch` retains the last value, so a failure
+                            // recorded before this branch was reached is
+                            // observed here rather than lost.
+                            while !*watcher.borrow_and_update() {
+                                if watcher.changed().await.is_err() {
+                                    return;
+                                }
+                            }
+                        } => {
+                            route_close(Some(&diagnostic_conn_for_route));
+                            future::poll_fn(|cx| driver.poll_close(cx)).await
+                        }
+                        close_err = future::poll_fn(|cx| driver.poll_close(cx)) => close_err,
+                    }
+                }
+                None => future::poll_fn(|cx| driver.poll_close(cx)).await,
+            };
             draining_for_driver.store(true, Ordering::Relaxed);
             let graceful = close_err.is_h3_no_error();
             let quinn_close = diagnostic_conn.close_reason();
@@ -712,7 +953,40 @@ impl H3Connector {
             draining,
             close_reason,
             alt_generation,
+            _route_endpoint: route_endpoint,
+            route_socket,
         })
+    }
+
+    /// Maps a QUIC-layer symptom to typed caller evidence when the generation
+    /// runs over a caller-owned route.
+    ///
+    /// The QUIC error is a downstream symptom of the real cause, so this is the
+    /// one place that replaces it. Every other classification decision stays
+    /// variant-derived, and no `Display` text is ever parsed.
+    fn route_error_override(route_socket: Option<&Arc<RouteUdpSocket>>, fallback: Error) -> Error {
+        let Some(socket) = route_socket else {
+            return fallback;
+        };
+        let Some(failure) = socket.route_failure() else {
+            return fallback;
+        };
+        match failure.kind() {
+            DialErrorKind::Connection => {
+                Error::H3Connect(format!("QUIC handshake failed: {}", failure.message()))
+            }
+            DialErrorKind::Timeout => Error::Timeout {
+                phase: TimeoutPhase::Connect,
+                elapsed: Duration::ZERO,
+            },
+            // Rejection and authentication evidence is preserved verbatim as a
+            // custom-transport error rather than being reclassified, because
+            // Eggfetch has no evidence of its own about why the provider
+            // refused. The kind survives in the typed source chain.
+            DialErrorKind::Authentication | DialErrorKind::Rejected | DialErrorKind::Other => {
+                Error::CustomTransport(Arc::new(failure))
+            }
+        }
     }
 
     /// Returns `true` when the cached cell is draining (GOAWAY observed or
@@ -853,32 +1127,64 @@ impl H3Connector {
             let endpoint_self = self.clone();
             let resolve_host_clone = resolve_host.clone();
             let sni_host_clone = sni_host.clone();
+            let route_kind = if alt.is_some() {
+                H3RouteKind::AltSvc
+            } else {
+                H3RouteKind::Explicit
+            };
             let init_result: std::result::Result<&CachedH3Sender, Error> = cell
                 .get_or_try_init(|| async {
-                    let addrs = Self::resolve_addrs(
-                        &resolve_host_clone,
-                        resolve_port,
-                        deadline,
-                        connect_timeout,
-                        started,
-                    )
-                    .await?;
-                    let quinn_conn = endpoint_self
-                        .connect_with_fallback(&addrs, &sni_host_clone, deadline, started)
+                    let sender = if endpoint_self.datagram_dialer.is_some() {
+                        // Caller-routed generation: no DNS and no direct
+                        // endpoint at all. The dialer receives the original
+                        // logical target, and SNI stays the origin host even
+                        // when the route's physical peer is a relay.
+                        endpoint_self
+                            .establish_routed_generation(
+                                crate::transport::dialer::DialTarget::new(
+                                    &resolve_host_clone,
+                                    resolve_port,
+                                ),
+                                &sni_host_clone,
+                                deadline,
+                                started,
+                                alt_generation,
+                                route_kind,
+                            )
+                            .await?
+                    } else {
+                        let endpoint = endpoint_self
+                            .endpoint
+                            .as_ref()
+                            .ok_or_else(|| Error::Connect("no QUIC endpoint available".into()))?;
+                        let addrs = Self::resolve_addrs(
+                            &resolve_host_clone,
+                            resolve_port,
+                            deadline,
+                            connect_timeout,
+                            started,
+                        )
                         .await?;
-                    let sender: CachedH3Sender = Self::establish_h3_sender(
-                        quinn_conn,
-                        deadline,
-                        started,
-                        alt_generation,
-                        if alt.is_some() {
-                            H3RouteKind::AltSvc
-                        } else {
-                            H3RouteKind::Explicit
-                        },
-                        endpoint_self.metrics.clone(),
-                    )
-                    .await?;
+                        let quinn_conn = endpoint_self
+                            .connect_with_fallback(
+                                endpoint,
+                                &addrs,
+                                &sni_host_clone,
+                                deadline,
+                                started,
+                            )
+                            .await?;
+                        Self::establish_h3_sender(
+                            quinn_conn,
+                            deadline,
+                            started,
+                            alt_generation,
+                            route_kind,
+                            endpoint_self.metrics.clone(),
+                            None,
+                        )
+                        .await?
+                    };
                     if let Some(ref m) = endpoint_self.metrics {
                         m.record_h3_created();
                         if was_reconnect {
@@ -899,6 +1205,12 @@ impl H3Connector {
             }
         };
         let sender = cached.sender.clone();
+        // Route evidence is resolved once per dispatch so a caller-routed
+        // generation reports the caller's typed cause instead of the QUIC
+        // symptom it produced.
+        let route_socket = cached.route_socket.clone();
+        let with_route_evidence =
+            |error: Error| Self::route_error_override(route_socket.as_ref(), error);
 
         // Decompose the incoming request
         let (parts, body) = request.into_parts();
@@ -957,7 +1269,7 @@ impl H3Connector {
                         ));
                     }
                     return Err(map_err(
-                        Error::H3Protocol(format!("send request: {e}")),
+                        with_route_evidence(Error::H3Protocol(format!("send request: {e}"))),
                         false,
                         false,
                     ));
@@ -1001,24 +1313,24 @@ impl H3Connector {
             // connection. H3 transport failures evict so the next attempt
             // reconnects. All body-phase outcomes are post-commit for
             // fallback gating.
-            if matches!(
+            let transport_failure = matches!(
                 e,
                 Error::H3Protocol(_)
                     | Error::H3ConnectionClosed(_)
                     | Error::H3Stream(_)
                     | Error::H3Connect(_)
-            ) {
+            );
+            if transport_failure {
                 self.evict_if_current(&cache_key, &cell);
-                return Err(map_err(e, true, false));
             }
-            return Err(map_err(e, true, false));
+            return Err(map_err(with_route_evidence(e), true, false));
         }
 
         // Signal end of request body (post-commit).
         if let Err(err) = request_stream.finish().await {
             self.evict_if_current(&cache_key, &cell);
             return Err(map_err(
-                Error::H3Protocol(format!("finish stream: {err}")),
+                with_route_evidence(Error::H3Protocol(format!("finish stream: {err}"))),
                 true,
                 false,
             ));
@@ -1030,7 +1342,7 @@ impl H3Connector {
             Err(e) => {
                 self.evict_if_current(&cache_key, &cell);
                 return Err(map_err(
-                    Error::H3Protocol(format!("recv response: {e}")),
+                    with_route_evidence(Error::H3Protocol(format!("recv response: {e}"))),
                     true,
                     false,
                 ));
@@ -1057,6 +1369,7 @@ impl H3Connector {
         let cache_for_body = self.sender_cache.clone();
         let key_for_body = cache_key.clone();
         let cell_for_body = cell.clone();
+        let route_for_body = route_socket.clone();
         let trailers = crate::body::SharedTrailers::new();
         let trailers_for_body = trailers.clone();
         let body_stream = futures_util::stream::unfold(
@@ -1066,6 +1379,7 @@ impl H3Connector {
                 let key_for_body = key_for_body.clone();
                 let cell_for_body = cell_for_body.clone();
                 let trailers_for_body = trailers_for_body.clone();
+                let route_for_body = route_for_body.clone();
                 async move {
                     if trailers_done {
                         return None;
@@ -1089,7 +1403,10 @@ impl H3Connector {
                                         h3_cache_remove(&cache_for_body, &key_for_body);
                                     }
                                     return Some((
-                                        Err(Error::H3Protocol(format!("recv trailers: {e}"))),
+                                        Err(Self::route_error_override(
+                                            route_for_body.as_ref(),
+                                            Error::H3Protocol(format!("recv trailers: {e}")),
+                                        )),
                                         (stream, true),
                                     ));
                                 }
@@ -1103,7 +1420,10 @@ impl H3Connector {
                                 h3_cache_remove(&cache_for_body, &key_for_body);
                             }
                             Some((
-                                Err(Error::H3Protocol(format!("recv data: {e}"))),
+                                Err(Self::route_error_override(
+                                    route_for_body.as_ref(),
+                                    Error::H3Protocol(format!("recv data: {e}")),
+                                )),
                                 (stream, true),
                             ))
                         }
@@ -1470,8 +1790,12 @@ mod tests {
         let started = std::time::Instant::now();
         let deadline = Some(started + Duration::from_millis(300));
         let bad = vec![SocketAddr::from(([127, 0, 0, 1], closed_port))];
+        let endpoint = connector
+            .endpoint
+            .as_ref()
+            .expect("unit tests use a direct connector");
         let first = connector
-            .connect_with_fallback(&bad, "localhost", deadline, started)
+            .connect_with_fallback(endpoint, &bad, "localhost", deadline, started)
             .await;
         assert!(first.is_err(), "expected handshake failure, got {first:?}");
         // No cache entry is created by `connect_with_fallback` itself; the
@@ -1512,7 +1836,16 @@ mod tests {
         let addrs = vec![SocketAddr::from(([127, 0, 0, 1], closed_port)), server.addr];
         let conn = tokio::time::timeout(
             Duration::from_secs(20),
-            connector.connect_with_fallback(&addrs, "localhost", deadline, started),
+            connector.connect_with_fallback(
+                connector
+                    .endpoint
+                    .as_ref()
+                    .expect("unit tests use a direct connector"),
+                &addrs,
+                "localhost",
+                deadline,
+                started,
+            ),
         )
         .await
         .expect("fallback test must not hang")
@@ -1529,6 +1862,10 @@ mod tests {
         let deadline = Some(started + budget);
         let err = connector
             .connect_with_fallback(
+                connector
+                    .endpoint
+                    .as_ref()
+                    .expect("unit tests use a direct connector"),
                 std::slice::from_ref(&blackhole.addr),
                 "localhost",
                 deadline,
@@ -1554,6 +1891,10 @@ mod tests {
         // Abort well before the 30s budget: dropping the future must stop the
         // remaining attempts instead of stalling to the deadline.
         let pending = connector.connect_with_fallback(
+            connector
+                .endpoint
+                .as_ref()
+                .expect("unit tests use a direct connector"),
             std::slice::from_ref(&blackhole.addr),
             "localhost",
             deadline,

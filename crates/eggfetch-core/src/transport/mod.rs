@@ -106,6 +106,8 @@ pub(crate) mod custom_connector {
     #[cfg(not(feature = "tls-rustls"))]
     pub(crate) type CustomConnector = super::dialer::DialerConnector;
 }
+#[cfg(feature = "http3")]
+pub mod datagram;
 pub mod dialer;
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 pub(crate) mod direct;
