@@ -1,6 +1,6 @@
 # eggfetch Planning System
 
-> **Current execution gate:** none active. Core-transport M007 is closed, qualified, and published; release-verification M005 is closed. Coordinated **0.2.2** is the current public version across all six crates, PyPI, the signed `v0.2.2` tag, and the GitHub Release. Exact-pin downstream consumers may begin their own adoption milestone against the published 0.2.2 classifier API. Historical v0.2.0/v0.2.1 identities remain immutable; the next candidate enters through M003 as a bounded corrective or feature plan.
+> **Current execution gate:** TLS/protocol M004 is ready: caller-owned fixed-target datagram routing for experimental H3 under accepted ADR-0007. It is a Rust-only feature handoff, not an H3-graduation or release task. Core-transport M007 and release-verification M005 remain closed/published; coordinated **0.2.2** remains the current public version. M004 must renew exact-SHA Stage C qualification before closure and does not authorize publication.
 > **Live status for agents:** the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`). Completed sections and legacy plan files are historical records, not current gates (verification-policy principle 9). Validation tiers: `.skills/verification-qualification.md`.
 
 This directory separates durable architectural direction from temporary

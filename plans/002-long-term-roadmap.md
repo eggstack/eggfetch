@@ -107,10 +107,13 @@ transports, Node maturation, H3 graduation, Python trailer exposure,
 Trio/AnyIO, new CLI features, new FFI symbols, compatibility waivers — none
 belongs in a corrective unless its own milestone plan opens it.
 
-## Phase 4 — Gated futures (not opened)
+## Phase 4 — Gated futures (M004 transport hook opened; other futures remain gated)
 
 Each item opens only on its named trigger, as its own subsystem roadmap +
-milestone plan. None is approved work today.
+milestone plan. The fixed-target datagram-routing slice of item 4 is now opened
+by explicit maintainer direction, accepted ADR-0007, and TLS/protocol M004.
+HTTPX 1.0, H3 graduation, Node maturation, and unrelated transport/public
+helpers remain gated.
 
 1. **HTTPX 1.0 compatibility program.** Trigger: upstream RC with frozen
    public API (or stable 1.0) + no further reset signal + fresh pinned delta
@@ -127,7 +130,10 @@ milestone plan. None is approved work today.
    silent capability growth.
 4. **New transports / auth schemes / public helpers.** Trigger: accepted ADR
    proving the addition cannot live behind existing surfaces (see inventory
-   rule in `docs/architecture/rust-surface-containment.md`).
+   rule in `docs/architecture/rust-surface-containment.md`). The fixed-target
+   datagram route needed to carry experimental origin H3 over caller-owned UDP
+   has fired this trigger under ADR-0007 and M004. This does not open unrelated
+   helper growth or the separate H3 graduation gate.
 
 ## Recommended immediate execution sequence
 
@@ -135,9 +141,11 @@ milestone plan. None is approved work today.
 Phase 1  release publication (maintainer action)
 Phase 2  Python 3.15 wheel rehearsal (then claim)
 Phase 3  correctives as needed, each bounded and requalified
+Phase 4  TLS/protocol M004 caller-owned H3 datagram routing
 ```
 
-Phase 4 items remain gated; none unblocks or is unblocked by Phases 1–3.
+Only the ADR-0007/M004 slice of Phase 4 is open. The remaining Phase 4 futures
+retain their named triggers.
 
 ## Roadmap governance
 

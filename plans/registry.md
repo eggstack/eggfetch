@@ -44,7 +44,7 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 |---|---|---|---|---|
 | Core transport and request policy | closed | `plans/subsystems/core-transport-policy-roadmap.md` | M007 closed and published as 0.2.2; subsystem at steady state | ADR-0006 implemented, qualified, and published. |
 | Python bindings and HTTPX compatibility | closed | `plans/subsystems/python-httpx-compat-roadmap.md` | M001-M003 closed on live Stage C binding | Facade work reopens only via gated roadmap Phase 4 trigger. |
-| TLS, proxy, and protocols | closed | `plans/subsystems/tls-proxy-protocols-roadmap.md` | All milestones closed; H3 experimental retained | H3 graduation blocked on named external evidence. |
+| TLS, proxy, and protocols | **active** | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M004 caller-owned H3 datagram routing | M004 ready under ADR-0007; H3 graduation remains separately blocked. |
 | Release and verification | closed | `plans/subsystems/release-verification-roadmap.md` | M005 closed; subsystem at steady state | No active release task. M003 standing corrective intake remains proposed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
@@ -52,6 +52,7 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
 |---|---|---|---|---|
+| TLS, proxy, and protocols | M004 caller-owned H3 datagram routing | **ready** | `plans/implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | M003 closed; ADR-0007 accepted; Quinn 0.11.11 abstract socket is the interface dependency. No Eggress dependency. |
 | Release and verification | M005 0.2.2 M007 publication | closed | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | `plans/closure/release-verification/005-0-2-2-m007-publication.md`. Published on candidate `015a56d7ec3edf186eec8ebccff01cbf5584274e`: six crates.io packages, signed `v0.2.2`, 19 PyPI files, GitHub Release `401746856`. |
 | Core transport and request policy | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`. Published as eggfetch 0.2.2 by release-verification M005; exact-pin downstream consumers may now begin their own adoption milestone. |
 | Release and verification | M001 coordinated 0.2.x publication umbrella | closed | `plans/archive/implementation/release-verification/001-release-publication.md` | `plans/closure/release-verification/001-coordinated-0-2-1-publication.md` |
@@ -71,10 +72,16 @@ The next candidate is a fresh bounded corrective or feature plan through M003.
 as 0.2.2; the subsystem is at steady state. No further core-transport
 implementation is required.
 
-**Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta),
-H3 graduation (independent interop/drain/impairment/upstream evidence), Node
-maturation (explicit scope decision). None is registered; none unblocks
-active work.
+**TLS/protocol execution gate:** M004 is the sole ready feature handoff. It
+adds a Rust-only fixed-target datagram route beneath experimental H3 under
+accepted ADR-0007. It must preserve direct H3, may not depend on Eggress, may
+not expose Quinn types, and must renew the exact-SHA Stage C binding before
+closure. It does not authorize H3 graduation or publication.
+
+**Gated futures:** HTTPX 1.0 (RC/stable + frozen API + fresh delta), H3
+graduation (independent interop/drain/impairment/upstream evidence), and Node
+maturation (explicit scope decision) remain unregistered. M004 is an
+experimental H3 routing extension, not the H3 graduation program.
 
 ## Blocked / operational work
 
@@ -85,12 +92,12 @@ active work.
 
 ## Closure work and current control points
 
-No active milestone and no blocked handoff. Core transport M007 is closed and
-published; release-verification M005 is closed with all public identities
-recorded; the gated futures (HTTPX 1.0, H3 graduation, Node maturation)
-remain unregistered and unaffected. The only carried item is one low-severity
-compatibility-fixture finding routed to M003 in
-`plans/closure/release-verification/005-0-2-2-m007-publication.md`.
+TLS/protocol M004 is the sole ready implementation handoff. Core transport
+M007 is closed and published; release-verification M005 is closed with all
+public identities recorded. HTTPX 1.0, H3 graduation, and Node maturation
+remain gated/unregistered and are not implied by M004. The low-severity
+compatibility-fixture finding from M005 remains routed to the standing Phase 3
+corrective intake and is independent of M004.
 
 M001A and M002 are closed historical release evidence. M002 run
 `36223505399` proved the original candidate's 18-wheel + 1-sdist matrix with
