@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: conditionally closed — M004 caller-owned H3 datagram routing implemented; awaiting Linux-host compatibility gates. H3 graduation remains separately gated
+Status: closed — M004 caller-owned H3 datagram routing implemented and fully qualified. H3 graduation remains separately gated
 
 Long-term references:
 
@@ -94,10 +94,11 @@ M001 proxy Hyper pooling + upstream reuse (hard predecessor for M002)
                     (hard: M003; interface: ADR-0007 + Quinn 0.11.11 abstract socket)
 ```
 
-M001–M003 are closed. M004 is conditionally closed under accepted ADR-0007: all
-implementation and every gate runnable on the current host pass, but Tier 2's
-full pinned HTTPX compatibility suite and the API-manifest comparison require the
-Linux qualification host. H3 graduation remains a separate gated future and was
+M001–M003 are closed. M004 is closed under accepted ADR-0007: implementation and
+every Tier 2 gate pass, including the full pinned HTTPX compatibility suite and
+the API-manifest comparison, which are green on `ubuntu-latest` / Python 3.12.14 at
+run `37511735210` (1934 passed / 0 failed; both facades 0 unexplained, 0 stale).
+H3 graduation remains a separate gated future and was
 not an M004 exit condition.
 
 ## 7. Milestones
@@ -146,7 +147,7 @@ negative graduation verdict.
 
 ### Milestone 4 — Caller-owned H3 datagram routing
 
-Class: capability (experimental). Status: conditionally closed.
+Class: capability (experimental). Status: closed.
 
 Implementation:
 `plans/implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md`.
@@ -197,9 +198,10 @@ label rule; any promotion attempt is a new gated milestone, not a corrective.
 ## 11. Completion definition
 
 M001–M003 evidence is accepted. While M004 is open, the subsystem is active.
-M004 is conditionally closed on a renewed exact-SHA Stage C binding because it
-changed executable/public Rust inputs; the subsystem holds at steady state with
-H3 still experimental until the Linux-host compatibility gates are run. Graduation remains controlled by the separate Phase
+M004 is closed on an unconditional exact-SHA Stage C binding because it changed
+executable/public Rust inputs; its two outstanding Tier 2 gates were then run green
+on `ubuntu-latest` / Python 3.12.14 (run `37511735210`). The subsystem holds at
+steady state with H3 still experimental. Graduation remains controlled by the separate Phase
 4 evidence trigger, and no future milestone is unblocked by this closure.
 
 ## 12. Milestone status
@@ -209,4 +211,4 @@ H3 still experimental until the Linux-host compatibility gates are run. Graduati
 | M001 proxy pooling/reuse | closed | legacy plans §7 | legacy closures | — |
 | M002 route pinning/egress | closed | legacy program §7 | legacy closure | — |
 | M003 H3 retained-experimental | closed | legacy program §7 | legacy + evidence ledger | Graduation evidence (gated future) |
-| M004 caller-owned H3 datagram routing | conditionally closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/3 and all runnable Tier 2 gates green; full compat suite + API-manifest gates await the Linux host; H3 stays experimental |
+| M004 caller-owned H3 datagram routing | closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/2/3 green including full compat suite (1934 passed) + API manifests on `ubuntu-latest`/3.12.14, run `37511735210`; H3 stays experimental |

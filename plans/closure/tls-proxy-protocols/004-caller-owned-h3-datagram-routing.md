@@ -1,6 +1,6 @@
 # TLS, Proxy and Protocols Milestone 004 — Closure Status
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -30,12 +30,14 @@ client configuration, so a provider supplies a datagram carrier and never takes
 over authentication. Direct H3 is unchanged when no dialer is configured, and
 H3 remains retained-experimental.
 
-Closure is **conditional**, not unqualified: every M004 requirement is
-implemented and every Tier 2 gate that is runnable on this host passes, but the
-full pinned HTTPX compatibility suite and the API-manifest comparison cannot be
-made to pass on this `darwin` workstation for reasons that predate M004 and are
-unrelated to it (§4, §10). Those two gates must be run on the Linux
-qualification host before this can become an unqualified closure.
+Closure is **unqualified**: every M004 requirement is implemented and every Tier 2
+gate passes. The full pinned HTTPX compatibility suite (1934 passed, 0 failed)
+and the API-manifest comparison for both facades were executed on
+`ubuntu-latest` / Python 3.12.14 at run
+[`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)
+(§10). Those two gates were previously recorded as blocked on this `darwin`
+workstation; that attribution was partly wrong and is corrected in §10. H3
+graduation remains separately gated and is not claimed here.
 
 Two requirements needed an interpretation, both recorded in §10 rather than
 silently resolved:
@@ -89,8 +91,8 @@ no public enum or struct changed; only the all-features oracle snapshot changed.
 | Tier 2 — FFI | `cargo test -p eggfetch-ffi --all-features` | pass | 38 tests |
 | Tier 2 — resource monitor | `resource_monitor` release binary | pass | |
 | Tier 2 — lifecycle / soak / merge-lossless | pytest suites | pass | 49 / 11 / 12 |
-| Tier 2 — full pinned HTTPX compat suite | `EGGFETCH_COMPAT_REQUIRED=1 pytest tests/compat` | **BLOCKED** | Pre-existing `darwin`/Python-3.11 artifacts; see §4 and §10 |
-| Tier 2 — API manifest comparison | `generate`/`compare_httpx_api_manifest.py` | **BLOCKED** | Pre-existing Python-3.11-vs-3.12 artifact; see §4 and §10 |
+| Tier 2 — full pinned HTTPX compat suite | `EGGFETCH_COMPAT_REQUIRED=1 pytest tests/compat` | **PASS** | 1934 passed / 0 failed on `ubuntu-latest`, Python 3.12.14, run `37511735210`; see §10 |
+| Tier 2 — API manifest comparison | `generate`/`compare_httpx_api_manifest.py` | **PASS** | Both facades, 0 unexplained / 0 stale, same run; see §10 |
 | Tier 3 green | `./scripts/check.sh package` | pass | Crate packaging + wheel build/smoke |
 | Live security preflight | `./scripts/check_security.sh` | pass | `advisories ok, bans ok, licenses ok, sources ok` |
 | Exact-SHA Stage C renewal | `plans/httpx-parity-correction-status.md` + both `compat/*/profile.toml` | pass | Rebound to `42a9c96d…` |
@@ -201,31 +203,70 @@ this host passes:
 | Soak | pass (11) |
 | Lossless merge | pass (12) |
 | Feature-gated tests (gzip/brotli/zstd/deflate/proxy) | pass |
-| Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 suite | **blocked — see below** |
-| API manifest comparison (both facades) | **blocked — see below** |
+| Full pinned HTTPX 0.28.1 / HTTPX2 2.12.0 suite | pass — 1934 passed, 0 failed, `--strict-markers`, `EGGFETCH_COMPAT_REQUIRED=1` (see below) |
+| API manifest comparison (both facades) | pass — 0 unexplained, 0 stale (see below) |
 
-Two Tier 2 gates cannot be made to pass on this host, for reasons that
-predate M004 and that M004 cannot influence:
+The two gates that first made this closure conditional have since been
+executed green and were misattributed when they were recorded. The
+correction matters more than the gate results, because the earlier
+record sent the next maintainer after a bug that does not exist.
 
-1. `crates/eggfetch-python/tests/compat/test_resource_assertions.py` fails
-   with `Failed: No resource thresholds for platform: darwin`.
-   `compat/*/resource-thresholds.toml` declares `[platform.macos]` while the
-   test keys on `platform.system().lower()`, which returns `darwin` on macOS.
-   The key names simply do not match on macOS, so this test cannot pass on any
-   macOS host, at any commit. The sibling
-   `test_corrective_01_tls_and_proxy_trust_safety.py::test_ca_count_heuristic_removed`
-   fails for the same class of reason: it depends on the cardinality and
-   semantics of the macOS system trust store.
-2. The API-manifest comparison reports one difference,
-   `codes (is_integer): ref=present cand=absent`. `http.HTTPStatus.is_integer`
-   exists in the Python 3.11 standard library used by this venv and was removed
-   in 3.12+, so the recorded reference snapshot (generated on a Python where it
-   is absent) cannot match a 3.11 candidate.
+1. **`codes (is_integer): ref=present cand=absent` was not a Python
+   3.11-versus-3.12 difference.** `int.is_integer` has existed since
+   Python 2.6 and is present in every stock CPython. The local `.venv`
+   was built on a **damaged** interpreter
+   (`/Library/Frameworks/Python.framework/Versions/3.11`, python.org
+   3.11.9) that lacks exactly that one public `int` method — the other
+   six (`as_integer_ratio`, `bit_count`, `bit_length`, `conjugate`,
+   `from_bytes`, `to_bytes`) are all present — and whose
+   `etc/openssl/` directory is **empty**. CI's `ubuntu-latest`
+   interpreter is 3.12.14 with `int.is_integer = True` and 121 default
+   CA certificates. The earlier note also contradicted itself by
+   claiming the reference snapshot was generated on an interpreter
+   where the symbol is absent while the comparator reported
+   `ref=present`.
+2. **`test_ca_count_heuristic_removed` was the same damaged
+   interpreter, not macOS trust-store semantics.** With a default CA
+   count of 0 the test generated 0 CAs, so the "custom" store was
+   empty and classified as `verify=True` — correct behavior for an
+   empty store. Against an interpreter with a real CA store (121 on CI,
+   136 on this host's healthy 3.14.2) the test passes unmodified.
+3. **`test_resource_assertions.py` is a genuine pre-existing repo
+   defect and was reported accurately.** `compat/*/resource-thresholds.toml`
+   declares `[platform.linux]`, `[platform.macos]` and
+   `[platform.windows]`, while the test keys on
+   `platform.system().lower()`, which returns `darwin` on macOS. No
+   macOS host can pass this test at any commit; Linux passes only
+   because `[platform.linux]` happens to match. Left unfixed here —
+   see the residual-risk table.
+4. **A third defect surfaced only once the suite could run to
+   completion.** `test_helper_context_then_min_version_detected`
+   assigned `minimum_version = ssl.TLSVersion.TLSv1_2` to a helper that
+   already floors at TLSv1_2, so the context was byte-for-byte
+   unchanged (`771` → `771`). A value-based construction fingerprint
+   cannot observe a no-op write, so no implementation could satisfy the
+   assertion; it failed on every host and interpreter tried. Fixed in
+   `e675b2e7` by mutating an observable value and adding a positive
+   control. The sibling `load_verify_locations` test, which performs a
+   genuinely observable mutation, is unchanged.
 
-M004 changed **no** Python, FFI, Node, CLI, or `compat/` file — the entire diff
-outside `crates/eggfetch-core` is one additive line block in
-`compat/rust-public-api/all-features.txt`. Both failure classes are therefore
-unreachable from this change.
+**Evidence.** `ubuntu-latest`, Python 3.12.14, Actions run
+[`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)
+at `e675b2e7`: compat suite **1934 passed, 0 failed** (266 s), manifest
+generate/compare clean for both facades (74 and 76 symbols), no
+unexplained and no stale allowed-difference entries.
+
+**Exact-SHA note.** The gates ran at `e675b2e7`, not at the frozen
+`42a9c96d`. `git diff 42a9c96d e675b2e7` touches no Rust source,
+manifest or lockfile — only this closure record, the Stage C ledger and
+docs, the two `compat/*/profile.toml` notes, the temporary evidence
+workflow (since removed), and the one Python test described above. The
+shipped artifact under qualification is identical to the freeze.
+
+M004 changed **no** Python, FFI, Node, CLI, or `compat/` file at the
+freeze — the entire diff outside `crates/eggfetch-core` is one additive
+line block in `compat/rust-public-api/all-features.txt`. None of the
+defects above are reachable from this change.
 
 **Tier 3 — `./scripts/check.sh package`: PASS.** Crate
 `cargo publish --dry-run` packaging for the published crates, wheel build
@@ -242,19 +283,23 @@ manifest absent). Both are explicit skips, not failures.
 
 ### Condition on this closure
 
-The two blocked Tier 2 gates must be executed on the Linux qualification host
-(or CI's single `ubuntu-latest` job) on the same executable freeze before this
-milestone can be upgraded from *conditionally closed* to *closed*. The exact
-future evidence is:
+**Satisfied.** The two Tier 2 gates were executed on `ubuntu-latest`
+(or CI's single `ubuntu-latest` job) against the same executable freeze:
+Actions run
+[`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)
+at `e675b2e7`, whose Rust tree is identical to the frozen `42a9c96d`:
 
 ```sh
-./scripts/check.sh extended          # on ubuntu-latest, at this freeze
+EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx  --output "$tmp/a.json"
+python scripts/compare_httpx_api_manifest.py --reference compat/httpx/0.28.1/reference-api.json  --candidate "$tmp/a.json" --allowed compat/httpx/0.28.1/allowed-differences.toml
+python scripts/generate_httpx_api_manifest.py --package eggfetch.compat.httpx2 --output "$tmp/b.json"
+python scripts/compare_httpx_api_manifest.py --reference compat/httpx2/2.12.0/reference-api.json --candidate "$tmp/b.json" --allowed compat/httpx2/2.12.0/allowed-differences.toml
 ```
 
-and specifically a green `EGGFETCH_COMPAT_REQUIRED=1` run of
-`crates/eggfetch-python/tests/compat/` with `--strict-markers`, plus a green
-`generate_httpx_api_manifest.py` + `compare_httpx_api_manifest.py` pair for
-both facades.
+Result: **1934 passed, 0 failed** in 266 s; both facades 0 unexplained and
+0 stale. A throwaway, dispatch-only workflow carried this evidence and was
+deleted afterwards, so no CI job was added to the repository.
 
 ### Environment note (recorded, not hidden)
 
@@ -392,24 +437,29 @@ line and no Eggress dependency was added.
 | Low | `crates/eggfetch-bench/src/bench_proxy.rs::forwards_complete_origin_form_requests_and_repeated_gets` is intermittently flaky here (~25% of runs). Measured pre-existing: interleaved A/B on the true baseline `c8e51bfd` in a separate worktree failed 5/16 (baseline) vs 4/16 (M004). Three fixture hardenings were trialled (bound the origin's read, drain-and-forward the
 upstream response, drain the proxy's accept backlog) and all were reverted because none changed
 the rate. | Tier 2 can fail on an unrelated pre-existing harness race; no M004 behavior is implicated | Recorded in §4 and in the Stage C ledger; routed to the standing corrective intake. Tier 2 was run to a clean pass. |
-| **Medium** | Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison cannot pass on this `darwin` host: `resource-thresholds.toml` keys on `[platform.macos]` while the test reads `platform.system()` (`darwin`), the CA-count trust test depends on macOS trust-store semantics, and `codes.is_integer` exists in the venv's Python 3.11 but was removed in 3.12+. | The two gates are unexecuted, so closure is conditional rather than unqualified | Run `./scripts/check.sh extended` on the Linux qualification host / CI `ubuntu-latest` at this freeze; specifically a green `EGGFETCH_COMPAT_REQUIRED=1` compat suite with `--strict-markers` and a green manifest generate/compare pair for both facades. |
+| **Resolved** | Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison could not be executed on the `darwin` workstation. Recorded cause was partly wrong: `codes.is_integer` was attributed to a Python 3.11-vs-3.12 change and the CA-count test to "macOS trust-store semantics", when both were caused by a damaged local interpreter, and a third defect (an unsatisfiable no-op mutation test) had gone unnoticed because the suite never ran to completion. | None remaining — both gates are green | Executed on `ubuntu-latest` / Python 3.12.14, run [`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210) at `e675b2e7`: 1934 passed / 0 failed, both manifests clean. Causes corrected in §10 so the next maintainer does not chase a non-existent 3.12 regression. |
+| **Low** | `compat/*/resource-thresholds.toml` declares `[platform.macos]` but `test_resource_assertions.py` keys on `platform.system()` (`darwin`), so the full compat suite still cannot pass on **any** macOS host at any commit. Linux passes only because `[platform.linux]` matches. | Tier 2's full compat suite remains macOS-unrunnable; the gate above was satisfied on Linux instead | Pre-existing defect, deliberately not fixed here: it is unrelated to M004 and would be a repo-wide test-infra change. Routed to the standing corrective intake. Recorded in §10. |
 | Low | `direct_transport_tests.rs::test_pool_isolation_uds_vs_tcp` is intermittently load-sensitive (failed 6/6 on baseline under concurrent load, passed 6/6 on this branch when run alone). | UDS/TCP pool isolation evidence is intermittently noisy on this host | Routed to the standing corrective intake. No M004 code path is involved. |
 | Info | `h3_route_attempted` describes Alt-Svc discovery, not explicit `Http3Only`. | The strict-H3 test asserts on `h3_fallback_selected` plus the dial count instead | Not a defect; the counter's existing semantics are unchanged. |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/tls-proxy-protocols-roadmap.md` Milestone 4 moves
-**ready → conditionally closed**. Every M004 exit condition is met and evidenced:
+**ready → closed**. Every M004 exit condition is met and evidenced:
 bounded/cancel-safe bridge, no direct-UDP fallback when the route is configured,
 direct-H3 non-regression, additive API with the oracle snapshot updated, Tier 1
 green, Tier 3 green, live security preflight green, all runnable Tier 2 gates
-green, and a renewed exact-SHA Stage C binding.
+green, the full pinned HTTPX compatibility suite and the API-manifest comparison
+green on `ubuntu-latest` / Python 3.12.14 (run
+[`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)),
+and a renewed exact-SHA Stage C binding.
 
-The single outstanding condition is external to the change: Tier 2's full pinned
-HTTPX compatibility suite and the API-manifest comparison cannot execute green on
-this `darwin` host because of pre-existing platform/Python-version artifacts
-(§4). They must run on the Linux qualification host at this freeze before the
-milestone is upgraded to unqualified *closed*.
+The two gates that made this closure conditional are now executed, and their
+recorded causes were partly wrong (§10): two were a damaged local interpreter
+rather than a Python version difference, and a third defect had gone unnoticed
+precisely because the suite never ran to completion. The one defect left standing
+— the `[platform.macos]` / `darwin` key mismatch that makes the full suite
+macOS-unrunnable — is unrelated to M004 and is recorded in §10.
 
 Deferred exactly as the roadmap specified: per-request route override,
 MASQUE/CONNECT-UDP carrier, QUIC migration, 0-RTT, H3 application datagrams, and

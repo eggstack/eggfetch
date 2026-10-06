@@ -6,7 +6,7 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Recorded state — Stage C renewed after M004 caller-owned H3 datagram routing (2026-10-05)
 
-Recorded designation: **Stage C qualified (conditional renewal)** for both
+Recorded designation: **Stage C qualified (unconditional renewal)** for both
 documented facades, bound to executable freeze
 `42a9c96db5b25354843bd83bd458c71757e95651`. The preceding `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding is historical
 because the TLS/protocol M004 milestone changed executable and public Rust
@@ -37,12 +37,14 @@ The change deliberately has no compatibility facade impact:
   evidence requirements are unchanged.
 
 Qualification evidence on `42a9c96db5b25354843bd83bd458c71757e95651`. **This
-binding is recorded as a conditional renewal**: Tier 1, Tier 3, the live security
-preflight, and every Tier 2 gate runnable on the current host are green, but
-Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison
-could not be executed green on this `darwin` workstation and must still run on
-the Linux qualification host at this freeze before the renewal becomes
-unconditional.
+binding is unconditional**: Tier 1, Tier 2, Tier 3 and the live security preflight
+are green, including Tier 2's full pinned HTTPX compatibility suite and the
+API-manifest comparison for both facades, executed on `ubuntu-latest` /
+Python 3.12.14 at run
+[`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)
+against `e675b2e7`, whose Rust tree is identical to this freeze. The binding was
+originally recorded as a *conditional* renewal with a partly wrong rationale;
+that rationale is corrected below rather than left in place.
 
 - Tier 1 (`./scripts/check.sh`) and Tier 3 (`./scripts/check.sh package`) green.
   The only skips are the policy-defined optional ones: the Node JS surface
@@ -53,20 +55,40 @@ unconditional.
   update required"), the feature matrix, the Rust 1.89.0 MSRV matrix, docs and
   doctests, FFI, the resource regression monitor, lifecycle, soak, lossless merge,
   and the feature-gated tests.
-- Tier 2 **not runnable green on this host**, for reasons that predate this change
-  and that it cannot influence:
-  `compat/*/resource-thresholds.toml` declares `[platform.macos]` while
-  `test_resource_assertions.py` keys on `platform.system()`, which returns
-  `darwin` on macOS so the key never matches;
-  `test_ca_count_heuristic_removed` depends on macOS system-trust-store
-  semantics; and the API-manifest comparison reports
-  `codes (is_integer): ref=present cand=absent` because `http.HTTPStatus.is_integer`
-  exists in this venv's Python 3.11 and was removed in 3.12+. M004 changed no
-  Python, FFI, Node, CLI, or `compat/` file, so none of these are reachable from
-  it. Required future evidence: `./scripts/check.sh extended` on ubuntu-latest at
-  this freeze, specifically a green `EGGFETCH_COMPAT_REQUIRED=1` compat suite with
-  `--strict-markers` plus a green manifest generate/compare pair for both
-  facades.
+- Tier 2's two remaining gates are **executed green**. Evidence:
+  `ubuntu-latest`, Python 3.12.14, Actions run
+  [`37511735210`](https://github.com/eggstack/eggfetch/actions/runs/37511735210)
+  at `e675b2e7` — compat suite **1934 passed, 0 failed** with
+  `EGGFETCH_COMPAT_REQUIRED=1` and `--strict-markers`; manifest
+  generate/compare clean for both facades (74 and 76 symbols, 0 unexplained,
+  0 stale). `git diff 42a9c96d e675b2e7` touches no Rust source, manifest or
+  lockfile, so the shipped artifact is identical to the frozen SHA.
+- **Correction to the earlier record.** The prior note attributed these gates
+  to pre-existing platform/Python-version artifacts. That was partly wrong and
+  is corrected here rather than left to mislead:
+  - `codes (is_integer): ref=present cand=absent` was **not** a Python
+    3.11-versus-3.12 difference. `int.is_integer` has existed since Python 2.6
+    and is present in every stock CPython, including CI's 3.12.14
+    (`int.is_integer = True`). The local `.venv`'s base interpreter
+    (`/Library/Frameworks/Python.framework/Versions/3.11`, python.org 3.11.9)
+    is damaged: it lacks exactly that one public `int` method while the other
+    six are present, and its `etc/openssl/` directory is empty.
+  - `test_ca_count_heuristic_removed` failed for the same damaged interpreter,
+    not "macOS system-trust-store semantics": with 0 default CA certificates
+    the test generated 0 CAs, so an empty custom store correctly classified as
+    `verify=True`. Against CI's 121 (and this host's healthy 3.14.2's 136) the
+    test passes unmodified.
+  - `compat/*/resource-thresholds.toml` declaring `[platform.macos]` while
+    `test_resource_assertions.py` keys on `platform.system()` (`darwin`) **is**
+    a genuine pre-existing defect: the full suite cannot pass on any macOS host
+    at any commit. It was satisfied on Linux, where `[platform.linux]` matches.
+    Left unfixed — unrelated to M004, routed to the standing corrective intake.
+  - A fourth defect surfaced only once the suite could run to completion:
+    `test_helper_context_then_min_version_detected` asserted detection of a
+    no-op write (`minimum_version` set to the value it already held, 771 → 771),
+    which no value-based fingerprint can observe. Fixed in `e675b2e7`.
+- M004 changed no Python, FFI, Node, CLI, or `compat/` file, so none of these
+  defects are reachable from it.
 - Live security preflight: `advisories ok, bans ok, licenses ok, sources ok`.
 - One observation recorded rather than suppressed:
   `crates/eggfetch-bench/src/bench_proxy.rs::forwards_complete_origin_form_requests_and_repeated_gets`

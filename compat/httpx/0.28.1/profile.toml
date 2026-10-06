@@ -145,17 +145,24 @@ rebaseline-sha = "f9eb1a455907d43210886b7b047d18bde8716652"
 # live security preflight. The immediately preceding `015a56d7...` binding is
 # historical only. H3 remains experimental and this renewal is not an HTTPX
 # parity or H3 graduation claim.
-# NOTE: this binding is a CONDITIONAL renewal (the canonical
-# `stage-c-qualified` / `qualified` vocabulary is retained deliberately so
-# downstream readers are unaffected; the condition lives in prose here, in
-# `plans/httpx-parity-correction-status.md`, and in the M004 closure record).
-# Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison
-# could not be executed green on the `darwin` workstation used for this run
-# (pre-existing `[platform.macos]` vs `platform.system()` key mismatch, macOS
-# trust-store semantics, and a Python 3.11-vs-3.12 `codes.is_integer` artifact).
-# M004 changed no Python, FFI, Node, CLI, or compat file, so none of those are
-# reachable from it. Both gates must run on the Linux qualification host at this
-# freeze for the renewal to become unconditional.
+# NOTE: this binding is an UNCONDITIONAL renewal. Tier 2's full pinned HTTPX
+# compatibility suite and the API-manifest comparison were executed green on
+# `ubuntu-latest` / Python 3.12.14 at
+# https://github.com/eggstack/eggfetch/actions/runs/37511735210 (`e675b2e7`,
+# whose Rust tree is identical to the frozen SHA below): compat suite 1934
+# passed / 0 failed with `--strict-markers`, both facades 0 unexplained and
+# 0 stale allowed differences.
+# The earlier CONDITIONAL note on this binding misattributed the causes and is
+# corrected in
+# `plans/closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` §10:
+# `codes.is_integer` was never a Python 3.11-vs-3.12 difference (`int.is_integer`
+# exists in every stock CPython; the local venv's 3.11.9 build is damaged and
+# lacks that one method), and the CA-count test failed for the same reason plus
+# an empty OpenSSL config directory, not "macOS trust-store semantics".
+# One pre-existing defect stands and is unrelated to M004:
+# `resource-thresholds.toml` declares `[platform.macos]` while
+# `test_resource_assertions.py` keys on `platform.system()` (`darwin`), so the
+# full suite remains macOS-unrunnable and was satisfied on Linux instead.
 stage = "stage-c-qualified"
 status = "qualified"
 qualification-sha = "42a9c96db5b25354843bd83bd458c71757e95651"
