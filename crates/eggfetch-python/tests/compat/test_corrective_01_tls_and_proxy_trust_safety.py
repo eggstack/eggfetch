@@ -278,7 +278,7 @@ class TestConstructionFingerprint:
             assert isinstance(kwargs.get("verify"), list)
 
     def test_helper_context_then_min_version_detected(self):
-        """Lowering the TLS minimum version mutates the live
+        """Raising the TLS minimum version mutates the live
         public state.  The fingerprint must reject reuse of
         stale metadata so the new version bounds are honored.
         """
@@ -286,14 +286,26 @@ class TestConstructionFingerprint:
             _eggfetch_ssl_registry,
         )
 
+        # ``create_ssl_context()`` already floors at TLSv1_2, so
+        # writing TLSv1_2 again leaves the context byte-for-byte
+        # identical.  The fingerprint hashes live public state, so a
+        # no-op write is unobservable by construction and asserting
+        # otherwise would demand something no value-based fingerprint
+        # can provide.  Raise the floor instead so the mutation is
+        # real and the detection claim is meaningful.
         ctx = create_ssl_context()
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        # Default helper context with TLS 1.2 minimum is a no-op
-        # for the classification result, so the fingerprint must
-        # still detect the mutation.
+        assert ctx.minimum_version != ssl.TLSVersion.TLSv1_3
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
         assert not _eggfetch_ssl_registry.is_eggfetch_context(ctx), (
             "Min-version mutation was not detected by the "
             "construction fingerprint."
+        )
+
+        # Positive control: an untouched helper is still recognized,
+        # so the assertion above is detecting the mutation rather
+        # than a registry that rejects everything.
+        assert _eggfetch_ssl_registry.is_eggfetch_context(
+            create_ssl_context()
         )
 
     def test_helper_context_then_cipher_policy_change_rejected(self):
