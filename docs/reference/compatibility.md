@@ -5,13 +5,16 @@ claims refer specifically to the pinned 0.28.1 asyncio-supported facade
 (`eggfetch.compat.httpx`), not all HTTPX transports or concurrency backends.
 HTTPX2 claims refer specifically to the sibling 2.12.0 facade
 (`eggfetch.compat.httpx2`, Stage C qualified on frozen executable SHA
-`015a56d7ec3edf186eec8ebccff01cbf5584274e` (2026-10-02,
-requalification for the coordinated 0.2.2 release candidate, which carried the release identity plus one genuine executable fix found by the Tier 1 gate: the FFI bounded C-string scan used the signed-only `cast_unsigned()`, so `eggfetch-ffi` did not compile where `c_char` is `u8` (aarch64 Linux and other unsigned-`c_char` targets)),
-profiles in
+`42a9c96db5b25354843bd83bd458c71757e95651` (2026-10-05,
+requalification after the TLS/protocol M004 milestone added a Rust-only
+additive fixed-target datagram route beneath experimental H3; no adapter,
+manifest, typing, or facade surface changed).
+The prior `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding (the coordinated
+0.2.2 candidate) is historical. Profiles live in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`;
-the live ledger is `plans/httpx-parity-correction-status.md`). The prior
+the live ledger is `plans/httpx-parity-correction-status.md`). The
 `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
-`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings historical (with
+`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical (with
 `5247ff0e...`, `d4979f1d...`, `18c1f96c...`, `bc4800ee...` and `df2549f7...` retained as prior maintenance evidence);
 the two contracts are independent and never collapsed into one "HTTPX parity"
 claim. HTTPX 1.0 pre-releases are preview-only (`compat/httpx/1.0-preview/`)
@@ -131,8 +134,10 @@ eggfetch targets HTTPX 0.28.1 compatibility in phases. The current status:
   lifecycle hardening, observability cleanup. Historical evidence only.
 - **Current qualification**: HTTPX 0.28.1 and HTTPX2 2.12.0 are Stage C
   qualified on executable SHA
-  `015a56d7ec3edf186eec8ebccff01cbf5584274e` (2026-10-02,
-  requalification for the coordinated 0.2.2 release candidate, which carried the release identity plus one genuine executable fix found by the Tier 1 gate: the FFI bounded C-string scan used the signed-only `cast_unsigned()`, so `eggfetch-ffi` did not compile where `c_char` is `u8` (aarch64 Linux and other unsigned-`c_char` targets)).
+  `42a9c96db5b25354843bd83bd458c71757e95651` (2026-10-05,
+  requalification after the TLS/protocol M004 milestone added a Rust-only
+  additive fixed-target datagram route beneath experimental H3; no adapter,
+  manifest, typing, or facade surface changed)
   The prior `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
   `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical; earlier
   maintenance freezes remain historical implementation evidence, not live

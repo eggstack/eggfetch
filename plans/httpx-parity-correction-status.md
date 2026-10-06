@@ -4,6 +4,101 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after M004 caller-owned H3 datagram routing (2026-10-05)
+
+Recorded designation: **Stage C qualified (conditional renewal)** for both
+documented facades, bound to executable freeze
+`42a9c96db5b25354843bd83bd458c71757e95651`. The preceding `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding is historical
+because the TLS/protocol M004 milestone changed executable and public Rust
+inputs: it added a Rust-only, additive fixed-target datagram route beneath
+experimental H3 (`ClientBuilder::datagram_dialer`, `DatagramDialer`,
+`DatagramRoute`, three boxed-future aliases). Per the exact-SHA rule that
+public additive surface plus the changed core transport required renewed
+qualification.
+
+The change deliberately has no compatibility facade impact:
+
+- Rust-only by construction. Python, FFI, and Node expose nothing here, so no
+  generated API manifest, typing surface, or `__all__` changed. The adapter
+  feature-ownership gate confirms no adapter feature edge was added.
+- Additive and semver-safe. The six-profile `cargo-public-api` diff is exactly
+  one builder method, two traits, three type aliases, and one blanket `impl`;
+  nothing removed, renamed, or narrowed. `cargo-semver-checks` 0.49.0 reports no
+  semver update required against planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`. Five of six profiles are
+  byte-identical; only `all-features` changed.
+- No new dependency, license, or source. Quinn was already in the `http3` line,
+  and no Eggress dependency was added.
+- Eggfetch retains the whole QUIC/TLS/H3 stack; the seam carries datagrams only,
+  so this is not an HTTPX parity delta. It is documented as native-only in
+  `docs/residual-differences.md`.
+- H3 remains experimental. This renewal is not an H3 graduation claim; the
+  graduation gate and its independent interop/drain/impairment/upstream-risk
+  evidence requirements are unchanged.
+
+Qualification evidence on `42a9c96db5b25354843bd83bd458c71757e95651`. **This
+binding is recorded as a conditional renewal**: Tier 1, Tier 3, the live security
+preflight, and every Tier 2 gate runnable on the current host are green, but
+Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison
+could not be executed green on this `darwin` workstation and must still run on
+the Linux qualification host at this freeze before the renewal becomes
+unconditional.
+
+- Tier 1 (`./scripts/check.sh`) and Tier 3 (`./scripts/check.sh package`) green.
+  The only skips are the policy-defined optional ones: the Node JS surface
+  (native `eggfetch.node` artifact absent) and downstream fixtures (artifact
+  manifest absent).
+- Tier 2 green for the six-profile Rust public API oracle (pinned
+  `nightly-2026-05-07`), the `cargo-semver-checks` 0.49.0 cross-check ("no semver
+  update required"), the feature matrix, the Rust 1.89.0 MSRV matrix, docs and
+  doctests, FFI, the resource regression monitor, lifecycle, soak, lossless merge,
+  and the feature-gated tests.
+- Tier 2 **not runnable green on this host**, for reasons that predate this change
+  and that it cannot influence:
+  `compat/*/resource-thresholds.toml` declares `[platform.macos]` while
+  `test_resource_assertions.py` keys on `platform.system()`, which returns
+  `darwin` on macOS so the key never matches;
+  `test_ca_count_heuristic_removed` depends on macOS system-trust-store
+  semantics; and the API-manifest comparison reports
+  `codes (is_integer): ref=present cand=absent` because `http.HTTPStatus.is_integer`
+  exists in this venv's Python 3.11 and was removed in 3.12+. M004 changed no
+  Python, FFI, Node, CLI, or `compat/` file, so none of these are reachable from
+  it. Required future evidence: `./scripts/check.sh extended` on ubuntu-latest at
+  this freeze, specifically a green `EGGFETCH_COMPAT_REQUIRED=1` compat suite with
+  `--strict-markers` plus a green manifest generate/compare pair for both
+  facades.
+- Live security preflight: `advisories ok, bans ok, licenses ok, sources ok`.
+- One observation recorded rather than suppressed:
+  `crates/eggfetch-bench/src/bench_proxy.rs::forwards_complete_origin_form_requests_and_repeated_gets`
+  is intermittently flaky in this environment (~25% of runs). It was measured as
+  pre-existing, not a regression: an interleaved A/B of 16 runs per arm on the
+  true pre-M004 baseline commit `c8e51bfd` in a separate git worktree, same
+  toolchain and same build conditions, failed 5/16 on the baseline and 4/16 on
+  M004, which is statistically indistinguishable. A candidate fixture hardening
+  (bound the origin's per-connection read and stop abandoning the whole run on
+  one short read) was trialled and reverted because it did not change the
+  failure rate; keeping it would have been an unrelated half-fix. No product or
+  fixture code was changed for it.
+  `crates/eggfetch-core/tests/direct_transport_tests.rs::test_pool_isolation_uds_vs_tcp`
+  is likewise load-sensitive (6/6 failures on the baseline under concurrent load,
+  6/6 passes on this branch when run alone) and shares no code path with HTTP/3
+  datagram routing. Both are tracked for the standing corrective intake alongside
+  the existing low-severity compatibility-fixture finding.
+- A local environment accommodation is recorded rather than hidden: this
+  machine's shell and Python venv are `x86_64` while rustup's default host is
+  `aarch64-apple-darwin`, so `maturin develop` under the default toolchain
+  produced an `arm64` wheel the `x86_64` interpreter rejected. All tiers were
+  run with `RUSTUP_TOOLCHAIN=stable-x86_64-apple-darwin`. Only the build
+  architecture differs; the MSRV gate still resolved `rustup run 1.89.0`
+  explicitly (and `rustup run` ignores `RUSTUP_TOOLCHAIN`) so the exact required
+  1.89.0 toolchain ran, and the API oracle ran the pinned `nightly-2026-05-07`.
+  CI runs one `ubuntu-latest` job and is unaffected.
+
+The canonical qualification records (`docs/residual-differences.md`,
+`docs/reference/compatibility.md`,
+`docs/reference/compatibility-stage-decision.md`, both `compat/*/profile.toml`)
+were renewed together with this binding.
+
 ## Recorded state — Stage C renewed for the coordinated 0.2.2 release candidate (2026-10-02)
 
 Recorded designation: **Stage C qualified** for both documented facades, bound

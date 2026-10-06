@@ -4,9 +4,12 @@
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
 documented httpx2 2.12.0 sibling surface are qualified on executable SHA
-`015a56d7ec3edf186eec8ebccff01cbf5584274e` (2026-10-02,
-requalification for the coordinated 0.2.2 release candidate, which carried the release identity plus one genuine executable fix found by the Tier 1 gate: the FFI bounded C-string scan used the signed-only `cast_unsigned()`, so `eggfetch-ffi` did not compile where `c_char` is `u8` (aarch64 Linux and other unsigned-`c_char` targets)).
-The prior `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
+`42a9c96db5b25354843bd83bd458c71757e95651` (2026-10-05,
+requalification after the TLS/protocol M004 milestone added a Rust-only
+  additive fixed-target datagram route beneath experimental H3; no adapter,
+  manifest, typing, or facade surface changed)
+The prior `015a56d7...` binding (the coordinated 0.2.2 candidate) is
+historical. The `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
 `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical; earlier
 maintenance freezes remain historical implementation evidence. The final
 executable tree passed

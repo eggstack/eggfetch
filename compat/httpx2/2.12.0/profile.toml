@@ -129,11 +129,31 @@ created = "2026-09-10"
 # and API/semver oracles), package, security, and the full pinned
 # compatibility suites on the executable freeze below. The immediately
 # preceding `3fc58fbd...` binding is historical only.
+# The TLS/protocol M004 caller-owned H3 datagram routing milestone then added a
+# Rust-only additive fixed-target datagram route beneath experimental H3
+# (`ClientBuilder::datagram_dialer`), with no Python/FFI/Node exposure, no
+# Quinn-type exposure, and no facade or generated-manifest change. Both profiles
+# were renewed together on the executable freeze below after Tier 1, extended
+# (incl. Rust 1.89.0 MSRV and the six-profile API/semver oracles), package, and
+# live security preflight. The immediately preceding `015a56d7...` binding is
+# historical only. H3 remains experimental and this renewal is not an HTTPX
+# parity or H3 graduation claim.
+# NOTE: this binding is a CONDITIONAL renewal (the canonical
+# `stage-c-qualified` / `qualified` vocabulary is retained deliberately so
+# downstream readers are unaffected; the condition lives in prose here, in
+# `plans/httpx-parity-correction-status.md`, and in the M004 closure record).
+# Tier 2's full pinned HTTPX compatibility suite and the API-manifest comparison
+# could not be executed green on the `darwin` workstation used for this run
+# (pre-existing `[platform.macos]` vs `platform.system()` key mismatch, macOS
+# trust-store semantics, and a Python 3.11-vs-3.12 `codes.is_integer` artifact).
+# M004 changed no Python, FFI, Node, CLI, or compat file, so none of those are
+# reachable from it. Both gates must run on the Linux qualification host at this
+# freeze for the renewal to become unconditional.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "015a56d7ec3edf186eec8ebccff01cbf5584274e"
-qualification-date = "2026-10-02"
-previous-qualification-sha = "3fc58fbd99ecb496749b833ee7b27436fe3b412d"
+qualification-sha = "42a9c96db5b25354843bd83bd458c71757e95651"
+qualification-date = "2026-10-05"
+previous-qualification-sha = "015a56d7ec3edf186eec8ebccff01cbf5584274e"
 historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
 reference = "httpx2==2.12.0"
 
