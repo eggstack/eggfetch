@@ -5,7 +5,9 @@
 name: M004 Tier2 evidence (temporary)
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feat/h3-caller-owned-datagram-routing
 
 permissions:
   contents: read
