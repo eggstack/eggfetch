@@ -67,6 +67,7 @@ jobs:
             -v --strict-markers
 
       - name: API manifest comparison (both facades)
+        if: always()
         run: |
           source .venv/bin/activate
           tmp_dir="$(mktemp -d)"
