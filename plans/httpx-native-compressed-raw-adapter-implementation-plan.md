@@ -818,3 +818,12 @@ Before closure:
 # Closure statement
 
 This line is closed only when the built-in EggFetch transport preserves a compressed response’s encoded source until first one-shot body selection, native raw iteration yields the same encoded bytes and incremental accounting as HTTPX 0.28.1, decoded operations retain current behavior, all focused and full validation completes, and the exact final tree passes the existing single routine CI job.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 35 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

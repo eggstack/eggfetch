@@ -183,3 +183,12 @@ At plan closure also run relevant feature-combination tests from `./scripts/chec
 - [ ] `client.rs` is materially shorter/less repetitive without public API growth.
 - [ ] Hyper-util pool adoption decision is recorded with source/fixture rationale.
 - [ ] Tier 1 and focused route tests pass.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 11 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

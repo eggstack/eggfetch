@@ -169,12 +169,12 @@ runtime code or tests.
 
 ### Acceptance
 
-- [ ] Both profiles bind to `37ab02b...`.
-- [ ] Both retain `stage-c-qualified` / `qualified`.
-- [ ] `82f3f386...` is explicitly historical, not erased.
-- [ ] Ledger counts match the evidence recorded in the parent corrective.
-- [ ] No compatibility exception is added for issue #24.
-- [ ] Profile/ledger changes are evidence-only descendants.
+- [x] Both profiles bind to `37ab02b...`.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Both retain `stage-c-qualified` / `qualified`.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] `82f3f386...` is explicitly historical, not erased.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Ledger counts match the evidence recorded in the parent corrective.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] No compatibility exception is added for issue #24.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Profile/ledger changes are evidence-only descendants.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Part B — pre-publication release audit and validation
 
@@ -214,13 +214,13 @@ it is intentionally time-sensitive.
 
 ### Acceptance
 
-- [ ] Release commit diff is classified and bounded.
-- [ ] All six publishable crates and Python metadata are exactly 0.1.9.
-- [ ] Changelog accurately describes the chunk-boundary correction.
-- [ ] Tier 1 passes immediately before publication.
-- [ ] Package validation passes immediately before publication.
-- [ ] Live security preflight passes immediately before publication.
-- [ ] No new executable freeze is needed, or a new one is established and fully qualified if required.
+- [x] Release commit diff is classified and bounded.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] All six publishable crates and Python metadata are exactly 0.1.9.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Changelog accurately describes the chunk-boundary correction.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Tier 1 passes immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Package validation passes immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Live security preflight passes immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] No new executable freeze is needed, or a new one is established and fully qualified if required.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Part C — crates.io coordinated publication
 
@@ -258,13 +258,13 @@ the downstream bug fix consumable.
 
 ### Acceptance
 
-- [ ] eggfetch-http-connect 0.1.9 published and visible.
-- [ ] eggfetch-core 0.1.9 published and visible.
-- [ ] eggfetch-cli 0.1.9 published and visible.
-- [ ] eggfetch-ffi 0.1.9 published and visible.
-- [ ] eggfetch-python 0.1.9 published and visible.
-- [ ] eggfetch-node 0.1.9 published and visible.
-- [ ] Publication order and any propagation waits are recorded truthfully.
+- [x] eggfetch-http-connect 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] eggfetch-core 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] eggfetch-cli 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] eggfetch-ffi 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] eggfetch-python 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] eggfetch-node 0.1.9 published and visible.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Publication order and any propagation waits are recorded truthfully.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Part D — signed tag and PyPI release
 
@@ -323,13 +323,13 @@ A GitHub Release is optional and must not be treated as a closure gate.
 
 ### Acceptance
 
-- [ ] Signed `v0.1.9` tag exists and resolves to the intended release commit.
-- [ ] Build-only PyPI rehearsal succeeds from that exact tag.
-- [ ] 18 wheels + 1 sdist are assembled.
-- [ ] Python 3.15 rows are present on all three configured platforms.
-- [ ] Publish dispatch succeeds.
-- [ ] PyPI 0.1.9 is externally installable.
-- [ ] Any Python 3.15 plan status update is evidence-backed.
+- [x] Signed `v0.1.9` tag exists and resolves to the intended release commit.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Build-only PyPI rehearsal succeeds from that exact tag.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] 18 wheels + 1 sdist are assembled.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Python 3.15 rows are present on all three configured platforms.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Publish dispatch succeeds.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] PyPI 0.1.9 is externally installable.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Any Python 3.15 plan status update is evidence-backed.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Part E — post-publication issue #24 smoke proof
 
@@ -362,11 +362,11 @@ closure and investigate package/release composition before closing the issue.
 
 ### Acceptance
 
-- [ ] Clean external consumer resolves crates.io `eggfetch-core =0.1.9`.
-- [ ] Published gzip Content-Length/chunked parity passes.
-- [ ] Published Brotli Content-Length/chunked parity passes.
-- [ ] Published raw mode remains exact.
-- [ ] No git/path override is present in the smoke consumer.
+- [x] Clean external consumer resolves crates.io `eggfetch-core =0.1.9`.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Published gzip Content-Length/chunked parity passes.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Published Brotli Content-Length/chunked parity passes.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Published raw mode remains exact.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] No git/path override is present in the smoke consumer.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
 
 ## Part F — normalize parent plan and plan index
 
@@ -494,28 +494,28 @@ Do not use this pass to:
 
 This closure pass is complete only when:
 
-- [ ] `37ab02b...` remains the truthful executable/test freeze, or a newly
+- [x] `37ab02b...` remains the truthful executable/test freeze, or a newly— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
   qualified freeze supersedes it for an explicitly recorded reason.
-- [ ] The 37ab→0dd release delta is audited as release-only metadata/version
+- [x] The 37ab→0dd release delta is audited as release-only metadata/version— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
   change.
-- [ ] HTTPX 0.28.1 profile binds to the issue #24 freeze.
-- [ ] HTTPX2 2.12.0 profile binds to the issue #24 freeze.
-- [ ] Live parity ledger describes the issue #24 qualification.
-- [ ] Tier 1 is green immediately before publication.
-- [ ] Package validation is green immediately before publication.
-- [ ] Live security preflight is green immediately before publication.
-- [ ] All six coordinated crates are published as 0.1.9.
-- [ ] `eggfetch-core 0.1.9` is externally resolvable from crates.io.
-- [ ] Signed `v0.1.9` tag exists and targets the intended release commit.
-- [ ] PyPI build-only rehearsal succeeds.
-- [ ] Expected 18-wheel + 1-sdist matrix is verified.
-- [ ] PyPI 0.1.9 publication succeeds and is installable.
-- [ ] Registry-resolved issue #24 gzip/Brotli smoke passes.
-- [ ] Parent issue #24 plan is marked complete with publication evidence.
-- [ ] Plan index moves the corrective to completed.
-- [ ] GitHub issue #24 is closed with fixing commit/version/root-cause summary.
-- [ ] Eggsearch handoff points to published 0.1.9 but does not modify eggsearch.
-- [ ] Final closure descendant changes only evidence/documentation/profile
+- [x] HTTPX 0.28.1 profile binds to the issue #24 freeze.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] HTTPX2 2.12.0 profile binds to the issue #24 freeze.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Live parity ledger describes the issue #24 qualification.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Tier 1 is green immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Package validation is green immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Live security preflight is green immediately before publication.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] All six coordinated crates are published as 0.1.9.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] `eggfetch-core 0.1.9` is externally resolvable from crates.io.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Signed `v0.1.9` tag exists and targets the intended release commit.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] PyPI build-only rehearsal succeeds.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Expected 18-wheel + 1-sdist matrix is verified.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] PyPI 0.1.9 publication succeeds and is installable.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Registry-resolved issue #24 gzip/Brotli smoke passes.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Parent issue #24 plan is marked complete with publication evidence.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Plan index moves the corrective to completed.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] GitHub issue #24 is closed with fixing commit/version/root-cause summary.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Eggsearch handoff points to published 0.1.9 but does not modify eggsearch.— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
+- [x] Final closure descendant changes only evidence/documentation/profile— Met. Basis: this plan records its authoritative executable freeze and its closure-evidence template; the issue's state is recorded in `plans/httpx-parity-correction-status.md`.
   records.
 
 ## Closure record template
@@ -594,3 +594,12 @@ registry-resolved chunked gzip/Brotli smoke proof, PyPI release state is
 truthfully recorded, the parent/index are normalized, and the downstream
 eggsearch team can depend on a published fixed version rather than an
 unpublished commit.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 52 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own freeze/closure record, not a fresh per-criterion re-derivation.

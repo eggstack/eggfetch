@@ -1,3 +1,6 @@
+// This target exercises the redirect-following client builder, which the lean profile compiles out.
+// It therefore requires `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -21,6 +24,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(feature = "redirects")]
 //! Integration tests for eggfetch-core public API.
 
 mod test_server;

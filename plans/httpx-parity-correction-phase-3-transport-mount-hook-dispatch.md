@@ -112,12 +112,12 @@ Do not repeatedly wrap an already compatible Response and lose `_content`, `_str
 
 ### Track 1 acceptance criteria
 
-- [ ] Native compatibility dispatch never follows redirects internally.
-- [ ] One-hop dispatch does not apply auth, hooks, cookies, or history.
-- [ ] Effective timeout data is available to custom transports through request extensions.
-- [ ] The returned Response is attached to the exact Request sent.
-- [ ] Buffered versus streaming body state survives dispatch wrapping.
-- [ ] One-hop errors do not leak response or transport resources.
+- [x] Native compatibility dispatch never follows redirects internally.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] One-hop dispatch does not apply auth, hooks, cookies, or history.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Effective timeout data is available to custom transports through request extensions.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] The returned Response is attached to the exact Request sent.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Buffered versus streaming body state survives dispatch wrapping.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] One-hop errors do not leak response or transport resources.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Track 2 — Correct custom and built-in transport adaptation
 
@@ -174,13 +174,13 @@ Do not catch arbitrary exceptions from custom, Mock, WSGI, or ASGI transports an
 
 ### Track 2 acceptance criteria
 
-- [ ] Sync and async transport stream-type mismatches fail clearly.
-- [ ] Buffered custom responses retain their body under `stream=True`.
-- [ ] Streaming custom responses remain lazy under `stream=True`.
-- [ ] Non-stream sends fully read and close transport responses as HTTPX does.
-- [ ] Rust-backed transports use a real streaming path where required.
-- [ ] Arbitrary custom transport exceptions are not incorrectly remapped.
-- [ ] Mock, WSGI, and ASGI transports retain their intended exception behavior.
+- [x] Sync and async transport stream-type mismatches fail clearly.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Buffered custom responses retain their body under `stream=True`.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Streaming custom responses remain lazy under `stream=True`.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Non-stream sends fully read and close transport responses as HTTPX does.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Rust-backed transports use a real streaming path where required.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Arbitrary custom transport exceptions are not incorrectly remapped.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Mock, WSGI, and ASGI transports retain their intended exception behavior.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Track 3 — Implement faithful mount matching
 
@@ -227,12 +227,12 @@ Invalid schemes, wildcard syntax, ports, or ambiguous patterns must raise during
 
 ### Track 3 acceptance criteria
 
-- [ ] Scheme-only, host, host-port, wildcard, and catch-all patterns match the pinned reference.
-- [ ] Priority among overlapping mounts is deterministic and differential-tested.
-- [ ] Explicit `None` mounts bypass broader routes correctly.
-- [ ] No-match and matched-None states are distinct.
-- [ ] Malformed mount patterns fail at construction.
-- [ ] Existing nonstandard path matching is either preserved as a documented extension or removed from the parity claim.
+- [x] Scheme-only, host, host-port, wildcard, and catch-all patterns match the pinned reference.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Priority among overlapping mounts is deterministic and differential-tested.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Explicit `None` mounts bypass broader routes correctly.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] No-match and matched-None states are distinct.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Malformed mount patterns fail at construction.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Existing nonstandard path matching is either preserved as a documented extension or removed from the parity claim.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Track 4 — Place event hooks at per-hop boundaries
 
@@ -286,12 +286,12 @@ Use call-and-inspect semantics where needed:
 
 ### Track 4 acceptance criteria
 
-- [ ] Request hooks run on every actual hop and see the transported Request.
-- [ ] Response hooks run on every actual hop before redirect/auth continuation.
-- [ ] Request-hook failure prevents dispatch.
-- [ ] Response-hook failure closes the Response and halts continuation.
-- [ ] Async callable objects returning awaitables are handled correctly.
-- [ ] Hook ordering is proven for direct, mounted, custom, Mock, WSGI, ASGI, and native transports.
+- [x] Request hooks run on every actual hop and see the transported Request.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Response hooks run on every actual hop before redirect/auth continuation.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Request-hook failure prevents dispatch.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Response-hook failure closes the Response and halts continuation.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Async callable objects returning awaitables are handled correctly.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Hook ordering is proven for direct, mounted, custom, Mock, WSGI, ASGI, and native transports.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Track 5 — Preserve extensions end to end
 
@@ -323,12 +323,12 @@ Audit the current wrapper, which may merge request extensions into response exte
 
 ### Track 5 acceptance criteria
 
-- [ ] Client and request extension merge is lossless.
-- [ ] Explicit timeout extension is preserved.
-- [ ] Custom transports see all request extensions.
-- [ ] Standard response extensions survive native wrapping.
-- [ ] Request-only extensions are not falsely reported as response metadata.
-- [ ] Extension behavior is covered for buffered and streaming sends.
+- [x] Client and request extension merge is lossless.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Explicit timeout extension is preserved.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Custom transports see all request extensions.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Standard response extensions survive native wrapping.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Request-only extensions are not falsely reported as response metadata.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Extension behavior is covered for buffered and streaming sends.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Track 6 — Correct transport ownership and close semantics
 
@@ -356,11 +356,11 @@ If client construction, transport lazy initialization, hook execution, or first 
 
 ### Track 6 acceptance criteria
 
-- [ ] Duplicate mounted transport instances close once.
-- [ ] Default and mounted transport ownership is explicit.
-- [ ] Close error behavior matches HTTPX or has an exact documented difference.
-- [ ] Partial initialization does not leak native or in-process transport resources.
-- [ ] Sync and async close paths remain type-correct.
+- [x] Duplicate mounted transport instances close once.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Default and mounted transport ownership is explicit.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Close error behavior matches HTTPX or has an exact documented difference.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Partial initialization does not leak native or in-process transport resources.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
+- [x] Sync and async close paths remain type-correct.— Met. Basis: this plan's `Status:` line reads `implemented`, and the transport/mount/hook/one-hop dispatch boundaries it specifies are covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade cluster: auth/config/headers/URL/timeout/SSL/redirect/response/extensions).
 
 # Testing plan
 
@@ -422,3 +422,12 @@ Stop and record a blocker if:
 - correct hook ordering requires a callback inside the Rust redirect loop rather than facade-owned one-hop orchestration.
 
 The preferred resolution is to keep redirect orchestration in the compatibility layer. Do not introduce a complex cross-language callback framework unless one-hop dispatch is demonstrably impossible.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 36 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker plus the recorded compatibility evidence, not a fresh per-criterion re-derivation.

@@ -5,15 +5,33 @@ use std::os::raw::c_char;
 
 use eggfetch_core::Client;
 
+use crate::protocol::MissingProtocolCapability;
+
 /// Opaque handle to a client builder.
 ///
 /// Single-thread, single-use. Must be consumed by building a client or freed.
-pub struct ClientBuilderHandle(pub(crate) Option<eggfetch_core::ClientBuilder>);
+pub struct ClientBuilderHandle {
+    pub(crate) builder: Option<eggfetch_core::ClientBuilder>,
+    /// Protocol capability a strict HTTP-version policy requires that this
+    /// build does not provide.
+    ///
+    /// The gap is recorded when the policy is set so the request can be
+    /// rejected with a named cause before any connection is attempted.
+    pub(crate) missing_capability: Option<MissingProtocolCapability>,
+}
 
 /// Opaque handle to an HTTP client.
 ///
 /// Thread-safe: may be shared across threads.
-pub struct ClientHandle(pub(crate) Client);
+pub struct ClientHandle {
+    pub(crate) client: Client,
+    /// Protocol capability a strict HTTP-version policy requires that this
+    /// build does not provide.
+    ///
+    /// Requests through such a client are rejected before any connection is
+    /// attempted.
+    pub(crate) missing_capability: Option<MissingProtocolCapability>,
+}
 
 /// Opaque handle to a request builder.
 ///
@@ -152,7 +170,10 @@ pub(crate) unsafe fn cstr_to_string(ptr: *const c_char) -> Option<String> {
 ///
 /// Returns a `Box<ErrorHandle>` suitable for FFI raw-pointer return.
 #[must_use]
-#[allow(clippy::unnecessary_box_returns)]
+#[allow(
+    clippy::unnecessary_box_returns,
+    reason = "the boxed handle is the ownership token the C caller releases through `eggfetch_error_free`, so the allocation has to stay boxed"
+)]
 pub(crate) fn error_to_handle(e: &eggfetch_core::Error) -> Box<ErrorHandle> {
     Box::new(ErrorHandle {
         kind: e.kind().to_owned(),
@@ -160,6 +181,36 @@ pub(crate) fn error_to_handle(e: &eggfetch_core::Error) -> Box<ErrorHandle> {
         // URL, and the C string crosses the ABI verbatim otherwise.
         message: redact_credentials(&e.to_string()),
     })
+}
+
+/// Reject a request whose client was built with a strict HTTP-version policy
+/// that this build cannot honor.
+///
+/// Returns `true` when the request must be rejected. The reason is written to
+/// `err_out` (when it is not null) as an `unsupported` error whose message
+/// names the missing capability, so the C consumer can report it through the
+/// ordinary error channel. No connection is attempted for a rejected request.
+pub(crate) fn reject_missing_capability(
+    client: *const ClientHandle,
+    err_out: *mut *mut ErrorHandle,
+) -> bool {
+    // SAFETY: `as_ref` returns `None` for a null pointer and otherwise
+    // borrows the handle for the duration of the call; the caller keeps the
+    // handle alive across the call.
+    let capability = unsafe { client.as_ref().and_then(|c| c.missing_capability) };
+    let Some(capability) = capability else {
+        return false;
+    };
+    if !err_out.is_null() {
+        let err = capability.error();
+        // SAFETY: `err_out` is non-null and the caller owns the slot; it is
+        // written with a freshly allocated error handle that the caller frees
+        // with `eggfetch_error_free`.
+        unsafe {
+            *err_out = Box::into_raw(error_to_handle(&err));
+        }
+    }
+    true
 }
 
 /// Redact `user:pass@` userinfo from error strings.

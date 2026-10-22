@@ -99,6 +99,107 @@ SOCKS, and UDS H2 are separately enforced and tested.
 Evidence: `TestH2ProxyConnectResidual::test_candidate_proxy_connect_remains_http1`
 and parity case `H2-009`.
 
+## Cookie `Domain` attribute policy
+
+The engine jar and the HTTPX 0.28.1 facade jar consume the same `Set-Cookie`
+stream, so ADR-0009 rule 3 requires them to reach the same accept/reject
+verdict and to contribute the same `Cookie` header. The facade jar is
+`http.cookiejar` — the jar HTTPX 0.28.1 itself uses — so its verdict is the
+HTTPX-defined one and is unchanged. The engine was aligned to it.
+
+Before the alignment the engine rejected every `Set-Cookie` whose explicit
+`Domain` attribute named an IP address, so `Domain=127.0.0.1` served by
+`127.0.0.1` was dropped by the engine while the facade stored it and sent
+`a=1`. The engine now accepts an IP-literal `Domain` only when it names
+exactly the response host. Its `domain_matches` already restricts IP
+literals to exact equality (RFC 6265 §5.2.3), so the relaxation cannot widen
+cross-host matching: `Domain=127.0.0.1` is still rejected for any other host
+and the cookie is only ever returned to the exact IP it names. The engine
+stores a normalized domain value (no leading dot) and a non-host-only flag,
+so the cookie is returned to the named IP only.
+
+One difference remains, and it is confined to an explicit IPv6-literal `Domain`
+attribute:
+
+- `Set-Cookie: a=1; Domain=[::1]` served by `[::1]` is *stored* by both jars,
+  but the facade does not return it while the engine does.
+  `http.cookiejar` rewrites a dotless request host to `<host>.local`
+  (`eff_request_host`), so the request host becomes `[::1].local` and the
+  library's leading-dot domain convention (`. [::1]`) no longer
+  suffix-matches it. The engine keeps the RFC 6265 §5.2.3/§5.3 behavior and
+  returns a cookie whose `Domain` names the host it was served from. A
+  host-only cookie for the same IPv6 host is returned by both jars, so the
+  difference is specific to the explicit IPv6-literal `Domain` attribute.
+
+This difference is deliberate, not a defect: the facade keeps HTTPX 0.28.1
+behavior by construction, and the engine's behavior is the RFC 6265-conformant
+one. Matching the facade here would mean reproducing a standard-library
+host-mangling artifact in the native engine.
+
+The two jars also spell the stored domain differently: the facade keeps the
+standard library's leading-dot convention (`.example.test`) while the engine
+normalizes the dot away (`example.test`). The accept/reject verdict and the
+contributed `Cookie` header are identical; only the stored domain string
+differs, so a caller comparing a stored domain string across the two
+surfaces sees `.example.test` and `example.test` for the same cookie.
+
+Evidence: `crates/eggfetch-core/tests/cookie_policy_parity_tests.rs`,
+`crates/eggfetch-python/tests/compat/test_cookie_policy_parity.py`.
+
+## Redirect credential scope: engine vs HTTPX 0.28.1
+
+`eggfetch-core`'s redirect pipeline and `eggfetch.compat.httpx` implement two
+different redirect policies. HTTPX 0.28.1 is the facade's specification, so
+the facade keeps HTTPX behaviour and the engine keeps its stricter rules.
+The difference is deliberate and is pinned by
+`crates/eggfetch-python/tests/compat/test_redirect_policy_parity.py`.
+
+| case | engine | facade / HTTPX 0.28.1 |
+| --- | --- | --- |
+| `Authorization`, same-origin hop | kept | kept |
+| `Authorization`, cross-origin hop | dropped | dropped |
+| `Authorization`, `https` -> `http` downgrade | dropped | dropped |
+| `Authorization`, canonical `http:80` -> `https:443` same-host upgrade | dropped | kept |
+| `Proxy-Authorization`, any hop | dropped | kept |
+| `Cookie`, same-origin hop | kept | dropped |
+| `Cookie`, cross-origin hop | dropped | dropped |
+| `Referer` / `Origin`, cross-origin hop | dropped | kept |
+| `Host`, cross-origin hop | rewritten | rewritten |
+| method, `301`/`303`/`307`/`308` | RFC 9110 table | HTTPX table (agree) |
+| method, `302` with a method other than POST/HEAD | preserved (body preserved) | rewritten to `GET` (body dropped) |
+
+The engine's rule is origin-based: credentials survive only while
+`origin(previous) == origin(next)`, so any scheme or port change is
+cross-origin. HTTPX instead keeps `Authorization` for one special case, the
+canonical `http:80` -> `https:443` same-host upgrade, which it treats as an
+upgrade of the same trust domain; an `https` -> `http` downgrade is
+cross-origin for both implementations and is therefore **stripped by both**.
+
+Why the engine stays conservative:
+
+- `Proxy-Authorization` is a proxy credential. Forwarding it to a different
+  origin discloses the proxy secret to that origin, so the engine drops it
+  on every hop.
+- `Referer` and `Origin` disclose the source URL to the destination origin;
+  the engine drops them whenever the origin changes.
+- `Authorization` is replayed only within one origin. HTTPX replays a bearer
+  token across the canonical `http` -> `https` upgrade; the engine does not,
+  because a scheme change is a new origin.
+- An explicit `Cookie` header survives only same-origin hops in the engine;
+  HTTPX drops it on every redirect. The engine is not weaker on the leak
+  path, because it also drops the cookie on every cross-origin hop.
+
+The `302` method difference is a browser-emulation rule in HTTPX (every
+non-HEAD method becomes `GET`) versus the engine's RFC 9110 table, which
+rewrites only `POST`. The engine preserves the method and the request body
+for other methods, so the next origin receives what the client actually
+sent.
+
+Consequence for users: `eggfetch.compat.httpx` behaves exactly like HTTPX
+0.28.1. The native `eggfetch` client and the engine-based surfaces are
+stricter; callers that need HTTPX's redirect credential scope must use the
+compatibility facade.
+
 ## Socket-option safety boundary
 
 HTTPX accepts a valid four-element `(level, option, None, optlen)` socket
@@ -173,6 +274,30 @@ residuals:
 - Detailed design, invariants, and evidence: `core-tls-proxy-protocols.md` §
   "Caller-owned datagram routing (experimental)", `threat-model.md` §
   "Malicious Datagram Route", and ADR-0007.
+
+## IPv6 pool-key divergence between the high-level and native origin paths (Rust-only)
+
+- Measured during the core duplicate-helper consolidation (M010). The two
+  origin normalizations are now one rule, but the *inputs* they are fed
+  differ for IPv6 literals:
+  - the high-level path builds the pool origin from the URL **host**;
+    `url::Url::host_str()` returns the bracketed `[::1]` for
+    `http://[::1]:8080/`;
+  - the native path builds it from the URI **authority**; `http::Uri::host()`
+    returns `[::1]`, which `HttpOrigin::from_uri()` strips to `::1`.
+- Consequence: the same IPv6 endpoint produces two different pool keys
+  (`[::1]:8080` high-level, `::1:8080` native), so the per-origin
+  concurrency limit is not shared between the two entry paths for that
+  endpoint. Nothing else changes: the scheme, the port, and the
+  lowercase-host normalization are identical.
+- Not changed here: aligning the two forms would alter pool keying, which
+  the consolidation milestone explicitly excludes. It is recorded rather
+  than papered over, and the (previously incorrect) doc comments in
+  `http_origin.rs` that claimed the native form matches the high-level
+  `url` form were corrected to state the divergence.
+- Rust-only: the Python, FFI, and Node adapters reach the same core code
+  paths, so no generated API manifest or typing surface changes, and there
+  is no HTTPX counterpart to compare against.
 
 ## Historical closures and exclusions
 

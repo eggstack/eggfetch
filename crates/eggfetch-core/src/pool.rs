@@ -227,42 +227,43 @@ impl OriginKey {
         Self::from_components(origin.scheme_str(), origin.host(), origin.port_ref())
     }
 
-    /// Build an `OriginKey` from a scheme and `url::Url`.
+    /// Build an `OriginKey` from a `url::Url`.
     ///
     /// High-level adapter: reduces immediately to the same canonical
-    /// component representation as [`Self::from_origin`].
+    /// component representation as [`Self::from_origin`], through the one
+    /// shared origin normalization
+    /// ([`crate::http_origin::HttpOrigin::from_url`]).
+    ///
+    /// The rule is the strict one: only the HTTP and HTTPS schemes are
+    /// accepted and the host must not be empty. A `None` result is a soft
+    /// degrade — this request simply has no pool key — and never a hard
+    /// error; the hard error for an invalid URL belongs to the caller.
     #[cfg(feature = "high-level-url")]
-    pub(crate) fn from_url(scheme: &str, url: &url::Url) -> Option<Self> {
-        let host = url.host_str()?.to_owned();
-        let port = url.port_or_known_default()?;
-        Some(Self::from_components(
-            scheme,
-            &host.to_ascii_lowercase(),
-            port,
-        ))
+    pub(crate) fn from_url(url: &url::Url) -> Option<Self> {
+        let origin = crate::http_origin::HttpOrigin::from_url(url)?;
+        Some(Self::from_origin(&origin))
     }
 
     /// Build an origin key including the proxy endpoint scheme.
+    ///
+    /// The origin part is built by the same shared normalization as
+    /// [`Self::from_url`]; only the proxy fields are attached here, so the
+    /// origin identity of a proxied request cannot drift from the
+    /// unproxied one.
     #[cfg(feature = "proxy")]
     pub(crate) fn from_url_with_proxy_scheme(
-        scheme: &str,
         url: &url::Url,
         proxy_host: Option<&str>,
         proxy_port: Option<u16>,
         proxy_scheme: Option<&str>,
         is_tunnel: bool,
     ) -> Option<Self> {
-        let host = url.host_str()?.to_owned();
-        let port = url.port_or_known_default()?;
-        Some(Self {
-            scheme: scheme.to_owned(),
-            host: host.to_ascii_lowercase(),
-            port,
-            proxy_host: proxy_host.map(str::to_owned),
-            proxy_port,
-            proxy_scheme: proxy_scheme.map(str::to_owned),
-            is_tunnel,
-        })
+        let mut key = Self::from_url(url)?;
+        key.proxy_host = proxy_host.map(str::to_owned);
+        key.proxy_port = proxy_port;
+        key.proxy_scheme = proxy_scheme.map(str::to_owned);
+        key.is_tunnel = is_tunnel;
+        Some(key)
     }
 
     /// Build an `OriginKey` for tests or callers that already have the
@@ -1069,7 +1070,7 @@ mod tests {
     #[test]
     fn origin_key_from_url_http() {
         let url = url::Url::parse("http://example.com:8080/path").unwrap();
-        let key = OriginKey::from_url("http", &url).unwrap();
+        let key = OriginKey::from_url(&url).unwrap();
         assert_eq!(key.scheme(), "http");
         assert_eq!(key.host(), "example.com");
         assert_eq!(key.port(), 8080);
@@ -1079,7 +1080,7 @@ mod tests {
     #[test]
     fn origin_key_from_url_https_default_port() {
         let url = url::Url::parse("https://example.com/path").unwrap();
-        let key = OriginKey::from_url("https", &url).unwrap();
+        let key = OriginKey::from_url(&url).unwrap();
         assert_eq!(key.scheme(), "https");
         assert_eq!(key.host(), "example.com");
         assert_eq!(key.port(), 443);
@@ -1089,7 +1090,7 @@ mod tests {
     #[test]
     fn origin_key_from_url_http_default_port() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let key = OriginKey::from_url("http", &url).unwrap();
+        let key = OriginKey::from_url(&url).unwrap();
         assert_eq!(key.scheme(), "http");
         assert_eq!(key.port(), 80);
     }
@@ -1162,8 +1163,8 @@ mod tests {
         // URL with explicit port is honored; URL without port uses scheme default.
         let explicit = url::Url::parse("http://example.com:8080/path").unwrap();
         let default = url::Url::parse("http://example.com/path").unwrap();
-        let k_explicit = OriginKey::from_url("http", &explicit).unwrap();
-        let k_default = OriginKey::from_url("http", &default).unwrap();
+        let k_explicit = OriginKey::from_url(&explicit).unwrap();
+        let k_default = OriginKey::from_url(&default).unwrap();
         assert_eq!(k_explicit.port(), 8080);
         assert_eq!(k_default.port(), 80);
     }
@@ -1180,24 +1181,12 @@ mod tests {
     #[test]
     fn origin_key_proxy_a_not_equal_proxy_b() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let a = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy-a"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
-        let b = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy-b"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
+        let a =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy-a"), Some(8080), None, false)
+                .unwrap();
+        let b =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy-b"), Some(8080), None, false)
+                .unwrap();
         assert_ne!(a, b);
     }
 
@@ -1205,24 +1194,12 @@ mod tests {
     #[test]
     fn origin_key_tunnel_not_equal_non_tunnel() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let tunnel = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            true,
-        )
-        .unwrap();
-        let direct = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
+        let tunnel =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, true)
+                .unwrap();
+        let direct =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, false)
+                .unwrap();
         assert_ne!(tunnel, direct);
     }
 
@@ -1230,24 +1207,10 @@ mod tests {
     #[test]
     fn origin_key_proxy_same_route_equal() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let a = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
-        let b = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
+        let a = OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, false)
+            .unwrap();
+        let b = OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, false)
+            .unwrap();
         assert_eq!(a, b);
     }
 
@@ -1283,15 +1246,9 @@ mod tests {
     #[test]
     fn origin_key_display_with_proxy() {
         let url = url::Url::parse("https://example.com/path").unwrap();
-        let key = OriginKey::from_url_with_proxy_scheme(
-            "https",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            true,
-        )
-        .unwrap();
+        let key =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, true)
+                .unwrap();
         assert_eq!(
             key.to_string(),
             "https://example.com:443 via proxy:8080 tunnel"
@@ -1302,15 +1259,9 @@ mod tests {
     #[test]
     fn origin_key_display_without_tunnel() {
         let url = url::Url::parse("http://example.com/path").unwrap();
-        let key = OriginKey::from_url_with_proxy_scheme(
-            "http",
-            &url,
-            Some("proxy"),
-            Some(8080),
-            None,
-            false,
-        )
-        .unwrap();
+        let key =
+            OriginKey::from_url_with_proxy_scheme(&url, Some("proxy"), Some(8080), None, false)
+                .unwrap();
         assert_eq!(key.to_string(), "http://example.com:80 via proxy:8080");
     }
 
@@ -1728,5 +1679,225 @@ mod tests {
                 .load(Ordering::Relaxed),
             0
         );
+    }
+
+    /// The pre-consolidation permissive origin rule, kept as the reference
+    /// the consolidation is measured against.
+    ///
+    /// This is the rule that lived in `OriginKey::from_url` before the
+    /// origin normalizations were consolidated: any scheme string is
+    /// accepted and the host is not validated.
+    #[cfg(feature = "high-level-url")]
+    fn legacy_permissive_components(scheme: &str, url: &url::Url) -> Option<(String, String, u16)> {
+        let host = url.host_str()?.to_owned();
+        let port = url.port_or_known_default()?;
+        Some((scheme.to_owned(), host.to_ascii_lowercase(), port))
+    }
+
+    /// One row of the origin-verdict agreement table.
+    #[cfg(feature = "high-level-url")]
+    struct OriginShape {
+        /// Shape name.
+        name: &'static str,
+        /// The URL text, or `None` when the shape is not representable as a
+        /// `url::Url` at all.
+        url: Option<&'static str>,
+        /// The verdict the pre-consolidation permissive rule produced.
+        legacy_accepts: bool,
+        /// The verdict the consolidated strict rule produces.
+        strict_accepts: bool,
+    }
+
+    #[cfg(feature = "high-level-url")]
+    fn origin_shapes() -> Vec<OriginShape> {
+        vec![
+            OriginShape {
+                name: "http",
+                url: Some("http://example.com/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "https",
+                url: Some("https://example.com/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "non-http(s) scheme",
+                url: Some("ftp://example.com/path"),
+                legacy_accepts: true,
+                strict_accepts: false,
+            },
+            OriginShape {
+                name: "empty host",
+                // `url::Url` itself refuses an empty host for a special
+                // scheme, so the shape never reaches either normalization.
+                url: None,
+                legacy_accepts: false,
+                strict_accepts: false,
+            },
+            OriginShape {
+                name: "uppercase host",
+                url: Some("http://EXAMPLE.COM/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "ipv4 literal",
+                url: Some("http://127.0.0.1:8080/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "ipv6 literal",
+                url: Some("http://[::1]:8080/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "explicit default port",
+                url: Some("http://example.com:80/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "explicit non-default port",
+                url: Some("http://example.com:8080/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "punycode host",
+                url: Some("http://xn--bcher-kva.example/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "trailing-dot host",
+                url: Some("http://example.com./path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+            OriginShape {
+                name: "userinfo",
+                url: Some("http://user:pass@example.com/path"),
+                legacy_accepts: true,
+                strict_accepts: true,
+            },
+        ]
+    }
+
+    #[cfg(feature = "high-level-url")]
+    #[test]
+    fn origin_verdict_agreement_table() {
+        for shape in origin_shapes() {
+            let url = if let Some(text) = shape.url {
+                url::Url::parse(text)
+                    .unwrap_or_else(|error| panic!("shape {} must parse: {error}", shape.name))
+            } else {
+                // Not representable as a `url::Url`: neither
+                // normalization can accept it.
+                assert!(!shape.legacy_accepts, "shape {}", shape.name);
+                assert!(!shape.strict_accepts, "shape {}", shape.name);
+                continue;
+            };
+
+            let legacy = legacy_permissive_components(url.scheme(), &url);
+            let strict = crate::http_origin::HttpOrigin::from_url(&url);
+            let key = OriginKey::from_url(&url);
+
+            assert_eq!(
+                legacy.is_some(),
+                shape.legacy_accepts,
+                "shape {}: legacy verdict",
+                shape.name
+            );
+            assert_eq!(
+                strict.is_some(),
+                shape.strict_accepts,
+                "shape {}: strict verdict",
+                shape.name
+            );
+            // The two origin normalizations must agree on every shape.
+            assert_eq!(
+                strict.is_some(),
+                key.is_some(),
+                "shape {}: HttpOrigin and OriginKey must agree",
+                shape.name
+            );
+        }
+    }
+
+    #[cfg(feature = "high-level-url")]
+    #[test]
+    fn pool_key_is_stable_for_every_supported_shape() {
+        for shape in origin_shapes() {
+            let Some(text) = shape.url else {
+                continue;
+            };
+            if !shape.strict_accepts {
+                continue;
+            }
+            let url = url::Url::parse(text).expect("supported shape parses");
+            let legacy = legacy_permissive_components(url.scheme(), &url)
+                .expect("supported shape has legacy components");
+            let key = OriginKey::from_url(&url).expect("supported shape has a pool key");
+            assert_eq!(
+                (key.scheme(), key.host(), key.port()),
+                (legacy.0.as_str(), legacy.1.as_str(), legacy.2),
+                "shape {}: pool key must not change",
+                shape.name
+            );
+        }
+    }
+
+    #[cfg(all(feature = "high-level-url", feature = "proxy"))]
+    #[test]
+    fn proxy_origin_key_keeps_the_shared_origin_identity() {
+        let url = url::Url::parse("https://example.com/path").expect("valid url");
+        let direct = OriginKey::from_url(&url).expect("pool key");
+        let proxied = OriginKey::from_url_with_proxy_scheme(
+            &url,
+            Some("proxy"),
+            Some(8080),
+            Some("http"),
+            true,
+        )
+        .expect("proxied pool key");
+        assert_eq!(direct.scheme(), proxied.scheme());
+        assert_eq!(direct.host(), proxied.host());
+        assert_eq!(direct.port(), proxied.port());
+        assert_eq!(proxied.proxy_host(), Some("proxy"));
+        assert!(proxied.is_tunnel());
+    }
+
+    #[test]
+    fn pool_config_and_pool_resolve_the_same_idle_policy() {
+        // The persistent per-client Hyper singletons resolve the idle policy
+        // from the builder's pool configuration at build time; the bounded
+        // route caches resolve it from the live pool at use time. Both must
+        // resolve the same values, so the shared `HyperClientPolicy`
+        // constructor serves both families.
+        let configs = [
+            PoolConfig::default(),
+            PoolConfig {
+                max_idle_connections: Some(4),
+                max_idle_connections_per_host: Some(2),
+                ..Default::default()
+            },
+            PoolConfig {
+                max_idle_connections: Some(7),
+                ..Default::default()
+            },
+        ];
+        for config in configs {
+            let pool = Pool::new(config.clone());
+            assert_eq!(pool.idle_timeout(), config.idle_timeout);
+            assert_eq!(
+                pool.max_idle_per_host(),
+                config.effective_max_idle_per_host()
+            );
+        }
     }
 }

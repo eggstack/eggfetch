@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-
+#![cfg(feature = "high-level-url")]
 //! Lean high-level policy profile coverage.
 //!
 //! Exercises the supported lean embedding recipe

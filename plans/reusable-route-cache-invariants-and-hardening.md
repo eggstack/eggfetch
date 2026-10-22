@@ -155,3 +155,12 @@ No exact-SHA compatibility renewal occurs in this plan.
 - [ ] Secret-bearing route keys remain non-renderable.
 - [ ] Cache construction holds no async lock across network I/O.
 - [ ] Tier 1 remains green.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 7 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

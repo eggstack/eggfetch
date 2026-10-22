@@ -41,8 +41,41 @@ All handles are opaque pointers (`*mut ClientHandle`, `*mut RequestHandle`, etc.
 | `ffi_response.rs` | Response data extraction for FFI |
 | `error.rs` | Error inspection |
 | `builder.rs` | Builder configuration helpers |
+| `protocol.rs` | Compiled protocol-capability gate for the HTTP-version policy |
 | `runtime.rs` | Tokio runtime management |
 | `streaming.rs` | Streaming body support |
+
+### HTTP Version Policy
+
+`eggfetch_client_builder_http_version(handle, policy)` is a user-facing
+protocol control. The published policy values are `0` (`Http1Only`), `1`
+(`Http2Only`), `2` (`Auto` without HTTP/3), and `3` (`Auto` with HTTP/3).
+
+The FFI forwards its `http2`/`http3` crate features to
+`eggfetch-core/http2` and `eggfetch-core/http3` and reads the compiled
+capability with `cfg!`, so the linked library reports what it can actually
+do. A strict policy that needs a capability the library does not have is
+recorded when the policy is set, and every request through the built client is
+then rejected before any connection is attempted, with an
+`Error::Unsupported` whose message names the missing capability and states
+that the library was not compiled with the matching feature (for example
+`HTTP/2 is not supported by this build: the linked library was compiled
+without the http2 feature`). The rejection travels through the ordinary error
+channel (`err_out`), so the C consumer reads the cause from
+`eggfetch_error_kind` (`unsupported`) and `eggfetch_error_message`. No
+connection, pool permit, or request deadline is consumed by the rejected
+request.
+
+`Auto` is not a strict request: values `2` and `3` stay accepted on every
+build and keep negotiating down to the protocols the linked library has. The
+engine's native-caller downgrade contract therefore still applies to the
+values the FFI can express, and the FFI's default policy is unchanged: a
+client built without calling `eggfetch_client_builder_http_version` uses the
+engine default (`Auto` without HTTP/3).
+
+The strict HTTP/3 policy is not part of the published FFI value set, so the
+HTTP/3 capability is not observable at this ABI boundary; the classification
+itself is shared with the engine and covered by the crate's unit tests.
 
 ### Runtime Bridge
 

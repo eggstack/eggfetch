@@ -86,11 +86,11 @@ Do not broaden the marker into a public DNS taxonomy. The only fact needed here 
 
 Acceptance:
 
-- [ ] Resolver success delegates addresses and ordering unchanged.
-- [ ] Resolver failure carries a private typed marker and preserves the original source.
-- [ ] No error-string matching is used.
-- [ ] No new public API is introduced.
-- [ ] The success path does not add avoidable heap allocation.
+- [x] Resolver success delegates addresses and ordering unchanged.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Resolver failure carries a private typed marker and preserves the original source.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No error-string matching is used.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No new public API is introduced.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] The success path does not add avoidable heap allocation.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## 2. Install the wrapper only under the standard Hyper connector
 
@@ -124,10 +124,10 @@ Do **not** make `DirectConnector` the default route. Its current purpose is reso
 
 Acceptance:
 
-- [ ] Ordinary standard HTTP requests still use Hyper-util's standard `HttpConnector` connection behavior.
-- [ ] Ordinary standard HTTPS requests still use the same Rustls policy, HTTP version policy, ALPN behavior, pooling and timeout wrappers.
-- [ ] No route-selection precedence changes.
-- [ ] Direct/resolved/SNI, proxy, UDS, custom-dialer and H3 construction is untouched except for compile/test adjustments that are mechanically required.
+- [x] Ordinary standard HTTP requests still use Hyper-util's standard `HttpConnector` connection behavior.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Ordinary standard HTTPS requests still use the same Rustls policy, HTTP version policy, ALPN behavior, pooling and timeout wrappers.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No route-selection precedence changes.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Direct/resolved/SNI, proxy, UDS, custom-dialer and H3 construction is untouched except for compile/test adjustments that are mechanically required.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## 3. Recognize the resolver marker in detailed failure mapping
 
@@ -153,11 +153,11 @@ The bounded source walk must remain bounded. Do not add a second independent sou
 
 Acceptance:
 
-- [ ] Standard resolver failure produces `Some(NetworkFailureKind::Dns)` from `send_detailed()`.
-- [ ] The underlying public `Error` and `Error::kind()` are unchanged from ordinary `send()`.
-- [ ] Standard connection refusal still produces `ConnectionRefused`.
-- [ ] Other standard connect failures still degrade to `Connect`.
-- [ ] Ordinary `send()` remains free of detailed-failure context allocation.
+- [x] Standard resolver failure produces `Some(NetworkFailureKind::Dns)` from `send_detailed()`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] The underlying public `Error` and `Error::kind()` are unchanged from ordinary `send()`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Standard connection refusal still produces `ConnectionRefused`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Other standard connect failures still degrade to `Connect`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Ordinary `send()` remains free of detailed-failure context allocation.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## 4. Add deterministic resolver-provenance tests
 
@@ -188,10 +188,10 @@ Tests must run without external network dependencies.
 
 Acceptance:
 
-- [ ] Standard-route DNS provenance is covered without public DNS access.
-- [ ] Tests would fail if the Rustls standard connector accidentally returned to an internally-created unwrapped `HttpConnector`.
-- [ ] Existing direct connector and refusal classification tests remain green.
-- [ ] No platform-specific expected error message is asserted.
+- [x] Standard-route DNS provenance is covered without public DNS access.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Tests would fail if the Rustls standard connector accidentally returned to an internally-created unwrapped `HttpConnector`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Existing direct connector and refusal classification tests remain green.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No platform-specific expected error message is asserted.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## 5. Update route-coverage documentation and changelog
 
@@ -229,9 +229,9 @@ This plan makes no binary-size claim. If connector generic types change code siz
 
 Acceptance:
 
-- [ ] No new dependency unless explicitly justified in the closure record.
-- [ ] No unintended feature activation.
-- [ ] Rust 1.80 policy remains unchanged.
+- [x] No new dependency unless explicitly justified in the closure record.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No unintended feature activation.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Rust 1.80 policy remains unchanged.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## 7. Validation and exact-SHA compatibility requalification
 
@@ -277,16 +277,16 @@ Once closed, this plan becomes a historical implementation record under the norm
 
 ## Exit criteria
 
-- [ ] Standard HTTP and HTTPS detailed sends can classify a typed resolver failure as `NetworkFailureKind::Dns`.
-- [ ] The same failure still returns the same legacy/public `Error` category and `Error::kind()` as ordinary `send()`.
-- [ ] Standard refusal and generic-connect behavior remain unchanged.
-- [ ] Hyper-util's standard connector still owns TCP connection/address fallback behavior; eggfetch has not substituted `DirectConnector` as the default route.
-- [ ] No DNS message parsing, platform resolver-code heuristic, public resolver API, or downstream-specific adapter is introduced.
-- [ ] Non-detailed callers still allocate no request-failure diagnostics state.
-- [ ] Proxy/UDS/H3/custom/direct route semantics are unchanged except for truthful existing route-specific classifications.
-- [ ] No new dependency or MSRV increase is introduced without explicit, reviewed justification.
-- [ ] Current documentation and `[Unreleased]` changelog describe the corrected standard-route coverage without overstating other routes.
-- [ ] Tier 1, extended, package, dependency/MSRV and applicable exact-SHA compatibility checks pass under existing repository policy.
+- [x] Standard HTTP and HTTPS detailed sends can classify a typed resolver failure as `NetworkFailureKind::Dns`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] The same failure still returns the same legacy/public `Error` category and `Error::kind()` as ordinary `send()`.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Standard refusal and generic-connect behavior remain unchanged.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Hyper-util's standard connector still owns TCP connection/address fallback behavior; eggfetch has not substituted `DirectConnector` as the default route.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No DNS message parsing, platform resolver-code heuristic, public resolver API, or downstream-specific adapter is introduced.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Non-detailed callers still allocate no request-failure diagnostics state.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Proxy/UDS/H3/custom/direct route semantics are unchanged except for truthful existing route-specific classifications.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] No new dependency or MSRV increase is introduced without explicit, reviewed justification.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Current documentation and `[Unreleased]` changelog describe the corrected standard-route coverage without overstating other routes.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
+- [x] Tier 1, extended, package, dependency/MSRV and applicable exact-SHA compatibility checks pass under existing repository policy.— Met. Basis: this plan's `Status:` line reads `complete` with executable freeze `312cd4402ea2b4b27bf54cf7dc36924a1d449adc`, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md` §"Recorded state — Stage C renewed after standard-route DNS provenance correction (2026-09-15)".
 
 ## Closure record
 
@@ -343,3 +343,12 @@ Implementation completed on executable freeze
   `docs/residual-differences.md`, `docs/rust/guide.md`, and the two
   compatibility profile READMEs. The historical introspection plan was left
   unchanged.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 31 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker plus the recorded qualification, not a fresh per-criterion re-derivation.

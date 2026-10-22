@@ -435,3 +435,12 @@ Stop and record a blocker if:
 - a public export requires private HTTPX internals or a separate CLI project.
 
 A blocker must be reflected in the compatibility claim and active difference registry; it must not be hidden by a placeholder property or generic fallback.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 38 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

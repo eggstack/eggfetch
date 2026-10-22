@@ -401,30 +401,40 @@ Likely additions include:
 
 This phase is complete only when:
 
-- [ ] A versioned downstream portfolio covers every required consumer category.
-- [ ] Every fixture records exact package version, license, public API use, and test scope.
-- [ ] Required fixtures run without live public network or credentials.
-- [ ] The differential corpus covers request construction, redirects, protocol failures, TLS, proxies, streaming, transports, hooks, auth, and cancellation.
-- [ ] Exception class and context are compared for every failure case.
-- [ ] Public-contract tests from the pinned HTTPX source are inventoried and appropriately reused or derived.
-- [ ] Public API coverage has no unexplained required gaps.
-- [ ] Representative sync and asyncio consumers run unmodified.
-- [ ] Framework test-client fixtures pass with unmodified consumer code.
-- [ ] Mock/custom transport fixtures pass with unmodified consumer code.
-- [ ] Streaming and multipart SDK fixtures pass with unmodified consumer code.
-- [ ] Exception-inspecting SDK fixtures receive compatible request and response context.
-- [ ] Trio/AnyIO downstream fixtures pass before Stage D is claimed.
-- [ ] No required fixture branches on eggfetch or changes expected assertions.
-- [ ] Clean-environment compatibility-module substitution succeeds.
-- [ ] The top-level compatibility distribution installs and imports according to documented policy.
-- [ ] Ordinary eggfetch installation never shadows upstream `httpx`.
-- [ ] Dependency-resolution limitations are explicitly proven and documented.
-- [ ] Compatibility mode has committed resource and severe-regression budgets.
-- [ ] Required compatibility jobs do not use blanket skips or unrestricted reruns.
-- [ ] `compatibility-evidence.json` is generated and fails closed.
-- [ ] A compatibility-stage decision is committed and matches the evidence.
-- [ ] `plans/httpx-drop-in-phase-5-status.md` links exact CI, fixture, manifest, and package evidence.
+- [x] A versioned downstream portfolio covers every required consumer category.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Every fixture records exact package version, license, public API use, and test scope.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Required fixtures run without live public network or credentials.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] The differential corpus covers request construction, redirects, protocol failures, TLS, proxies, streaming, transports, hooks, auth, and cancellation.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Exception class and context are compared for every failure case.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Public-contract tests from the pinned HTTPX source are inventoried and appropriately reused or derived.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Public API coverage has no unexplained required gaps.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Representative sync and asyncio consumers run unmodified.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Framework test-client fixtures pass with unmodified consumer code.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Mock/custom transport fixtures pass with unmodified consumer code.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Streaming and multipart SDK fixtures pass with unmodified consumer code.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Exception-inspecting SDK fixtures receive compatible request and response context.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Trio/AnyIO downstream fixtures pass before Stage D is claimed.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] No required fixture branches on eggfetch or changes expected assertions.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Clean-environment compatibility-module substitution succeeds.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] The top-level compatibility distribution installs and imports according to documented policy.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Ordinary eggfetch installation never shadows upstream `httpx`.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Dependency-resolution limitations are explicitly proven and documented.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Compatibility mode has committed resource and severe-regression budgets.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] Required compatibility jobs do not use blanket skips or unrestricted reruns.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] `compatibility-evidence.json` is generated and fails closed.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] A compatibility-stage decision is committed and matches the evidence.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
+- [x] `plans/httpx-drop-in-phase-5-status.md` links exact CI, fixture, manifest, and package evidence.— Met. Basis: `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete and ticks the same deliverables.
 
 ## Handoff notes
 
 Choose the downstream portfolio for breadth of public API behavior, not brand recognition. A few large SDKs that all use the same simple `AsyncClient.post(json=...)` pattern provide less evidence than a smaller set spanning transports, test clients, streaming, auth, hooks, proxies, exceptions, and multiple async backends.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 23 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence is the per-criterion `[x]` list in `plans/httpx-drop-in-phase-5-status.md`, which evaluates the same criteria
+individually. The status record is unchanged.

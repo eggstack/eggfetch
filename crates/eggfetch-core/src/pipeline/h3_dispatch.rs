@@ -181,7 +181,10 @@ pub(super) fn decide_h3_use(
 /// Explicit (`Http3Only`, `h3_alt=None`) is strict: no fallback, no
 /// suppression. Discovered (`Auto`, `Some`) may suppress and safely fall
 /// back pre-commit for replayable bodies.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the H3 route forwards the request line, the discovered alternative, the failure context and the remaining budget to one dispatch call so the fallback policy stays in one place"
+)]
 #[allow(
     clippy::too_many_lines,
     reason = "H3 attempt keeps suppression/fallback accounting in one place so the orchestration match arm stays a single call"

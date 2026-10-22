@@ -204,3 +204,12 @@ Use existing repository tiers. The interoperability harness belongs in Tier 2/ma
 - [ ] the graduation decision follows the objective gate;
 - [ ] any dependency changes are frozen before final compatibility requalification;
 - [ ] HTTP/3 documentation is either truthfully promoted to supported or truthfully retained as experimental with named blockers.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 25 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

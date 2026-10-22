@@ -9,10 +9,14 @@
 //! `finalize` (common post-transport policy). This module wires those phases
 //! together and keeps the narrower native frame-execution semantics explicit.
 
+#[cfg(feature = "advanced-routing")]
+mod custom_dialing;
 #[cfg(feature = "high-level-url")]
 mod finalize;
 #[cfg(feature = "http3")]
 mod h3_dispatch;
+#[cfg(feature = "high-level-url")]
+mod hop;
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 mod hyper_dispatch;
 #[cfg(all(feature = "high-level-url", not(feature = "redirects")))]
@@ -255,10 +259,26 @@ pub(crate) async fn send_single_request(
         }
     }
     #[cfg(all(feature = "advanced-routing", feature = "proxy"))]
-    if has_custom && has_proxy {
-        return Err(Error::Unsupported(
-            "custom dialing is incompatible with built-in proxy routing".into(),
-        ));
+    if has_custom {
+        let arms = custom_dialing::CustomDialingState {
+            has_resolved_target: transport_hints.resolved_target.is_some(),
+            has_local_address_or_socket_options: inner.direct_connector_config.is_some(),
+            has_uds: inner.config.uds_configured,
+            #[cfg(feature = "http3")]
+            is_http3_only: matches!(
+                inner.config.http_version_policy,
+                crate::HttpVersionPolicy::Http3Only
+            ),
+            #[cfg(not(feature = "http3"))]
+            is_http3_only: false,
+            // The built-in-proxy arm is evaluated here, at the dispatch
+            // boundary, so it stays last in the ladder: the preparation phase
+            // already rejected the other arms before the pool was acquired.
+            has_built_in_proxy: Some(has_proxy),
+        };
+        if let Some(conflict) = custom_dialing::custom_dialing_conflict(arms) {
+            return Err(conflict.error());
+        }
     }
     #[cfg(feature = "http3")]
     let (use_h3, h3_alt) =
@@ -486,16 +506,11 @@ where
     };
 
     if let Some(target) = &transport_hints.resolved_target {
-        let expected_port = http_origin.port_ref();
-        if target
-            .addresses()
-            .iter()
-            .any(|address| address.port() != expected_port)
-        {
-            return Err(Error::InvalidResolvedTarget(format!(
-                "all resolved destinations must use the URL's effective port {expected_port}"
-            )));
-        }
+        crate::http_origin::validate_effective_port(
+            crate::http_origin::EffectivePortSubject::ResolvedDestination,
+            target.addresses(),
+            http_origin.port_ref(),
+        )?;
     }
 
     #[cfg(feature = "proxy")]
@@ -507,29 +522,23 @@ where
 
     #[cfg(feature = "advanced-routing")]
     if inner.config.dialer.is_some() {
-        if transport_hints.resolved_target.is_some() {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with caller-supplied resolved destinations".into(),
-            ));
-        }
-        if inner.direct_connector_config.is_some() {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with local-address or socket-option routing".into(),
-            ));
-        }
-        if inner.config.uds_configured {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with Unix-domain routing".into(),
-            ));
-        }
-        #[cfg(feature = "http3")]
-        if matches!(
-            inner.config.http_version_policy,
-            crate::HttpVersionPolicy::Http3Only
-        ) {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with HTTP/3".into(),
-            ));
+        let arms = custom_dialing::CustomDialingState {
+            has_resolved_target: transport_hints.resolved_target.is_some(),
+            has_local_address_or_socket_options: inner.direct_connector_config.is_some(),
+            has_uds: inner.config.uds_configured,
+            #[cfg(feature = "http3")]
+            is_http3_only: matches!(
+                inner.config.http_version_policy,
+                crate::HttpVersionPolicy::Http3Only
+            ),
+            #[cfg(not(feature = "http3"))]
+            is_http3_only: false,
+            // The native dispatch path has no built-in-proxy arm: native
+            // proxy frames are rejected above with their own diagnostic.
+            has_built_in_proxy: None,
+        };
+        if let Some(conflict) = custom_dialing::custom_dialing_conflict(arms) {
+            return Err(conflict.error());
         }
     }
     #[cfg(not(feature = "advanced-routing"))]
@@ -730,7 +739,7 @@ where
         }
         route::TransportRoute::Standard => {
             let hyper_client = inner.hyper_client.as_ref().ok_or_else(|| {
-                Error::Unsupported("HTTP client not available for this protocol".into())
+                crate::http_version::missing_client_error(inner.config.http_version_policy)
             })?;
             let hyper_request =
                 hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;

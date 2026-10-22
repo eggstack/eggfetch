@@ -21,6 +21,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(feature = "high-level-url")]
 //! Connection pool and concurrency lifecycle tests.
 
 mod test_server;

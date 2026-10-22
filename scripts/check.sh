@@ -95,6 +95,20 @@ tier1_lint_suppressions() {
     bash "$SCRIPT_DIR/check_lint_suppressions.sh"
 }
 
+tier1_lint_suppression_self_test() {
+    info "Lint suppression guard self-test (guard verdicts only — not a tree scan)"
+    bash "$SCRIPT_DIR/check_lint_suppressions.sh" --self-test
+}
+
+tier1_h3_runner_self_test() {
+    info "H3 qualification runner self-test (runner logic only — not an H3 qualification result)"
+    # Pure unit self-test of scripts/h3_qualification.py's manifest and corpus
+    # validation. It opens no socket, resolves no name, needs no QUIC peer,
+    # and requires neither the http3 feature nor the http3 corpus evidence.
+    # H3 stays experimental: this asserts the runner's logic, not conformance.
+    "$PYTHON_BIN" "$SCRIPT_DIR/test_h3_qualification.py"
+}
+
 tier1_adapter_features() {
     info "Adapter feature ownership"
     "$PYTHON_BIN" "$SCRIPT_DIR/check_adapter_features.py"
@@ -123,12 +137,43 @@ tier1_rust_api_contracts() {
     # CI-wide -D warnings flag turns those profile-specific dead-code warnings
     # into errors; clippy and the all-features workspace checks own warning
     # enforcement, while this matrix owns stable public compile coverage.
+    # The matrix spans all eight supported profiles: default, the four
+    # compatibility aliases (http1, http2, standard-http1, standard-http2),
+    # the two native slices (native-http1, native-http2), and all-features.
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http1,tls-rustls -- --test-threads=1
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features http2,tls-rustls -- --test-threads=1
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features standard-http2,tls-rustls -- --test-threads=1
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features native-http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --no-default-features --features native-http2,tls-rustls -- --test-threads=1
     RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts --all-features -- --test-threads=1
+    # The lean profile's behavioral suites must run under the lean profile:
+    # under the default profile they would exercise the redirect path instead
+    # of the lean single-attempt path. The gate names the two portable
+    # targets explicitly; the whole-suite lean compile coverage is owned by
+    # tier1_lean_profile_compile below.
+    RUSTFLAGS= cargo test -p eggfetch-core --test lean_policy_tests --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
+    RUSTFLAGS= cargo test -p eggfetch-core --test lean_route_tests --no-default-features --features standard-http1,tls-rustls -- --test-threads=1
+}
+
+tier1_profile_whole_suite_compile() {
+    info "Feature-isolated profile whole-suite compile"
+    # Each feature-isolated profile must compile the whole test suite, not only
+    # the portable behavioral targets. Every test target that cannot compile
+    # under a profile carries a file-level feature gate expressing what that
+    # file needs, so these gates stay green for the whole suite.
+    #
+    # The bare RUSTFLAGS= matches tier1_rust_api_contracts: the lean and native
+    # profiles retain private helpers for other supported profiles, and CI's
+    # -D warnings turns profile-specific dead-code warnings into errors. Clippy
+    # and the all-features workspace checks own warning enforcement.
+    #
+    # These are compiles, not runs.
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --all-targets
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features standard-http2,tls-rustls --all-targets
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features native-http1,tls-rustls --all-targets
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features native-http2,tls-rustls --all-targets
 }
 
 tier1_python_build() {
@@ -191,13 +236,19 @@ tier1_node_binding() {
 run_tier1() {
     check_tools
     require_python_env
+    # The H3 runner self-test runs first so a broken runner is caught in under
+    # a second, before the tier spends time on cargo work. It is a runner
+    # self-test only and asserts nothing about H3 conformance.
+    tier1_h3_runner_self_test
     tier1_rust_format
+    tier1_lint_suppression_self_test
     tier1_lint_suppressions
     tier1_adapter_features
     tier1_release_validation
     tier1_clippy
     tier1_rust_tests
     tier1_rust_api_contracts
+    tier1_profile_whole_suite_compile
     tier1_python_build
     tier1_native_api
     tier1_python_typing_surface
@@ -269,10 +320,16 @@ tier2_api_manifest() {
 
 tier2_feature_matrix() {
     info "Feature matrix validation"
-    cargo check -p eggfetch-core --no-default-features
-    cargo check -p eggfetch-core --no-default-features --features http1
-    cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
-    cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
+    # Lean profiles retain private helpers for other supported profiles. The
+    # CI-wide -D warnings flag turns those profile-specific dead-code warnings
+    # into errors; clippy and the all-features workspace checks own warning
+    # enforcement, while this matrix owns profile compile coverage. Bare
+    # RUSTFLAGS= overrides CI's -D warnings for the profile-isolated checks
+    # only; the all-features check below keeps the flag.
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features http1
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls
+    RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,tls-native-roots
     cargo check -p eggfetch-core --all-features
 }
 
@@ -305,11 +362,24 @@ tier2_msrv() {
         "--locked -p eggfetch-core --no-default-features"
         "--locked -p eggfetch-core --no-default-features --features http1"
         "--locked -p eggfetch-core --no-default-features --features http1,tls-rustls"
+    )
+    local warning_checks=(
         "--locked -p eggfetch-core --all-features"
         "--locked --workspace --all-targets --all-features"
     )
     local check_args
+    # Lean profiles retain private helpers for other supported profiles. The
+    # CI-wide -D warnings flag turns those profile-specific dead-code warnings
+    # into errors; clippy and the all-features workspace checks own warning
+    # enforcement, while these profile-isolated checks own compile coverage.
+    # Bare RUSTFLAGS= overrides CI's -D warnings for the profile-isolated
+    # checks only; the all-features and workspace checks keep the flag.
     for check_args in "${checks[@]}"; do
+        info "MSRV: rustup run ${msrv_toolchain} cargo check ${check_args}"
+        # shellcheck disable=SC2086
+        RUSTFLAGS= rustup run "$msrv_toolchain" cargo check $check_args
+    done
+    for check_args in "${warning_checks[@]}"; do
         info "MSRV: rustup run ${msrv_toolchain} cargo check ${check_args}"
         # shellcheck disable=SC2086
         rustup run "$msrv_toolchain" cargo check $check_args
@@ -355,8 +425,39 @@ tier2_downstream() {
     info "Downstream behavioral fixtures"
     local artifact_manifest="$REPO_ROOT/target/downstream-qualification/artifact-manifest.json"
     if [[ ! -f "$artifact_manifest" ]]; then
-        record_skip "Downstream" "artifact manifest not present; run the downstream qualification workflow first"
-        return 0
+        # This portfolio is release-blocking (docs/verification-policy.md), so
+        # it fails closed instead of recording a skip. The skipped message used
+        # to point at a "downstream qualification workflow" that no longer
+        # exists in .github/workflows/; only the artifact and the scripts that
+        # consume it are named here.
+        cat >&2 <<DOWNSTREAM_GUIDE
+FAIL: the downstream compatibility portfolio is release-blocking and its
+      artifact manifest is missing. It is not optional and cannot be skipped.
+
+  Missing artifact manifest:
+    ${artifact_manifest}
+
+  The manifest must list two wheels with verified SHA-256 hashes:
+    - role "eggfetch"                     the eggfetch wheel built from this checkout
+    - role "httpx-controlled-replacement"  the controlled httpx replacement wheel
+
+  Network access: this gate needs it. The isolated runner creates a virtual
+  environment, downloads the pinned downstream packages and their wheels from
+  PyPI, and verifies each package's source hash against
+  compat/downstream/manifest.toml. The package test suites themselves run
+  with outbound network disabled.
+
+  Operator obligation: build the eggfetch wheel and the controlled httpx
+  replacement wheel, write their paths and SHA-256 hashes into the manifest
+  at the path above, and re-run ./scripts/check.sh extended. The procedure is
+  documented in compat/downstream/README.md ("Update Process"); the consumer
+  is scripts/run_downstream_compat.py.
+
+  Nothing in this repository produces the manifest automatically, and no CI
+  job does either. Until the operator supplies it, ./scripts/check.sh extended
+  fails here by design.
+DOWNSTREAM_GUIDE
+        fail "Downstream behavioral fixtures — release-blocking artifact manifest missing"
     fi
     "$PYTHON_BIN" scripts/run_downstream_compat.py \
         --artifact-manifest "$artifact_manifest" \

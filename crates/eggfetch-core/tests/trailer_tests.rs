@@ -5,6 +5,7 @@
     clippy::unwrap_used,
     clippy::expect_used
 )]
+#![cfg(feature = "high-level-url")]
 //! Trailer lifecycle integration tests (plan: native-protocol-observability).
 //!
 //! - H1 chunked trailers preserve duplicate/multi-value headers.

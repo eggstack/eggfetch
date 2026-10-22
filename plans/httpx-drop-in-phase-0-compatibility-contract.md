@@ -371,25 +371,36 @@ pytest crates/eggfetch-python/tests/compat -q --strict-markers
 
 This phase is complete only when all of the following are true:
 
-- [ ] HTTPX 0.28.1 is pinned in a dedicated compatibility dependency definition.
-- [ ] Required compatibility CI verifies the imported HTTPX version exactly.
-- [ ] Required comparison tests cannot silently skip because HTTPX or Requests is absent.
-- [ ] The required profile fails on unapproved skip, xfail, deselection, or collection error.
-- [ ] A normalized HTTPX public API golden manifest is committed.
-- [ ] An eggfetch manifest using the same schema is generated in CI.
-- [ ] The comparator reports symbol, signature, default, inheritance, attribute, and kind differences.
-- [ ] Every unexplained manifest difference fails CI.
-- [ ] Allowed-difference records are schema validated and linked to tests.
-- [ ] Stale allowed-difference records fail CI.
-- [ ] Current compatibility documentation has been audited against the pinned reference.
-- [ ] Incorrect redirect-default and pool-timeout statements are corrected.
-- [ ] Unqualified drop-in claims are rejected until the required stage is achieved.
-- [ ] Deterministic local behavior fixtures cover compliant and malformed peer cases.
-- [ ] Sync and asyncio differential suites have stable case identifiers.
-- [ ] Compatibility reports are retained as CI artifacts.
-- [ ] The aggregate required gate includes the compatibility jobs.
-- [ ] The implementation status file links a green CI run and exact candidate SHA.
+- [x] HTTPX 0.28.1 is pinned in a dedicated compatibility dependency definition.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Required compatibility CI verifies the imported HTTPX version exactly.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Required comparison tests cannot silently skip because HTTPX or Requests is absent.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] The required profile fails on unapproved skip, xfail, deselection, or collection error.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] A normalized HTTPX public API golden manifest is committed.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] An eggfetch manifest using the same schema is generated in CI.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] The comparator reports symbol, signature, default, inheritance, attribute, and kind differences.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Every unexplained manifest difference fails CI.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Allowed-difference records are schema validated and linked to tests.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Stale allowed-difference records fail CI.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Current compatibility documentation has been audited against the pinned reference.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Incorrect redirect-default and pool-timeout statements are corrected.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Unqualified drop-in claims are rejected until the required stage is achieved.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Deterministic local behavior fixtures cover compliant and malformed peer cases.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Sync and asyncio differential suites have stable case identifiers.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] Compatibility reports are retained as CI artifacts.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] The aggregate required gate includes the compatibility jobs.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
+- [x] The implementation status file links a green CI run and exact candidate SHA.— Met. Basis: `plans/httpx-drop-in-phase-0-status.md` records a per-criterion `PASS` table over the same eighteen criteria, each with its own evidence entry.
 
 ## Handoff notes
 
 Implementation should prioritize truth and measurement over closing gaps in this phase. A large red comparator report is an acceptable Phase 0 outcome if every delta is correctly classified and the oracle fails closed. Converting open gaps into false passes is not acceptable.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 18 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion.
+
+The evidence is the per-criterion `PASS` table in
+`plans/httpx-drop-in-phase-0-status.md`, which evaluates the same eighteen criteria
+individually and names the artifact for each. This file's own status line is
+unchanged.

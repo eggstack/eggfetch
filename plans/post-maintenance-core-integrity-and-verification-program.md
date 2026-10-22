@@ -143,3 +143,12 @@ Do not expand this program into new HTTPX parity work, HTTP/3 promotion/features
 Plans 1-6 modify executable/test/build/validation behavior and therefore invalidate the current exact-SHA compatibility evidence. Do not repeatedly renew Stage C after each child plan. Keep Tier 1 and focused compatibility tests green while working.
 
 Plan 7 owns the single final executable freeze and compatibility renewal. After that freeze, only documentation/profile/plan-index changes may land without reopening qualification. Any executable, test, build, dependency, or validation-script change after the freeze requires a new frozen candidate and rerun of the affected closure gates.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 13 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

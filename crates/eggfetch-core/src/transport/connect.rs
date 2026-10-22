@@ -112,13 +112,7 @@ impl tokio::io::AsyncWrite for ConnectProxyStream {
 impl hyper_util::client::legacy::connect::Connection for ConnectProxyStream {
     fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
         let connected = hyper_util::client::legacy::connect::Connected::new();
-        if self
-            .inner
-            .get_ref()
-            .1
-            .alpn_protocol()
-            .is_some_and(|protocol| protocol == b"h2")
-        {
+        if super::negotiated_http2(self.inner.get_ref().1.alpn_protocol()) {
             connected.negotiated_h2()
         } else {
             connected
@@ -341,9 +335,7 @@ async fn send_https_connect_request_hyper(
 ) -> Result<Response> {
     let target = if let Some(target) = transport_hints.target.as_deref() {
         crate::pipeline::validate_target(target)?;
-        std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
-            .to_owned()
+        crate::transport_hints::target_extension_str(target)?.to_owned()
     } else {
         match dest_url.query() {
             Some(query) => format!("{}?{query}", dest_url.path()),
@@ -556,9 +548,7 @@ async fn send_https_connect_request_once(
     // absolute-form.  Apply target override if present.
     let origin_uri = if let Some(ref target) = transport_hints.target {
         crate::pipeline::validate_target(target)?;
-        std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
-            .to_owned()
+        crate::transport_hints::target_extension_str(target)?.to_owned()
     } else {
         match dest_url.query() {
             Some(query) => format!("{}?{query}", dest_url.path()),

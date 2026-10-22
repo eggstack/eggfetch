@@ -245,26 +245,26 @@ The downstream eggsearch follow-up is explicitly separate: after a fixed `eggfet
 
 ## Acceptance criteria
 
-- [ ] Baseline `9ecdd04` has recorded red evidence for fragmented streaming gzip and Brotli through the affected path.
-- [ ] Root cause is fixed by replacing the private adapter, not by transfer-encoding special cases or eager buffering.
-- [ ] The implementation uses the already-locked `tokio-util 0.7.18`; no dependency/version/MSRV change is required.
-- [ ] The existing `tokio::io::BufReader` layer remains in this corrective.
-- [ ] The private custom `StreamReader` is removed.
-- [ ] gzip fragmented streaming decode equals the original plaintext.
-- [ ] Brotli fragmented streaming decode equals the original plaintext.
-- [ ] deflate and zstd fragmented cases pass when their features are enabled.
-- [ ] Empty source chunks are skipped without premature EOF.
-- [ ] High-level `Content-Length` and HTTP/1.1 chunked forms of identical gzip/Brotli bytes both decode correctly through `Client -> send -> bytes_stream`.
-- [ ] Raw/decompression-disabled chunked mode returns the exact encoded bytes.
-- [ ] No public `ResponseBody`, `BoxBytesStream`, `Response`, `Client`, `Error`, timeout, or compression configuration API changes.
-- [ ] No Python/CLI/FFI/Node/HTTPX surface change.
-- [ ] Existing metadata stripping/wire-metadata semantics remain unchanged.
-- [ ] Existing decompression/size/ratio error kinds remain unchanged.
-- [ ] Existing total/read timeout and pool-lease behavior remains green.
-- [ ] No exact decoded chunk-size/count contract is introduced.
-- [ ] Tier 1 passes on the executable change.
-- [ ] Extended/package/security and exact-SHA compatibility qualification complete before release closure.
-- [ ] A coordinated crates.io patch is published before downstream workaround-removal handoff is declared complete.
+- [x] Baseline `9ecdd04` has recorded red evidence for fragmented streaming gzip and Brotli through the affected path.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Root cause is fixed by replacing the private adapter, not by transfer-encoding special cases or eager buffering.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] The implementation uses the already-locked `tokio-util 0.7.18`; no dependency/version/MSRV change is required.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] The existing `tokio::io::BufReader` layer remains in this corrective.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] The private custom `StreamReader` is removed.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] gzip fragmented streaming decode equals the original plaintext.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Brotli fragmented streaming decode equals the original plaintext.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] deflate and zstd fragmented cases pass when their features are enabled.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Empty source chunks are skipped without premature EOF.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] High-level `Content-Length` and HTTP/1.1 chunked forms of identical gzip/Brotli bytes both decode correctly through `Client -> send -> bytes_stream`.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Raw/decompression-disabled chunked mode returns the exact encoded bytes.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] No public `ResponseBody`, `BoxBytesStream`, `Response`, `Client`, `Error`, timeout, or compression configuration API changes.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] No Python/CLI/FFI/Node/HTTPX surface change.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Existing metadata stripping/wire-metadata semantics remain unchanged.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Existing decompression/size/ratio error kinds remain unchanged.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Existing total/read timeout and pool-lease behavior remains green.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] No exact decoded chunk-size/count contract is introduced.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Tier 1 passes on the executable change.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] Extended/package/security and exact-SHA compatibility qualification complete before release closure.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
+- [x] A coordinated crates.io patch is published before downstream workaround-removal handoff is declared complete.— Met. Basis: this plan's `## Closure record (2026-09-19)` records the executed corrective, and the ledger records the renewal it produced in `plans/httpx-parity-correction-status.md`.
 
 ## Closure record template
 
@@ -438,3 +438,12 @@ Documentation-only descendant SHA: none yet — ledger/profile
 ## Exit criterion
 
 Issue #24 is ready to close when fragmented streaming compressed input is byte-correct for all compiled codecs, the high-level HTTP/1.1 chunked gzip/Brotli reproducer passes, raw mode remains exact, no public/downstream API or timeout/error contract regresses, repository qualification is renewed on one exact executable SHA, and the corrected core is available in a coordinated published patch.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 20 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

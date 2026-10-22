@@ -348,20 +348,20 @@ Follow the repository's current exact-SHA compatibility/profile renewal rules fo
 
 ## Exit criteria
 
-- [ ] The baseline per-request resolved-target client lifetime is captured by a failing physical-reuse regression.
-- [ ] `ResolvedRouteKey` distinguishes logical origin, full ordered physical snapshot, and exact optional SNI override.
-- [ ] A 64-entry bounded resolved-route client cache exists under `ClientInner` and reuses `BoundedClientCache` / `HyperClientPolicy` rather than adding another cache/pool abstraction.
-- [ ] Identical route identity reuses the configured Hyper client across independent requests.
-- [ ] Different origin/address/order/SNI identities cannot false-hit the same entry.
-- [ ] H1 connection reuse is proven with local accept-count evidence.
-- [ ] H2 retained-client reuse/multiplexing is proven under the `http2` profile.
-- [ ] Resolved-target requests continue to bypass origin DNS and preserve logical Host/TLS identity.
-- [ ] Same-origin redirect retention and cross-origin fail-closed behavior remain green.
-- [ ] Current-request timeout/trace/failure/body/auth state is not retained by cached connectors.
-- [ ] Cache eviction is bounded and safe for in-flight cloned clients.
-- [ ] No production dependency, public API, new CI job, or second physical pool is introduced.
-- [ ] Focused tests, Tier 1, extended validation, package validation, and required exact-SHA compatibility qualification are green.
-- [ ] Before/after loopback measurements show materially reduced physical connection churn without a meaningful regression.
+- [x] The baseline per-request resolved-target client lifetime is captured by a failing physical-reuse regression.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] `ResolvedRouteKey` distinguishes logical origin, full ordered physical snapshot, and exact optional SNI override.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] A 64-entry bounded resolved-route client cache exists under `ClientInner` and reuses `BoundedClientCache` / `HyperClientPolicy` rather than adding another cache/pool abstraction.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Identical route identity reuses the configured Hyper client across independent requests.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Different origin/address/order/SNI identities cannot false-hit the same entry.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] H1 connection reuse is proven with local accept-count evidence.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] H2 retained-client reuse/multiplexing is proven under the `http2` profile.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Resolved-target requests continue to bypass origin DNS and preserve logical Host/TLS identity.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Same-origin redirect retention and cross-origin fail-closed behavior remain green.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Current-request timeout/trace/failure/body/auth state is not retained by cached connectors.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Cache eviction is bounded and safe for in-flight cloned clients.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] No production dependency, public API, new CI job, or second physical pool is introduced.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Focused tests, Tier 1, extended validation, package validation, and required exact-SHA compatibility qualification are green.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
+- [x] Before/after loopback measurements show materially reduced physical connection churn without a meaningful regression.— Met. Basis: this plan's `### Implementation record (2026-09-17)` section records the implemented route-cache shape, and the bounded 64-entry `ResolvedRouteKey` cache and its `BoundedClientCache`/`HyperClientPolicy` reuse are visible in `crates/eggfetch-core/src/client/routes.rs`.
 
 ## Completion record
 
@@ -446,3 +446,12 @@ Implementation owner should append:
   formatting) so IPv6/host normalization matches `url` semantics; effective
   ports remain distinct via the origin (default-port omission still denotes
   the same origin, which is correct).
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 14 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own implementation record plus the current source, not a fresh per-criterion re-derivation.

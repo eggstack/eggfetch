@@ -60,6 +60,39 @@ qualification blockers recorded in
 `plans/http3-production-qualification-evidence.md`; this plan does not claim
 those unavailable results.
 
+## Open items (2026-10-22)
+
+The acceptance criteria listed below are **not met** and remain open. They are
+recorded here so this file's closure status and its unticked boxes tell the
+same story. The original boxes stay unticked and point at the open-item IDs
+below. Nothing here was waived, and this file's closure status, closure audit
+and execution update are unchanged.
+
+Reason (from this file's own closure status below): deterministic resource and
+diagnostic controls are green, but the open upstream correctness issue, the
+long-duration external soak, and broader platform evidence remain unresolved
+graduation blockers. These items are intentionally preserved for a future
+requalification rather than marked complete by the local control results.
+
+- **OI-1** — the long-duration soak group: a descriptor/socket count that
+  returns to a bounded steady state, driver/task state that does not grow
+  monotonically, and no monotonic memory trend attributable to retained
+  per-origin/session state.
+- **OI-2** — the cache-pressure group: deterministic tests for any policy
+  change covering bound, active-reference safety and expected victim
+  selection.
+- **OI-3** — the parser-ownership group: no duplicate h3 QPACK/frame parser
+  implementation is introduced.
+- **OI-4** — the platform-evidence group: a platform table that records
+  build/runtime/IPv6 evidence separately, and support documentation that does
+  not infer H3 runtime support from a generic package build alone.
+- **OI-5** — the exit-criteria group: a current and complete upstream
+  dependency risk ledger, every graduation-relevant upstream issue fixed,
+  mitigated/proven irrelevant, or explicitly blocking promotion, bounded H3
+  soak/resource evidence, characterized cache-pressure behavior, sufficient
+  diagnostic coverage for qualification failures, an evidence-based platform
+  scope, and green focused and routine validation.
+
 ## 1. Freeze and audit the dependency graph
 
 Record the exact resolved versions and relevant feature flags for:
@@ -159,10 +192,10 @@ Capture, where portable/available:
 
 Acceptance:
 - [x] bounded caches remain within configured limits;
-- [ ] descriptor/socket count returns to a bounded steady state;
-- [ ] driver/task state does not grow monotonically;
+- [ ] descriptor/socket count returns to a bounded steady state; — Deferred (OI-1).
+- [ ] driver/task state does not grow monotonically; — Deferred (OI-1).
 - [x] client drop eventually releases owned QUIC resources after outstanding references finish;
-- [ ] no monotonic memory trend attributable to retained per-origin/session state is observed;
+- [ ] no monotonic memory trend attributable to retained per-origin/session state is observed; — Deferred (OI-1).
 - [x] failures/cancellation do not leak logical pool permits.
 
 ## 5. Cache eviction quality review
@@ -173,7 +206,7 @@ Only change policy if evidence shows meaningful churn or handshake amplification
 
 Acceptance:
 - [x] current eviction behavior is characterized under cache pressure;
-- [ ] any policy change has deterministic tests for bound, active-reference safety and expected victim selection;
+- [ ] any policy change has deterministic tests for bound, active-reference safety and expected victim selection; — Deferred (OI-2).
 - [x] no eviction change is made solely for aesthetic reasons.
 
 ## 6. QUIC/H3 diagnostic surface
@@ -217,7 +250,7 @@ Add corpus seeds for malformed/oversized Alt-Svc, repeated `clear`, generation r
 
 Acceptance:
 - [x] EggFetch-owned untrusted H3 policy state has deterministic fuzz/property coverage;
-- [ ] no duplicate h3 QPACK/frame parser implementation is introduced.
+- [ ] no duplicate h3 QPACK/frame parser implementation is introduced. — Deferred (OI-3).
 
 ## 8. Platform evidence
 
@@ -226,8 +259,8 @@ Re-run H3 build and deterministic runtime coverage on the project's supported pa
 Do not create a new permanent CI matrix without explicit policy approval. Manual/extended platform evidence is acceptable, but unsupported/unexecuted combinations must remain explicit.
 
 Acceptance:
-- [ ] platform table records build/runtime/IPv6 evidence separately;
-- [ ] support documentation does not infer H3 runtime support from a generic package build alone.
+- [ ] platform table records build/runtime/IPv6 evidence separately; — Deferred (OI-4).
+- [ ] support documentation does not infer H3 runtime support from a generic package build alone. — Deferred (OI-4).
 
 ## Validation
 
@@ -244,10 +277,10 @@ After any executable change run focused H3 suites first, then `./scripts/check.s
 
 ## Exit criteria
 
-- [ ] upstream dependency risk ledger is current and complete for ordinary H3 operation;
-- [ ] all graduation-relevant upstream issues are fixed, mitigated/proven irrelevant, or explicitly block promotion;
-- [ ] H3 soak/resource evidence is bounded;
-- [ ] cache pressure behavior is characterized and corrected only if justified;
-- [ ] diagnostic coverage is sufficient for qualification failures;
-- [ ] platform scope is evidence-based;
-- [ ] focused and routine validation are green.
+- [ ] upstream dependency risk ledger is current and complete for ordinary H3 operation; — Deferred (OI-5).
+- [ ] all graduation-relevant upstream issues are fixed, mitigated/proven irrelevant, or explicitly block promotion; — Deferred (OI-5).
+- [ ] H3 soak/resource evidence is bounded; — Deferred (OI-5).
+- [ ] cache pressure behavior is characterized and corrected only if justified; — Deferred (OI-5).
+- [ ] diagnostic coverage is sufficient for qualification failures; — Deferred (OI-5).
+- [ ] platform scope is evidence-based; — Deferred (OI-5).
+- [ ] focused and routine validation are green. — Deferred (OI-5).

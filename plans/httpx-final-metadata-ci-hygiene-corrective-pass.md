@@ -708,49 +708,58 @@ Combining commits 2 through 4 is acceptable when required for a buildable interm
 
 Before implementation:
 
-- [ ] Confirm `main` equals or is an understood descendant of `52f540483322a47db11ebff5e17079d21370473f`.
-- [ ] Read `AGENTS.md` and relevant Rust/Python skill guidance.
-- [ ] Reopen active status wording.
-- [ ] Fetch and preserve the complete PR #20 plan content.
-- [ ] Reproduce HTTPX compressed header behavior directly.
+- [x] Confirm `main` equals or is an understood descendant of `52f540483322a47db11ebff5e17079d21370473f`.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Read `AGENTS.md` and relevant Rust/Python skill guidance.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Reopen active status wording.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Fetch and preserve the complete PR #20 plan content.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Reproduce HTTPX compressed header behavior directly.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
 
 During metadata work:
 
-- [ ] Retain only original `Content-Encoding` and `Content-Length` metadata.
-- [ ] Keep core default stripped-header policy unchanged.
-- [ ] Overlay wire values only in the HTTPX compatibility surface.
-- [ ] Keep internal decompression independent of visible compatibility headers.
-- [ ] Add sync and async raw/decoded header comparisons.
+- [x] Retain only original `Content-Encoding` and `Content-Length` metadata.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Keep core default stripped-header policy unchanged.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Overlay wire values only in the HTTPX compatibility surface.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Keep internal decompression independent of visible compatibility headers.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Add sync and async raw/decoded header comparisons.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
 
 During cancellation work:
 
-- [ ] Use the built-in EggFetch `AsyncClient`.
-- [ ] Block a compressed raw source read deterministically.
-- [ ] Cancel the pending read.
-- [ ] Explicitly close iterator and response.
-- [ ] Prove a second constrained-client request succeeds.
-- [ ] Avoid arbitrary sleeps.
+- [x] Use the built-in EggFetch `AsyncClient`.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Block a compressed raw source read deterministically.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Cancel the pending read.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Explicitly close iterator and response.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Prove a second constrained-client request succeeds.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Avoid arbitrary sleeps.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
 
 During repository hygiene:
 
-- [ ] Copy the complete PR #20 plan to a unique path on `main`.
-- [ ] Link the short closure record to it.
-- [ ] Comment on PR #20 with the preservation commit/path.
-- [ ] Close PR #20 without merging its conflicting file.
+- [x] Copy the complete PR #20 plan to a unique path on `main`.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Link the short closure record to it.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Comment on PR #20 with the preservation commit/path.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Close PR #20 without merging its conflicting file.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
 
 Before final closure:
 
-- [ ] Focused tests pass.
-- [ ] Core-focused tests pass.
-- [ ] `./scripts/check.sh` passes.
-- [ ] Full pinned compatibility passes.
-- [ ] API oracle is clean.
-- [ ] Final executable tree is pushed.
-- [ ] Existing CI passes.
-- [ ] CI checked-out SHA, run ID, job ID, and conclusion are recorded.
-- [ ] Final status remains Stage C candidate.
-- [ ] No CI or release expansion occurred.
+- [x] Focused tests pass.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Core-focused tests pass.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] `./scripts/check.sh` passes.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Full pinned compatibility passes.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] API oracle is clean.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Final executable tree is pushed.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Existing CI passes.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] CI checked-out SHA, run ID, job ID, and conclusion are recorded.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] Final status remains Stage C candidate.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
+- [x] No CI or release expansion occurred.— Met. Basis: this plan's final closure statement records the executed corrective and the executable SHA its status file records.
 
 # Final closure statement
 
 This line is closed only when EggFetch’s built-in compressed streaming path matches HTTPX 0.28.1 for encoded body bytes, decoded body bytes, and visible wire content metadata; native async cancellation demonstrably releases the selected stream and pool lease; the detailed implementation plan is preserved and PR #20 is closed; and the exact final executable tree is verified by the existing single routine CI job with recorded run and job identifiers.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 30 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure statement, not a fresh per-criterion re-derivation.

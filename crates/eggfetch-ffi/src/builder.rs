@@ -18,7 +18,10 @@ use crate::handle::ClientBuilderHandle;
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_builder_new() -> *mut ClientBuilderHandle {
     crate::ffi_guard!(ptr::null_mut(), {
-        Box::into_raw(Box::new(ClientBuilderHandle(Some(Client::builder()))))
+        Box::into_raw(Box::new(ClientBuilderHandle {
+            builder: Some(Client::builder()),
+            missing_capability: None,
+        }))
     })
 }
 
@@ -60,14 +63,17 @@ pub unsafe extern "C" fn eggfetch_client_builder_build(
         let Some(handle) = raw.as_mut() else {
             return ptr::null_mut();
         };
-        let Some(builder) = handle.0.take() else {
+        let Some(builder) = handle.builder.take() else {
             // Already built: leave the shell allocation in place so the
             // caller can still release it exactly once via
             // eggfetch_client_builder_free (no dangling handle).
             return ptr::null_mut();
         };
         let client = builder.build();
-        Box::into_raw(Box::new(crate::handle::ClientHandle(client)))
+        Box::into_raw(Box::new(crate::handle::ClientHandle {
+            client,
+            missing_capability: handle.missing_capability,
+        }))
     })
 }
 
@@ -295,6 +301,14 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
 /// - 2: `Auto` (`allow_http3` = false)
 /// - 3: `Auto` (`allow_http3` = true)
 ///
+/// A strict policy (`Http2Only`, `Http3Only`) needs a protocol capability
+/// that this library may not have: `Http2Only` requires the `http2` feature
+/// and `Http3Only` requires the `http3` feature. When the capability is
+/// missing, the policy is recorded as unsupported and every request through
+/// the built client is rejected before any connection is attempted, with an
+/// error that names the missing capability. `Auto` is not strict: it
+/// negotiates down to the protocols this build has and is always accepted.
+///
 /// Returns 0 on success, -1 if handle is invalid or policy value is unknown.
 ///
 /// # Safety
@@ -316,6 +330,10 @@ pub unsafe extern "C" fn eggfetch_client_builder_http_version(
             3 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: true },
             _ => return -1,
         };
+        // Record the capability gap for strict policies this build cannot
+        // honor. The last accepted policy wins, so a later accepted policy
+        // clears an earlier gap.
+        handle.missing_capability = crate::protocol::missing_capability(version_policy);
         update_builder(handle, |builder| {
             builder.http_version_policy(version_policy)
         })
@@ -530,10 +548,10 @@ fn update_builder<F>(handle: &mut ClientBuilderHandle, update: F) -> i32
 where
     F: FnOnce(eggfetch_core::ClientBuilder) -> eggfetch_core::ClientBuilder,
 {
-    let Some(builder) = handle.0.take() else {
+    let Some(builder) = handle.builder.take() else {
         return -1;
     };
-    handle.0 = Some(update(builder));
+    handle.builder = Some(update(builder));
     0
 }
 
@@ -541,12 +559,12 @@ fn update_builder_result<F>(handle: &mut ClientBuilderHandle, update: F) -> i32
 where
     F: FnOnce(eggfetch_core::ClientBuilder) -> eggfetch_core::Result<eggfetch_core::ClientBuilder>,
 {
-    let Some(builder) = handle.0.take() else {
+    let Some(builder) = handle.builder.take() else {
         return -1;
     };
     match update(builder) {
         Ok(builder) => {
-            handle.0 = Some(builder);
+            handle.builder = Some(builder);
             0
         }
         // The consumed builder cannot be restored (ClientBuilder is not Clone);

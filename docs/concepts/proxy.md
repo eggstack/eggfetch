@@ -163,6 +163,25 @@ compatibility facade may translate scheme-specific proxy variables,
 `ALL_PROXY`, lowercase forms, and `NO_PROXY` into explicit native
 configuration when `trust_env=True`.
 
+### Environment semantics: native vs HTTPX
+
+The native Python client and the HTTPX compatibility facades read the same
+environment variables but apply different rules, selected explicitly:
+
+| rule | native `eggfetch` | `eggfetch.compat.httpx` (HTTPX 0.28.1) |
+| --- | --- | --- |
+| `NO_PROXY` parser | `NoProxy::parse` | `NoProxy::parse_httpx` |
+| `localhost` entry in `NO_PROXY` | matches `localhost` **and** the loopback IP literals | matches the hostname `localhost` only |
+| `socks5://` proxy URL | kept as `socks5://` (destination resolved locally) | normalized to `socks5h://` (destination resolved by the proxy) |
+
+Example: with `NO_PROXY=localhost` and an `HTTP_PROXY` set, a request to
+`http://127.0.0.1:8000/` goes **direct** on the native client and **through
+the proxy** on the compatibility facade.
+
+Native callers can opt into the HTTPX rules with
+`eggfetch.Client(proxy_env="httpx")`; the default is `proxy_env="native"`.
+The CLI always uses the native rules.
+
 ## Limitations
 
 - Pinned proxy peers and proxied targets are immutable route snapshots. They

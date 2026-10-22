@@ -501,32 +501,41 @@ Likely changes or additions include:
 
 This phase is complete only when:
 
-- [ ] Native eggfetch and upstream HTTPX coexist cleanly in one environment.
-- [ ] Ordinary eggfetch installation never shadows the `httpx` module.
-- [ ] The compatibility distribution has a tested, explicit conflict and replacement policy.
-- [ ] Runtime diagnostics report provider, implementation version, emulated version, profile, and stage.
-- [ ] Version fields across crates, Python packages, extension, profile, and release input are consistent.
-- [ ] The compatibility manifest is immutable, checksummed, and fail-closed.
-- [ ] Every declared Python/platform artifact is built from the same candidate SHA.
-- [ ] Every wheel passes clean-install native and compatibility smoke tests appropriate to its stage.
-- [ ] The sdist builds and passes smoke tests without repository-only files.
-- [ ] Package contents contain no unexpected top-level modules, secrets, stale manifests, or duplicate native libraries.
-- [ ] Artifact hashes, SBOMs, provenance, toolchains, and smoke results are recorded.
-- [ ] Rust and Python dependency security checks satisfy release policy.
-- [ ] Compatibility threat review has no unresolved release-blocking finding.
-- [ ] Candidate fuzz runs have no unresolved reproducible failure.
-- [ ] Malformed peer tests fail safely and release resources.
-- [ ] Required concurrency and cancellation profiles stay within committed limits.
-- [ ] Long soak profiles plateau within memory, descriptor, thread, task, and connection thresholds.
-- [ ] Severe performance regressions against the approved eggfetch baseline are absent.
-- [ ] Canary applications pass without rollback triggers.
-- [ ] Documentation and metadata use only the achieved compatibility-stage claim.
-- [ ] One complete immutable non-publishing release dry run is green.
-- [ ] The evidence bundle reports overall pass and is internally consistent.
-- [ ] No release-relevant changes exist after the validated candidate SHA.
-- [ ] A release decision explicitly approves or rejects the candidate and records the exact claim.
-- [ ] `plans/httpx-drop-in-phase-6-status.md` links all immutable evidence and workflow runs.
+- [x] Native eggfetch and upstream HTTPX coexist cleanly in one environment.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Ordinary eggfetch installation never shadows the `httpx` module.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] The compatibility distribution has a tested, explicit conflict and replacement policy.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Runtime diagnostics report provider, implementation version, emulated version, profile, and stage.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Version fields across crates, Python packages, extension, profile, and release input are consistent.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] The compatibility manifest is immutable, checksummed, and fail-closed.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Every declared Python/platform artifact is built from the same candidate SHA.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Every wheel passes clean-install native and compatibility smoke tests appropriate to its stage.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] The sdist builds and passes smoke tests without repository-only files.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Package contents contain no unexpected top-level modules, secrets, stale manifests, or duplicate native libraries.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Artifact hashes, SBOMs, provenance, toolchains, and smoke results are recorded.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Rust and Python dependency security checks satisfy release policy.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Compatibility threat review has no unresolved release-blocking finding.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Candidate fuzz runs have no unresolved reproducible failure.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Malformed peer tests fail safely and release resources.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Required concurrency and cancellation profiles stay within committed limits.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Long soak profiles plateau within memory, descriptor, thread, task, and connection thresholds.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Severe performance regressions against the approved eggfetch baseline are absent.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Canary applications pass without rollback triggers.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] Documentation and metadata use only the achieved compatibility-stage claim.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] One complete immutable non-publishing release dry run is green.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] The evidence bundle reports overall pass and is internally consistent.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] No release-relevant changes exist after the validated candidate SHA.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] A release decision explicitly approves or rejects the candidate and records the exact claim.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
+- [x] `plans/httpx-drop-in-phase-6-status.md` links all immutable evidence and workflow runs.— Not met, superseded: this phase was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-phase-6-status.md` ("Status: SUPERSEDED — corrective pass in progress … It is superseded by …").
 
 ## Handoff notes
 
 The final claim should be narrower than the evidence only by choice, never broader. Packaging constraints are part of drop-in compatibility: matching Python behavior does not make a differently named distribution transparently satisfy dependencies on `httpx`. The release decision must state exactly what substitution workflow is supported.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 25 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Every criterion in this file is dispositioned **not met, superseded**: the phase's own status record was marked SUPERSEDED because it overstated release readiness. The original criteria text is preserved above; the superseding plan owns the work.

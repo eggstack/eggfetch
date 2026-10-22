@@ -97,6 +97,105 @@ impl ResolvedRouteKey {
     }
 }
 
+/// How a direct Hyper client binds its logical destination.
+///
+/// The resolved-target route pins the physical addresses and may additionally
+/// override the TLS identity; the SNI route leaves DNS and TCP to the URL
+/// host and only overrides the TLS identity. Everything else — TLS
+/// materialization, connect timeout, metrics, idle-pool policy, and lifecycle
+/// policy — is identical for both.
+#[cfg(feature = "advanced-routing")]
+#[derive(Debug, Clone, Copy)]
+enum DirectRouteBinding<'a> {
+    /// Bind a caller-supplied resolved address snapshot, with an optional SNI
+    /// override on top of it.
+    Resolved {
+        /// The pinned destination addresses.
+        target: &'a crate::transport_hints::ResolvedTarget,
+        /// The TLS identity override, when the route carries one.
+        sni_hostname: Option<&'a str>,
+    },
+    /// Bind a logical SNI hostname; DNS and TCP still resolve the URL host.
+    Sni {
+        /// The TLS identity override.
+        sni_hostname: &'a str,
+    },
+}
+
+/// Build a direct Hyper client for one cached route, without touching the
+/// route cache.
+///
+/// CPU/local configuration only (connector + TLS policy + Hyper builder);
+/// performs no network I/O, so callers may hold the route-cache mutex while
+/// building, matching the documented route-cache locking contract.
+/// Construction failures return before insert and never poison the cache.
+#[cfg(feature = "advanced-routing")]
+fn build_direct_client(
+    config: &ClientConfig,
+    direct_connector_config: Option<&crate::transport::direct_connector::DirectConnectorConfig>,
+    transport_metrics: &Arc<crate::transport::metrics::TransportMetrics>,
+    pool: &Pool,
+    lifecycle: &Arc<LifecycleConfig>,
+    binding: DirectRouteBinding<'_>,
+) -> Result<crate::transport::TimeoutDirectClient> {
+    let connect_timeout = config.timeout.as_ref().and_then(|t| t.connect);
+    let enabler =
+        crate::http_version::HttpVersionPolicyEnabler::from_policy(config.http_version_policy);
+    #[cfg(feature = "tls-rustls")]
+    let tls_connector = {
+        let tls_config = config.tls_config.clone().unwrap_or_default();
+        let rustls_config = tls_config
+            .build_rustls_config()
+            .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
+        let rustls_config = configure_tls_alpn(rustls_config, enabler);
+        Some(tokio_rustls::TlsConnector::from(Arc::new(rustls_config)))
+    };
+    #[cfg(not(feature = "tls-rustls"))]
+    let tls_connector = None;
+
+    let base_config = direct_connector_config.cloned().unwrap_or(
+        crate::transport::direct_connector::DirectConnectorConfig {
+            local_address: None,
+            socket_options: Vec::new(),
+        },
+    );
+    let mut connector = crate::transport::direct_connector::DirectConnector::with_metrics(
+        base_config,
+        tls_connector,
+        transport_metrics.clone(),
+    );
+    let sni_hostname = match binding {
+        DirectRouteBinding::Resolved {
+            target,
+            sni_hostname,
+        } => {
+            connector = connector.with_resolved_target(target);
+            sni_hostname
+        }
+        DirectRouteBinding::Sni { sni_hostname } => Some(sni_hostname),
+    };
+    if let Some(sni_hostname) = sni_hostname {
+        connector = connector.with_sni(sni_hostname.to_owned());
+    }
+    // Idle-connection lifetime comes from the pool configuration
+    // (`Limits::keepalive_expiry`), matching the standard, direct,
+    // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
+    // and must not close idle connections early. The effective
+    // per-host idle cap is shared as well; see `Pool::max_idle_per_host`.
+    let policy = HyperClientPolicy::new(
+        config.retry_canceled_requests,
+        pool.idle_timeout(),
+        pool.max_idle_per_host(),
+        enabler,
+    );
+    Ok(build_hyper_client(
+        connector,
+        &policy,
+        connect_timeout,
+        lifecycle,
+    ))
+}
+
 impl ClientInner {
     /// Get or create a cached Hyper client for one direct resolved-target
     /// route.
@@ -119,82 +218,19 @@ impl ClientInner {
         if let Some(client) = clients.get(&key) {
             return Ok(client.clone());
         }
-        let client = Self::build_resolved_client(
+        let client = build_direct_client(
             &self.config,
             self.direct_connector_config.as_ref(),
             &self.transport_metrics,
             &self.pool,
             &self.lifecycle,
-            target,
-            sni_hostname,
+            DirectRouteBinding::Resolved {
+                target,
+                sni_hostname,
+            },
         )?;
         clients.insert(key, client.clone());
         Ok(client)
-    }
-
-    /// Build a configured resolved-route Hyper client without touching the
-    /// route cache.
-    ///
-    /// CPU/local configuration only (connector + TLS policy + Hyper builder);
-    /// performs no network I/O, so callers may hold the route-cache mutex
-    /// while building, matching the documented route-cache locking contract.
-    /// Construction failures return before insert and never poison the cache.
-    #[cfg(feature = "advanced-routing")]
-    #[allow(clippy::too_many_arguments)]
-    fn build_resolved_client(
-        config: &ClientConfig,
-        direct_connector_config: Option<&crate::transport::direct_connector::DirectConnectorConfig>,
-        transport_metrics: &Arc<crate::transport::metrics::TransportMetrics>,
-        pool: &Pool,
-        lifecycle: &Arc<LifecycleConfig>,
-        target: &crate::transport_hints::ResolvedTarget,
-        sni_hostname: Option<&str>,
-    ) -> Result<crate::transport::TimeoutDirectClient> {
-        let connect_timeout = config.timeout.as_ref().and_then(|t| t.connect);
-        #[cfg(feature = "tls-rustls")]
-        let tls_connector = {
-            let tls_config = config.tls_config.clone().unwrap_or_default();
-            let rustls_config = tls_config
-                .build_rustls_config()
-                .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
-            let rustls_config = configure_tls_alpn(
-                rustls_config,
-                crate::http_version::HttpVersionPolicyEnabler::from_policy(
-                    config.http_version_policy,
-                ),
-            );
-            Some(tokio_rustls::TlsConnector::from(Arc::new(rustls_config)))
-        };
-        #[cfg(not(feature = "tls-rustls"))]
-        let tls_connector = None;
-
-        let base_config = direct_connector_config.cloned().unwrap_or(
-            crate::transport::direct_connector::DirectConnectorConfig {
-                local_address: None,
-                socket_options: Vec::new(),
-            },
-        );
-        let mut connector = crate::transport::direct_connector::DirectConnector::with_metrics(
-            base_config,
-            tls_connector,
-            transport_metrics.clone(),
-        )
-        .with_resolved_target(target);
-        if let Some(sni_hostname) = sni_hostname {
-            connector = connector.with_sni(sni_hostname.to_owned());
-        }
-        let policy = HyperClientPolicy::cached_route(
-            config.retry_canceled_requests,
-            pool.idle_timeout(),
-            pool.max_idle_per_host(),
-            crate::http_version::HttpVersionPolicyEnabler::from_policy(config.http_version_policy),
-        );
-        Ok(build_hyper_client(
-            connector,
-            &policy,
-            connect_timeout,
-            lifecycle,
-        ))
     }
 
     /// Get or create a cached hyper client with TLS SNI hostname override.
@@ -213,47 +249,14 @@ impl ClientInner {
             return Ok(client.clone());
         }
 
-        let connect_timeout = self.config.timeout.as_ref().and_then(|t| t.connect);
-        let enabler = crate::http_version::HttpVersionPolicyEnabler::from_policy(
-            self.config.http_version_policy,
-        );
-
-        #[cfg(feature = "tls-rustls")]
-        let tls_connector = {
-            let tls_config = self.config.tls_config.clone().unwrap_or_default();
-            let rc = tls_config
-                .build_rustls_config()
-                .map_err(|e| Error::Tls(format!("failed to build TLS config: {e}")))?;
-            let rc = configure_tls_alpn(rc, enabler);
-            Some(tokio_rustls::TlsConnector::from(Arc::new(rc)))
-        };
-        #[cfg(not(feature = "tls-rustls"))]
-        let tls_connector = None;
-
-        let base_config = self.direct_connector_config.clone().unwrap_or(
-            crate::transport::direct_connector::DirectConnectorConfig {
-                local_address: None,
-                socket_options: Vec::new(),
-            },
-        );
-        let base_connector = crate::transport::direct_connector::DirectConnector::with_metrics(
-            base_config,
-            tls_connector,
-            self.transport_metrics.clone(),
-        );
-        let sni_connector = base_connector.with_sni(sni_hostname.to_owned());
-        // Idle-connection lifetime comes from the pool configuration
-        // (`Limits::keepalive_expiry`), matching the standard, direct,
-        // and UDS paths. `Timeout.pool`/`total` are acquisition budgets
-        // and must not close idle connections early. The effective
-        // per-host idle cap is shared as well; see `Pool::max_idle_per_host`.
-        let policy = HyperClientPolicy::cached_route(
-            self.config.retry_canceled_requests,
-            self.pool.idle_timeout(),
-            self.pool.max_idle_per_host(),
-            enabler,
-        );
-        let client = build_hyper_client(sni_connector, &policy, connect_timeout, &self.lifecycle);
+        let client = build_direct_client(
+            &self.config,
+            self.direct_connector_config.as_ref(),
+            &self.transport_metrics,
+            &self.pool,
+            &self.lifecycle,
+            DirectRouteBinding::Sni { sni_hostname },
+        )?;
         clients.insert(sni_hostname.to_owned(), client.clone());
         Ok(client)
     }
@@ -291,7 +294,7 @@ impl ClientInner {
             ),
             Some(sni_hostname),
         )?;
-        let policy = HyperClientPolicy::cached_route(
+        let policy = HyperClientPolicy::new(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
             self.pool.max_idle_per_host(),
@@ -350,7 +353,7 @@ impl ClientInner {
         // (timeout plus effective per-host cap) with every other persistent
         // Hyper family. `HyperClientPolicy::apply` installs the pool timer
         // the timeout requires.
-        let policy = HyperClientPolicy::cached_route(
+        let policy = HyperClientPolicy::new(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
             self.pool.max_idle_per_host(),
@@ -447,7 +450,7 @@ impl ClientInner {
             self.config.http_version_policy,
             self.transport_metrics.clone(),
         );
-        let policy = HyperClientPolicy::cached_route(
+        let policy = HyperClientPolicy::new(
             self.config.retry_canceled_requests,
             self.pool.idle_timeout(),
             self.pool.max_idle_per_host(),

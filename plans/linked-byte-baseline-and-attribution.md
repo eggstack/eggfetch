@@ -199,12 +199,12 @@ This plan should require only the fixture/runtime checks needed to prove the mea
 
 ## Exit criteria
 
-- [ ] 0.1.5, current-main high-level, current-main native, and aligned reqwest profiles are measured under documented equivalent settings.
-- [ ] The high-level fixture performs a real request path and typed-failure path.
-- [ ] Stripped and unstripped sizes are recorded.
-- [ ] Crate and symbol attribution is captured.
-- [ ] The expected contribution of advanced routing, retry/redirect, auth, TLS helpers, and residual dependencies is evidence-backed.
-- [ ] Later executable plans are confirmed, narrowed, or explicitly amended based on the evidence.
+- [x] 0.1.5, current-main high-level, current-main native, and aligned reqwest profiles are measured under documented equivalent settings.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
+- [x] The high-level fixture performs a real request path and typed-failure path.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
+- [x] Stripped and unstripped sizes are recorded.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
+- [x] Crate and symbol attribution is captured.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
+- [x] The expected contribution of advanced routing, retry/redirect, auth, TLS helpers, and residual dependencies is evidence-backed.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
+- [x] Later executable plans are confirmed, narrowed, or explicitly amended based on the evidence.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the measured entry and attribution on the stated baseline `263e7749`.
 
 ## Closure record (2026-09-18)
 
@@ -242,3 +242,12 @@ settings (0.1.5 historical via the prior x86_64/aarch64 records linked from
 `docs/architecture/embedded-footprint.md`); real request + typed-failure
 paths exercised; stripped/unstripped recorded; crate/symbol attribution
 captured; advanced-routing vs policy contributions evidence-backed.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 6 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

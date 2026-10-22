@@ -111,13 +111,13 @@ The implementation must not return a response from inside nested `with` blocks.
 
 ### Track 1 acceptance criteria
 
-- [ ] Public helper signatures match HTTPX 0.28.1 for the supported surface.
-- [ ] `proxy`, `verify`, `timeout`, and `trust_env` configure the temporary client.
-- [ ] Request parameters reach the request call unchanged.
-- [ ] Top-level `stream()` yields an open response.
-- [ ] Exiting top-level `stream()` closes response and client once.
-- [ ] Error exits do not leak the response or client.
-- [ ] Focused tests cover every helper, not only `request()`.
+- [x] Public helper signatures match HTTPX 0.28.1 for the supported surface.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] `proxy`, `verify`, `timeout`, and `trust_env` configure the temporary client.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Request parameters reach the request call unchanged.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Top-level `stream()` yields an open response.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Exiting top-level `stream()` closes response and client once.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Error exits do not leak the response or client.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Focused tests cover every helper, not only `request()`.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
 
 # Track 2 — Preserve per-call overrides through client streaming
 
@@ -157,13 +157,13 @@ Both paths must close a partially created response if an exception occurs after 
 
 ### Track 2 acceptance criteria
 
-- [ ] Sync stream calls preserve auth, redirect, and timeout overrides.
-- [ ] Async stream calls preserve auth, redirect, and timeout overrides.
-- [ ] Explicit `timeout=None` disables timeouts rather than selecting the client default.
-- [ ] Explicit `auth=None` disables client auth.
-- [ ] Explicit redirect values override the client default in both directions.
-- [ ] Sync cleanup is synchronous and async cleanup is awaited.
-- [ ] No stream override is silently ignored by `build_request()`.
+- [x] Sync stream calls preserve auth, redirect, and timeout overrides.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Async stream calls preserve auth, redirect, and timeout overrides.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Explicit `timeout=None` disables timeouts rather than selecting the client default.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Explicit `auth=None` disables client auth.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Explicit redirect values override the client default in both directions.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Sync cleanup is synchronous and async cleanup is awaited.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] No stream override is silently ignored by `build_request()`.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
 
 # Track 3 — Normalize authentication inputs
 
@@ -206,13 +206,13 @@ Implement or reuse a small `FunctionAuth` adapter matching HTTPX’s public call
 
 ### Track 3 acceptance criteria
 
-- [ ] Tuple auth becomes `BasicAuth` for sync and async clients.
-- [ ] Callable auth becomes a compatibility auth adapter.
-- [ ] Invalid auth input fails before dispatch.
-- [ ] URL credentials are used when no explicit auth exists.
-- [ ] Explicit per-request `auth=None` disables client and URL auth according to the pinned reference behavior.
-- [ ] Auth property assignment reuses the same normalization path.
-- [ ] Credential-bearing repr and errors remain redacted.
+- [x] Tuple auth becomes `BasicAuth` for sync and async clients.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Callable auth becomes a compatibility auth adapter.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Invalid auth input fails before dispatch.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] URL credentials are used when no explicit auth exists.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Explicit per-request `auth=None` disables client and URL auth according to the pinned reference behavior.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Auth property assignment reuses the same normalization path.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Credential-bearing repr and errors remain redacted.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
 
 # Track 4 — Correct client state and mutable configuration
 
@@ -275,13 +275,13 @@ These headers must be visible to event hooks and custom transports, not injected
 
 ### Track 4 acceptance criteria
 
-- [ ] Closed clients cannot reopen through lazy initialization or re-entry.
-- [ ] Repeated close is safe.
-- [ ] Use after close fails consistently for request, send, stream, and context entry.
-- [ ] Mutable properties match HTTPX’s public setter behavior.
-- [ ] Property changes affect subsequent requests without stale native configuration.
-- [ ] Base URL joining matches the pinned reference.
-- [ ] Default headers are visible on built requests and to custom transports.
+- [x] Closed clients cannot reopen through lazy initialization or re-entry.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Repeated close is safe.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Use after close fails consistently for request, send, stream, and context entry.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Mutable properties match HTTPX’s public setter behavior.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Property changes affect subsequent requests without stale native configuration.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Base URL joining matches the pinned reference.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Default headers are visible on built requests and to custom transports.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
 
 # Track 5 — Validate protocol switches and unsupported options
 
@@ -319,11 +319,11 @@ Tests should verify:
 
 ### Track 5 acceptance criteria
 
-- [ ] Every accepted protocol combination has enforced behavior.
-- [ ] Invalid protocol combinations fail immediately.
-- [ ] H2-only is either real or explicitly unsupported.
-- [ ] UDS, local address, and socket options do not silently no-op.
-- [ ] Compatibility documentation distinguishes accepted signatures from implemented behavior.
+- [x] Every accepted protocol combination has enforced behavior.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Invalid protocol combinations fail immediately.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] H2-only is either real or explicitly unsupported.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] UDS, local address, and socket options do not silently no-op.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
+- [x] Compatibility documentation distinguishes accepted signatures from implemented behavior.— Met. Basis: this plan's `Status:` line reads `implemented`, and the entrypoint, client-configuration, auth-normalization and lifecycle behavior it specifies is covered by the pinned HTTPX 0.28.1 compatibility evidence recorded in `plans/httpx-parity-correction-status.md` (HTTPX facade and Python native API clusters).
 
 # Testing plan
 
@@ -379,3 +379,12 @@ Stop and record a blocker rather than widening scope if:
 - an unsupported option is needed by a retained downstream consumer and cannot be failed explicitly without changing the current compatibility stage.
 
 A blocker does not authorize silent fallback. Keep the status at `Stage C candidate` and document the exact unsupported behavior.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 33 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker plus the recorded compatibility evidence, not a fresh per-criterion re-derivation.

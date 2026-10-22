@@ -131,3 +131,11 @@ proptest = "=1.5.0"
 rcgen = "0.13"
 tempfile = "3"
 tokio = { version = "1", features = ["io-util", "net", "macros", "sync", "time", "rt-multi-thread"] }
+
+# The quickstart example exercises redirect following and basic auth, which
+# are compiled out of the lean profiles. Declaring the requirement keeps the
+# example out of the lean-profile `--all-targets` compile instead of failing
+# it, so the whole-suite lean gate can be green.
+[[example]]
+name = "quickstart"
+required-features = ["redirects", "basic-auth"]

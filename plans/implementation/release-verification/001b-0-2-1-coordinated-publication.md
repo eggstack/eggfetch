@@ -200,21 +200,21 @@ Do not rewrite historical closure evidence.
 
 ## 10. Acceptance criteria
 
-- [ ] M001A candidate SHA unchanged;
-- [ ] M002 rehearsal closed on that exact SHA;
-- [ ] Tier 2 green immediately before publication;
-- [ ] Tier 3 green immediately before publication;
-- [ ] live security preflight green;
-- [ ] six crates.io `0.2.1` packages published in dependency order;
-- [ ] registry propagation/resolution verified;
-- [ ] signed `v0.2.1` tag exists and targets candidate SHA;
-- [ ] PyPI `publish=true` workflow runs from that tag;
-- [ ] all 19 distributions validated and published;
-- [ ] clean PyPI install/import smoke passes;
-- [ ] clean crates.io consumer smoke passes;
-- [ ] candidate/tag/rehearsal/publish SHA identity matches;
-- [ ] M001 umbrella closure written;
-- [ ] registry leaves no stale `0.2.0` publication instruction.
+- [x] M001A candidate SHA unchanged;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] M002 rehearsal closed on that exact SHA;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] Tier 2 green immediately before publication;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] Tier 3 green immediately before publication;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] live security preflight green;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] six crates.io `0.2.1` packages published in dependency order;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] registry propagation/resolution verified;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] signed `v0.2.1` tag exists and targets candidate SHA;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] PyPI `publish=true` workflow runs from that tag;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] all 19 distributions validated and published;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] clean PyPI install/import smoke passes;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] clean crates.io consumer smoke passes;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] candidate/tag/rehearsal/publish SHA identity matches;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] M001 umbrella closure written;— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
+- [x] registry leaves no stale `0.2.0` publication instruction.— Not met, superseded: this plan was never executed. Its own `Status:` line reads `superseded before execution`, and it names its replacement `plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`.
 
 ## 11. Stop conditions
 
@@ -238,3 +238,17 @@ Stop rather than weaken policy if:
 - No matrix reduction.
 - No HTTPX 1.0/H3/Node maturation.
 - No automatic crates.io publication.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 15 acceptance criteria above were re-evaluated and are all **not met,
+superseded**. None is deferred or never applicable. Evidence is cited inline with
+each criterion. The plan's `Status: superseded before execution` marker and its
+publication-order and recovery guidance are unchanged.
+
+This plan was replaced before execution by
+`plans/implementation/release-verification/004-0-2-1-tagged-release-finalization.md`,
+whose closure record (`plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md`)
+is the artifact that actually discharged the publication work: it records the
+published crates.io packages, the signed `v0.2.1` tag, the 19 PyPI files and the
+published GitHub Release.

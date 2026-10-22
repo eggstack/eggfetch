@@ -111,6 +111,42 @@ select `transport-http1` + `standard-route` (e.g.
 `default-features = false, features = ["transport-http1", "standard-route", "tls-rustls"]`);
 `native-http1` retains advanced routing for compatibility.
 
+### Gate coverage
+
+Every supported profile is compiled in isolation by the Tier 1 contract matrix
+(`scripts/check.sh`, `tier1_rust_api_contracts`) and frozen by the Rust
+public-surface oracle (`scripts/check_rust_public_api.py`, Tier 2). No
+supported profile is covered only as a side effect of `--all-features`.
+
+| Profile | Tier 1 contract matrix | Tier 2 public-surface oracle | Other gates |
+| --- | --- | --- | --- |
+| `default` (`http1`, `tls-rustls`, `tls-native-roots`) | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+| `http1,tls-rustls` | yes | yes | Tier 2 feature matrix and the feature-gated tests (compression, proxy) build on this feature set |
+| `http2,tls-rustls` | yes | yes | — |
+| `standard-http1,tls-rustls` (lean) | yes | yes | Tier 1 lean behavioral suites `lean_policy_tests` and `lean_route_tests` run under this profile; the whole core test suite also compiles under this profile (each target that needs an excluded feature carries a file-level `#![cfg(...)]` gate) |
+| `standard-http2,tls-rustls` (lean) | yes | yes | — |
+| `native-http1,tls-rustls` | yes | yes | — |
+| `native-http2,tls-rustls` | yes | yes | — |
+| `--all-features` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+
+The contract matrix runs the `public_api_contracts` fixture, which owns
+compile shape, not runtime behavior. The lean behavioral suites are the only
+core suites whose *behavior* runs under the lean profile; the remaining core
+test targets now also *compile* under it. Every target that exercises a
+feature the lean profile excludes carries a file-level `#![cfg(...)]` gate
+naming exactly that feature (`redirects`, `logical-retry`,
+`advanced-routing`), so the target compiles to an empty test binary in a
+profile that omits it and is unchanged in the default profile and under
+`--all-features`. The gate is per-file and feature-specific, never a blanket
+profile check.
+
+The oracle freezes each profile's public surface in
+`compat/rust-public-api/<profile>.txt`. The H1 and H2 members of each family
+differ only in the selected transport, which is private, so their snapshots are
+byte-identical: `http1`/`http2`, `standard-http1`/`standard-http2`, and
+`native-http1`/`native-http2`. The lean and native families are not identical
+to each other, so the oracle does discriminate profile surfaces.
+
 ## Feature Reference
 
 ### http1
@@ -230,6 +266,31 @@ Enables HTTP/3 support over QUIC. When enabled, the client can negotiate HTTP/3 
 Hardened lifecycle policy (see [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md)): bounded 64-entry per-origin QUIC cache with `OnceCell`-shared init and stale-eviction reconnect, multi-address fallback under one shared connect budget, phase-correct connect/total/read/write timeouts, keepalive-derived QUIC idle (default 30 s), pool-derived stream caps, no transport-level retries, plus separate bounded Alt-Svc cache/suppressor, pre-commit replayable-only safe fallback via `H3DispatchError`, and GOAWAY draining (pinned h3 0.0.8 `is_closing()`/`is_h3_no_error()`). `TransportMetrics::h3_diagnostics()` exposes bounded copied Quinn snapshots for HTTP/3 builds; unavailable stream counts are reported as `None`. Tests: `tests/h3_hardening.rs` + `tests/h3_alt_svc_discovery.rs` + `tests/h3_interop_qualification.rs` (GET/HEAD/upload/streaming/multiplex/trailers/early-close/soak/boundedness) plus unit tests in `transport/http3.rs` + `transport/alt_svc.rs` + `transport/metrics.rs` (loopback only). The implementation-neutral corpus, independent-server runner and qualification-only impairment matrix live in `qualification/http3/` and `scripts/`; external absence is an explicit unsupported result. Fuzz: `fuzz/fuzz_targets/fuzz_alt_svc.rs` (parser/cache + suppressor transitions). Graduation: retained experimental this milestone (see "Production Graduation Decision" in core-tls-proxy-protocols.md).
 
 This feature also carries the experimental caller-owned datagram routing seam (ADR-0007): `ClientBuilder::datagram_dialer` installs a `DatagramDialer`, and every HTTP/3 generation — explicit `Http3Only` or Alt-Svc discovered — is then established over one fixed-target `DatagramRoute` instead of a direct QUIC endpoint. Configuring a dialer creates no direct UDP socket, so a failed or refused route cannot silently downgrade. Eggfetch keeps the whole QUIC/TLS stack; the seam carries datagrams only (no handshake, no certificate material, no QUIC frames), and SNI/certificate validation stay bound to the logical origin. Rust-only: no Python, FFI, or Node exposure. See "Caller-owned datagram routing (experimental)" in [core-tls-proxy-protocols.md](core-tls-proxy-protocols.md); tests: `tests/h3_datagram_route.rs` plus crate-private `transport/datagram` unit tests.
+
+### CLI crate features (`eggfetch-cli`)
+
+**Status:** implemented.
+`eggfetch-cli` forwards its protocol capability to the core with two opt-in
+crate features: `http2 = ["eggfetch-core/http2"]` and
+`http3 = ["eggfetch-core/http3"]`. The CLI's `default` feature set is empty,
+so the published default binary compiles neither `http2` nor `http3` and
+keeps its established capability set (`cookies`, `multipart`, `proxy` from the
+core dependency). The CLI reads its compiled capability with
+`cfg!(feature = "http2")` / `cfg!(feature = "http3")` rather than repeating a
+hand-maintained list of core features, so the binary reports what it can
+actually do.
+
+`--http2` and `--http3` are strict protocol controls: when the built binary
+does not have the matching capability, the request fails closed before any
+connection is attempted, with an error that names the missing capability
+(`HTTP/2 is not supported by this build: the built binary was compiled
+without the http2 feature`) and exit code 5. The CLI never silently
+downgrades to HTTP/1.1. A build compiled with `--features http2` or
+`--features http3` supports the matching flag. The engine-level negotiation
+downgrade of `HttpVersionPolicy::Auto` (and of `Http2Only`/`Http3Only` for
+native Rust callers) is a separate contract and is not reachable from the CLI
+flags. See "Protocol and compression support" in
+[cli.md](cli.md).
 
 ### tls-rustls
 
@@ -373,14 +434,15 @@ cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,co
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
 ```
 
-Manual (not Tier 2 gates) compile checks for other combinations:
+Manual (not Tier 1 or Tier 2 gates) compile checks for other combinations:
 
 ```text
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,multipart,proxy
 cargo check -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,http3
 cargo check -p eggfetch-core --no-default-features --features transport-http1,standard-route,high-level-url,tls-rustls
-cargo check -p eggfetch-core --no-default-features --features standard-http1,tls-rustls
-cargo test -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --test lean_route_tests
-cargo test -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --test lean_policy_tests
 ```
+
+The lean and native profiles, including their HTTP/2 members, are covered by
+the Tier 1 contract matrix and the Tier 2 public-surface oracle; see "Gate
+coverage" above.

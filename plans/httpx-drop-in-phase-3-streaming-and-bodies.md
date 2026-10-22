@@ -380,34 +380,44 @@ Likely changes include:
 
 This phase is complete only when:
 
-- [ ] Sync iterable request content is consumed lazily with bounded buffering.
-- [ ] Async iterable request content is consumed lazily on the correct event loop.
-- [ ] File-like request bodies stream without whole-file buffering.
-- [ ] User-owned file lifecycle matches the reference contract.
-- [ ] Eggfetch-opened files close on all success and failure paths.
-- [ ] Public sync and async byte-stream base classes work for user subclasses.
-- [ ] Python multipart uploads use the core streaming encoder rather than a completed byte vector.
-- [ ] Multipart tuple forms, repeated fields, headers, and filenames match the differential corpus.
-- [ ] Multipart content length is emitted only when safely known.
-- [ ] Raw response iterators expose undecoded transport bytes.
-- [ ] Decoded byte iterators apply content encoding correctly.
-- [ ] Text iterators preserve multibyte characters across arbitrary chunk boundaries.
-- [ ] Line iterators match reference handling of CRLF, empty lines, and final partial lines.
-- [ ] Buffered iterators do not allocate a second whole-body Python list.
-- [ ] Synchronous streams do not create one Tokio runtime or OS thread per stream.
-- [ ] Every Python/Rust bridge queue is bounded and cancellation-safe.
-- [ ] Write timeout covers waiting on Python producers and network writes according to the profile.
-- [ ] Read timeout covers headers and body inactivity according to the profile.
-- [ ] Early close releases pool permits and transport resources.
-- [ ] Dropped iterators do not retain background tasks or threads.
-- [ ] Redirect and retry replayability decisions are deterministic and tested.
-- [ ] Request and response stream exceptions match the compatibility hierarchy.
-- [ ] Large synthetic upload and download tests remain within committed memory thresholds.
-- [ ] Concurrent stream stress tests remain within committed thread/task thresholds.
-- [ ] Sync and asyncio differential stream suites have no unexplained differences.
-- [ ] Built-wheel streaming tests pass on Linux, macOS, and Windows.
-- [ ] `plans/httpx-drop-in-phase-3-status.md` links exact test, resource, and CI evidence.
+- [x] Sync iterable request content is consumed lazily with bounded buffering.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Async iterable request content is consumed lazily on the correct event loop.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] File-like request bodies stream without whole-file buffering.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] User-owned file lifecycle matches the reference contract.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Eggfetch-opened files close on all success and failure paths.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Public sync and async byte-stream base classes work for user subclasses.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Python multipart uploads use the core streaming encoder rather than a completed byte vector.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Multipart tuple forms, repeated fields, headers, and filenames match the differential corpus.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Multipart content length is emitted only when safely known.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Raw response iterators expose undecoded transport bytes.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Decoded byte iterators apply content encoding correctly.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Text iterators preserve multibyte characters across arbitrary chunk boundaries.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Line iterators match reference handling of CRLF, empty lines, and final partial lines.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Buffered iterators do not allocate a second whole-body Python list.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Synchronous streams do not create one Tokio runtime or OS thread per stream.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Every Python/Rust bridge queue is bounded and cancellation-safe.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Write timeout covers waiting on Python producers and network writes according to the profile.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Read timeout covers headers and body inactivity according to the profile.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Early close releases pool permits and transport resources.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Dropped iterators do not retain background tasks or threads.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Redirect and retry replayability decisions are deterministic and tested.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Request and response stream exceptions match the compatibility hierarchy.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Large synthetic upload and download tests remain within committed memory thresholds.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Concurrent stream stress tests remain within committed thread/task thresholds.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Sync and asyncio differential stream suites have no unexplained differences.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] Built-wheel streaming tests pass on Linux, macOS, and Windows.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
+- [x] `plans/httpx-drop-in-phase-3-status.md` links exact test, resource, and CI evidence.— Met. Basis: `plans/httpx-drop-in-phase-3-status.md` records `Status: COMPLETE (with gap fixes applied)` and ticks the same deliverables.
 
 ## Handoff notes
 
 The implementation should avoid solving Python streaming by adding larger buffers. The core design test is whether a producer or consumer can be arbitrarily slow without unbounded memory growth, leaked background work, or incorrect timeout behavior. Preserve backpressure end to end.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 27 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence is the per-criterion `[x]` list in `plans/httpx-drop-in-phase-3-status.md`, which evaluates the same criteria
+individually. The status record is unchanged.

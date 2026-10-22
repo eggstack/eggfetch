@@ -96,13 +96,32 @@ Body sources are mutually exclusive (except `--form` + `--file`):
 ### Protocol and compression support
 
 `--http2`/`--http3` require a CLI build with the corresponding core feature
-compiled in; the default build enables `cookies`, `multipart`, and `proxy`
-but **not** `http2` or `http3`. Likewise the default build compiles **no**
-compression decoders: the CLI never sends `Accept-Encoding`, so compliant
-servers reply identity-encoded. If a server sends an encoded body anyway,
-decoding fails with exit 5 unless `--no-compress` passes the bytes through
-raw. Requesting an uncompiled capability fails instead of silently
-downgrading.
+compiled in. The CLI forwards its own `http2` and `http3` crate features to
+`eggfetch-core/http2` and `eggfetch-core/http3` and reads the compiled
+capability with `cfg!`, so the binary reports what it can actually do. The
+default build enables `cookies`, `multipart`, and `proxy` but **not** `http2`
+or `http3`; a build compiled with `--features http2` or `--features http3`
+supports the matching flag.
+
+Requesting a capability the built binary does not have fails closed before any
+connection is attempted. The request is rejected with an error that names the
+missing capability and states that the built binary does not support it (for
+example `HTTP/2 is not supported by this build: the built binary was compiled
+without the http2 feature`), and the CLI uses the existing protocol error exit
+code 5. The CLI never silently negotiates a different protocol: `--http2`
+does not fall back to HTTP/1.1, and `--http3` does not fall back to HTTP/2.
+
+The engine-level negotiation downgrade is a separate contract. For native
+Rust callers, `HttpVersionPolicy::Auto` still negotiates down to HTTP/1.1
+when HTTP/3 is unavailable, and `Http2Only`/`Http3Only` without the matching
+core feature are downgraded by the engine rather than rejected. That
+downgrade is an engine behavior for native callers; it is not reachable from
+the CLI flags, because `--http2` and `--http3` are strict requests.
+
+Likewise the default build compiles **no** compression decoders: the CLI never
+sends `Accept-Encoding`, so compliant servers reply identity-encoded. If a
+server sends an encoded body anyway, decoding fails with exit 5 unless
+`--no-compress` passes the bytes through raw.
 
 ## Output Modes
 

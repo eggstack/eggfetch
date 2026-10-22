@@ -194,3 +194,12 @@ Verify mechanically/manually that:
 - [ ] HTTPX 1.0 preview remains unqualified;
 - [ ] remote CI passes;
 - [ ] descendant audit proves executable identity after record commits.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 29 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

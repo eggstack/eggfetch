@@ -933,3 +933,12 @@ The implementing agent must report:
 - final compatibility designation.
 
 The intended end state is a truthful **Stage C qualified** HTTPX 0.28.1 compatibility profile for the documented Python >=3.10 asyncio surface, with the transport claim supported by executable local evidence rather than constructor acceptance or allowlist reclassification.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 27 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+This file's own status line records the work as *implementation in progress; final qualification pending* — no completion record was ever added, so no criterion can be reported as met.

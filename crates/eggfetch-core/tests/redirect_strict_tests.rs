@@ -1,9 +1,13 @@
+// This target exercises the redirect policy and its HTTPS-downgrade rules, which the lean profile compiles out.
+// It therefore requires `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
     clippy::missing_panics_doc,
     clippy::redundant_closure_for_method_calls
 )]
+#![cfg(feature = "redirects")]
 //! Strict HTTPS-downgrade redirect policy integration tests.
 //!
 //! Proves the transport policy end to end with local servers rather than

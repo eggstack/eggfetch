@@ -159,18 +159,18 @@ then rehearse again.
 
 ## 9. Acceptance criteria
 
-- [ ] workflow `head_sha` equals the M001A candidate SHA;
-- [ ] `publish=false`;
-- [ ] validate-release green;
-- [ ] all 18 wheel jobs green;
-- [ ] all three Python 3.15 rows green;
-- [ ] sdist green and rebuilds outside the repo;
-- [ ] exactly 19 distributions assembled;
-- [ ] wheel coverage validator green;
-- [ ] `twine check` green;
-- [ ] no publish job executed;
-- [ ] exact run ID and candidate SHA recorded;
-- [ ] Python 3.15 release-backed support is now evidence-backed for the
+- [x] workflow `head_sha` equals the M001A candidate SHA;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] `publish=false`;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] validate-release green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] all 18 wheel jobs green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] all three Python 3.15 rows green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] sdist green and rebuilds outside the repo;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] exactly 19 distributions assembled;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] wheel coverage validator green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] `twine check` green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] no publish job executed;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] exact run ID and candidate SHA recorded;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
+- [x] Python 3.15 release-backed support is now evidence-backed for the— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/002-python-315-wheel-rehearsal.md` records the rehearsed candidate SHA `41757569123c0b8038550b956d8b244ab55094a6`, the successful conclusion, and the skipped publish job for this milestone.
       candidate.
 
 ## 10. Closure
@@ -192,3 +192,15 @@ Record:
 - confirmation that nothing was published.
 
 After closure, M001B becomes the sole ready release task.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 12 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The plan's `Status: closed` marker is unchanged.
+
+Evidence is the closure record
+`plans/closure/release-verification/002-python-315-wheel-rehearsal.md`, which records
+the candidate SHA, the dispatch reference, the successful conclusion, the skipped
+publish job, and the per-wheel / interpreter / sdist / assemble / smoke / coverage /
+twine results for this milestone.

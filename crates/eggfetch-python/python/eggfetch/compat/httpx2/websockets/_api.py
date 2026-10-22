@@ -53,7 +53,7 @@ if typing.TYPE_CHECKING:
     from typing import Any as NetworkStream  # eggfetch: duck-typed native stream
 
     from eggfetch.compat.httpx2._client import AsyncClient, Client, UseClientDefault
-    from eggfetch.compat.httpx._response import Response
+    from eggfetch.compat.httpx2._response import Response
     from typing import Any as AuthTypes  # eggfetch: type alias
     from typing import Any as CookieTypes  # eggfetch: type alias
     from typing import Any as HeaderTypes  # eggfetch: type alias

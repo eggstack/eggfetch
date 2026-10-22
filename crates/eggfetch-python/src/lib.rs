@@ -67,7 +67,11 @@ use timeout::PyTimeout;
 /// persistent clients share a pool, so limits stay constructor-level.
 #[pyfunction]
 #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "the parameters are the public one-shot keyword surface, and the body keeps the shared preparation boundary, the short-lived runtime, and the dispatch in one flow"
+)]
 fn request<'py>(
     py: Python<'py>,
     method: &str,
@@ -139,6 +143,10 @@ fn request<'py>(
                 max_redirects.unwrap_or(20),
             ),
             decompress,
+            // The one-shot helpers are the native surface and own no
+            // environment configuration, so they always use the native
+            // proxy semantics.
+            proxy_env_semantics: crate::proxy::ProxyEnvSemantics::Native,
         },
     )?;
     let builder = dispatch.builder;
@@ -162,7 +170,10 @@ fn request<'py>(
 /// Send a GET request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn get<'py>(
     py: Python<'py>,
     url: &str,
@@ -207,7 +218,10 @@ fn get<'py>(
 /// Send a POST request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn post<'py>(
     py: Python<'py>,
     url: &str,
@@ -256,7 +270,10 @@ fn post<'py>(
 /// Send a PUT request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn put<'py>(
     py: Python<'py>,
     url: &str,
@@ -305,7 +322,10 @@ fn put<'py>(
 /// Send a PATCH request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn patch<'py>(
     py: Python<'py>,
     url: &str,
@@ -354,7 +374,10 @@ fn patch<'py>(
 /// Send a DELETE request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn delete<'py>(
     py: Python<'py>,
     url: &str,
@@ -399,7 +422,10 @@ fn delete<'py>(
 /// Send a HEAD request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn head<'py>(
     py: Python<'py>,
     url: &str,
@@ -444,7 +470,10 @@ fn head<'py>(
 /// Send an OPTIONS request using a short-lived client.
 #[pyfunction]
 #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, limits=None))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameter list is the public one-shot keyword surface, forwarded verbatim to `request`"
+)]
 fn options<'py>(
     py: Python<'py>,
     url: &str,

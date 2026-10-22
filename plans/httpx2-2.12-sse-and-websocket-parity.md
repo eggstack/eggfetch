@@ -184,3 +184,12 @@ Run focused HTTPX2 SSE/WS differential tests, existing `network_stream`/upgrade 
 - [ ] sync/async cancellation and close behavior pass;
 - [ ] API/differential corpus has no unexplained SSE/WS gaps in the declared target;
 - [ ] HTTPX 0.28.1 regressions and Tier 1 remain green.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 30 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

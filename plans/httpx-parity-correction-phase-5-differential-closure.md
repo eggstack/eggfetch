@@ -508,3 +508,12 @@ The implementation agent should report exactly one of:
 - **Partially implemented:** some phases landed, but Stage C candidate status remains and no closure claim is made.
 
 “Mostly complete” without mapped remaining cases is not an acceptable handoff state.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 33 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

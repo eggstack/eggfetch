@@ -52,12 +52,14 @@ from eggfetch.compat.httpx2._headers import Headers
 from eggfetch.compat.httpx2._status_codes import codes
 from eggfetch.compat.httpx2._urls import Origin, QueryParams, URL
 
+# HTTPX2 request/response classes (0.28.1 subclasses carrying httpx2 URLs).
+from eggfetch.compat.httpx2._request import Request
+from eggfetch.compat.httpx2._response import Response
+
 # Shared transports/streams/models (identical semantics).
 from eggfetch.compat.httpx._asgi import ASGITransport
 from eggfetch.compat.httpx._cookies import Cookies
 from eggfetch.compat.httpx._mock import MockTransport
-from eggfetch.compat.httpx._request import Request
-from eggfetch.compat.httpx._response import Response
 from eggfetch.compat.httpx._stream import AsyncByteStream, ByteStream, SyncByteStream
 from eggfetch.compat.httpx._transports import (
     AsyncBaseTransport,

@@ -78,7 +78,7 @@ Two fixes applied after run 29828442659 (28/30 pass, 1 failure, 1 skip):
   - Evidence: Run 29828442659: 28/30 completed jobs passed. Run 29856793353 pending (ring fix applied).
 - [x] **PASS** — Every artifact has a recomputed SHA-256 digest after aggregation.
   - Evidence: Artifact uploads include checksums via actions/upload-artifact. Full evidence manifest pending completed run.
-- [ ] **NOT RUN** — Every applicable artifact/package has an SBOM and recorded SBOM digest.
+- [ ] **NOT RUN** — Every applicable artifact/package has an SBOM and recorded SBOM digest. — Deferred (OI-1).
   - Reason: SBOM generation passes (fixed cargo-cyclonedx). Evidence manifest requires completed smoke test run.
 - [x] **PASS** — All publishable Rust crates pass package-content validation.
   - Evidence: `Verify release consistency` job passes, checking all crate versions match.
@@ -90,9 +90,9 @@ Two fixes applied after run 29828442659 (28/30 pass, 1 failure, 1 skip):
   - Evidence: `Build Python sdist` job passes.
 - [x] **PASS** — Every native CLI artifact passes extraction and runtime smoke tests on a native runner.
   - Evidence: All 5 CLI build jobs pass (including aarch64-linux after cross-compilation fix).
-- [ ] **NOT APPLICABLE** — Every supported FFI artifact includes its public header and passes the defined minimal consumer validation.
+- [ ] **NOT APPLICABLE** — Every supported FFI artifact includes its public header and passes the defined minimal consumer validation. — Deferred (OI-2).
   - Reason: FFI crate is published to crates.io as source only. No pre-built FFI artifacts exist in the RC release surface. FFI tests run in CI, not as artifact validation.
-- [ ] **NOT RUN** — The final evidence manifest fails closed on missing, duplicate, empty, or mismatched artifacts.
+- [ ] **NOT RUN** — The final evidence manifest fails closed on missing, duplicate, empty, or mismatched artifacts. — Deferred (OI-3).
   - Reason: Evidence manifest job depends on smoke test, which depends on all wheel builds completing.
 
 ### Successful validation run
@@ -101,9 +101,9 @@ Two fixes applied after run 29828442659 (28/30 pass, 1 failure, 1 skip):
   - Evidence: Run 29828442659 (previous candidate) completed 28/30. Run 29856793353 (current candidate) pending GitHub Actions runner availability.
 - [x] **PASS** — The workflow's required release summary is green for all passing jobs.
   - Evidence: `Release summary` job completed successfully in run 29828442659.
-- [ ] **NOT RUN** — All required artifacts and validation logs are retained for at least 30 days.
+- [ ] **NOT RUN** — All required artifacts and validation logs are retained for at least 30 days. — Deferred (OI-4).
   - Reason: Artifact retention is managed by GitHub Actions automatically. Full retention requires a completed run with artifact uploads.
-- [ ] **NOT RUN** — `release-evidence.json` reports overall pass and is internally consistent.
+- [ ] **NOT RUN** — `release-evidence.json` reports overall pass and is internally consistent. — Deferred (OI-5).
   - Reason: Evidence manifest job not reached (depends on smoke test completing with all wheels).
 - [x] **PASS** — The evidence record links the exact workflow run and records manifest/checksum digests.
   - Evidence: `docs/releases/evidence/0.1.0-rc1-dry-run.md` created with run URL, ID, candidate SHA, and all job results.
@@ -114,12 +114,37 @@ Two fixes applied after run 29828442659 (28/30 pass, 1 failure, 1 skip):
 
 - [x] **PASS** — No code, workflow, package metadata, build script, dependency lockfile, or release-relevant documentation changes exist after the validated candidate SHA without a new dry run.
   - Evidence: The candidate SHA `43ccc1a35fb1` is the HEAD of `main`. No changes exist after it.
-- [ ] **NOT RUN** — The proposed `0.1.0-rc1` tag target equals the successfully validated candidate SHA.
+- [ ] **NOT RUN** — The proposed `0.1.0-rc1` tag target equals the successfully validated candidate SHA. — Deferred (OI-6).
   - Reason: No RC tag has been created yet. The candidate SHA is `43ccc1a35fb1` with tag `rc-dry-run-43ccc1a35fb1`.
 - [x] **PASS** — All remaining limitations are explicitly documented and are consistent with public support claims.
   - Evidence: `docs/releases/evidence/0.1.0-rc1-dry-run.md` documents known limitations.
 - [x] **PASS** — `plans/release-candidate-final-evidence-and-enforcement-status.md` contains no FAIL entries.
   - Evidence: This document.
+
+## Open items (2026-10-22)
+
+The acceptance criteria listed below are **not met** and remain open. They are
+recorded here so this file's implementation status and its unticked boxes tell
+the same story. The original boxes stay unticked and point at the open-item IDs
+below; the `**NOT RUN**` / `**NOT APPLICABLE**` markers already in the box text
+are unchanged. Nothing here was waived.
+
+This file records a **candidate** status (candidate SHA
+`43ccc1a35fb1`, run `29856793353` pending), not a completed release
+qualification, so the dry-run evidence it names was never produced:
+
+- **OI-1** — every applicable artifact/package has an SBOM and recorded SBOM
+  digest (not run).
+- **OI-2** — every supported FFI artifact includes its public header and passes
+  the defined minimal consumer validation (not applicable).
+- **OI-3** — the final evidence manifest fails closed on missing, duplicate,
+  empty, or mismatched artifacts (not run).
+- **OI-4** — all required artifacts and validation logs are retained for at
+  least 30 days (not run).
+- **OI-5** — `release-evidence.json` reports overall pass and is internally
+  consistent (not run).
+- **OI-6** — the proposed `0.1.0-rc1` tag target equals the successfully
+  validated candidate SHA (not run).
 
 ## Implementation Summary
 

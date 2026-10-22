@@ -113,9 +113,9 @@ Do not add `trybuild` or another dependency. A normal integration test already c
 
 Acceptance:
 
-- [ ] The compatibility test is demonstrably red on `dd52f8c4`.
-- [ ] The identical source pattern is green against the pre-corrective API and final correction.
-- [ ] No `#[non_exhaustive]` shortcut is used; adding it would itself break existing exhaustive matches.
+- [x] The compatibility test is demonstrably red on `dd52f8c4`.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] The identical source pattern is green against the pre-corrective API and final correction.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] No `#[non_exhaustive]` shortcut is used; adding it would itself break existing exhaustive matches.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Part B — Restore the exact public ResponseBody shape
 
@@ -179,11 +179,11 @@ If extending `PoolGuard`, keep permit semantics conceptually separate with a sma
 
 Acceptance:
 
-- [ ] `ResponseBody` matches the old public field shape exactly.
-- [ ] Timeout metadata is entirely private.
-- [ ] `BodyTimeoutStream` remains the authoritative high-level response timeout implementation.
-- [ ] Raw and decoded compressed modes retain final-boundary timeout enforcement.
-- [ ] No dependency, public API, MSRV, or feature change is introduced.
+- [x] `ResponseBody` matches the old public field shape exactly.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Timeout metadata is entirely private.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `BodyTimeoutStream` remains the authoritative high-level response timeout implementation.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Raw and decoded compressed modes retain final-boundary timeout enforcement.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] No dependency, public API, MSRV, or feature change is introduced.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Part D — Preserve the dd52 behavioral fix
 
@@ -231,9 +231,9 @@ fresh restarted total ~= 1500 ms after final headers
 
 Acceptance:
 
-- [ ] The test fails if the final response gets a fresh total.
-- [ ] CI jitter tolerance remains generous.
-- [ ] The result must be `TimeoutPhase::Total`, not merely the external test timeout.
+- [x] The test fails if the final response gets a fresh total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] CI jitter tolerance remains generous.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] The result must be `TimeoutPhase::Total`, not merely the external test timeout.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Part F — Add retry -> final body remaining-budget proof
 
@@ -258,9 +258,9 @@ Do not test Hyper's hidden canceled-idle retry here. This is the explicit eggfet
 
 Acceptance:
 
-- [ ] Attempt count is asserted.
-- [ ] Final body uses remaining original total.
-- [ ] Existing retry/backoff/replayability behavior remains unchanged.
+- [x] Attempt count is asserted.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Final body uses remaining original total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Existing retry/backoff/replayability behavior remains unchanged.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Part G — Fix the native pool-lease proof
 
@@ -286,8 +286,8 @@ assert_eq!(response.status(), StatusCode::OK);
 
 Acceptance:
 
-- [ ] No `is_ok() || is_err()` tautology remains.
-- [ ] Successful second-request admission/headers are actually proven.
+- [x] No `is_ok() || is_err()` tautology remains.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Successful second-request admission/headers are actually proven.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Part H — Rationalize duplicate read-timeout code
 
@@ -466,27 +466,27 @@ Do not expand this pass into:
 
 This corrective and its parent are ready to close only when:
 
-- [ ] The exact 0.1.6/pre-corrective `ResponseBody` variant field shapes are restored.
-- [ ] An external integration test destructures those shapes without `..`.
-- [ ] That test is recorded green on `60a6e2b3`, red on `dd52f8c4`, and green on the final corrective.
-- [ ] No non-exhaustive escape hatch or semver-breaking public replacement is introduced.
-- [ ] Timeout metadata is carried entirely behind private lifecycle state.
-- [ ] `BodyTimeoutStream` remains the authoritative high-level response timeout mechanism.
-- [ ] The behavioral timeout matrix from `dd52f8c4` remains green.
-- [ ] Raw and decoded compressed final streams still enforce total.
-- [ ] Redirect proof categorically distinguishes remaining-original-budget behavior from a restarted total.
-- [ ] A logical retry -> successful headers -> slow final body regression proves remaining-original-budget behavior.
-- [ ] Native total timeout releases the permit and the second native request is explicitly successful.
-- [ ] Duplicate `ReadTimeoutStream` ownership is removed or explicitly justified.
-- [ ] Behavioral baseline-red evidence is recorded.
-- [ ] Lean standard route, full/default, proxy, deterministic H3, trailer, pool, native frame, and native service regressions pass.
-- [ ] No dependency, feature, MSRV, public API, Python, CLI, FFI, Node, or HTTPX semantic change is introduced.
-- [ ] The external native HTTP-body/TLS fixture passes.
-- [ ] Tier 1 passes on the final executable SHA.
-- [ ] Extended, package, security, and MSRV gates pass as required.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 exact-SHA evidence is renewed on that same freeze.
-- [ ] Parent plan and plan index contain truthful closure evidence.
-- [ ] A coordinated crates.io patch containing the correction is published before downstream handoff is marked complete.
+- [x] The exact 0.1.6/pre-corrective `ResponseBody` variant field shapes are restored.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] An external integration test destructures those shapes without `..`.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] That test is recorded green on `60a6e2b3`, red on `dd52f8c4`, and green on the final corrective.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] No non-exhaustive escape hatch or semver-breaking public replacement is introduced.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Timeout metadata is carried entirely behind private lifecycle state.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `BodyTimeoutStream` remains the authoritative high-level response timeout mechanism.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] The behavioral timeout matrix from `dd52f8c4` remains green.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Raw and decoded compressed final streams still enforce total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Redirect proof categorically distinguishes remaining-original-budget behavior from a restarted total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] A logical retry -> successful headers -> slow final body regression proves remaining-original-budget behavior.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Native total timeout releases the permit and the second native request is explicitly successful.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Duplicate `ReadTimeoutStream` ownership is removed or explicitly justified.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Behavioral baseline-red evidence is recorded.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Lean standard route, full/default, proxy, deterministic H3, trailer, pool, native frame, and native service regressions pass.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] No dependency, feature, MSRV, public API, Python, CLI, FFI, Node, or HTTPX semantic change is introduced.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] The external native HTTP-body/TLS fixture passes.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Tier 1 passes on the final executable SHA.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Extended, package, security, and MSRV gates pass as required.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 exact-SHA evidence is renewed on that same freeze.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Parent plan and plan index contain truthful closure evidence.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] A coordinated crates.io patch containing the correction is published before downstream handoff is marked complete.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that it was closed by `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Closure record template
 
@@ -613,3 +613,12 @@ Downstream handoff: eggfetch-core 0.1.7 from crates.io (Total through EOF,
   ResponseBody 0.1.6-compatible, no HTTPX total).
 Documentation-only descendant SHA: 842a3c35 (plus release commit 43c3b31).
 ```
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 37 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

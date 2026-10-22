@@ -219,3 +219,12 @@ Corrective 03 is complete only when:
 ## Out of scope
 
 Do not replace Hyper solely to expose ordinary pooled sockets. Do not expose writable H2 shared connection I/O. Do not implement WebSocket protocol semantics; this phase only supplies the underlying upgraded byte stream expected by compatibility consumers.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 12 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

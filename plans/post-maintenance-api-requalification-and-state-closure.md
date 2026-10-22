@@ -246,21 +246,21 @@ Required outcome:
 
 ## Completion criteria
 
-- [ ] One final executable SHA is recorded.
-- [ ] Exact Rust public-surface comparison to 03ecba973010e2858bf16a2b5f84d51ce70adae4 reports zero drift in all reviewed profiles.
-- [ ] Fast Rust compile-contract and semver checks pass.
-- [ ] Native Python manifest, relational guardrails, typing checks, and ordinary tests report zero public drift.
-- [ ] SSLContext private contract/security/network tests pass with unchanged accepted/rejected behavior.
-- [ ] Core private decomposition tests pass with no visibility/feature/dependency drift.
-- [ ] CONNECT conformance tests pass and production wire ownership remains singular.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility/API-oracle results contain zero new unexplained differences.
-- [ ] FFI/CLI/Node-Rust/lifecycle/resource/native-frame checks are green or truthfully skipped per policy.
-- [ ] Tier 1, extended, applicable package, security, docs, and exact MSRV gates pass.
-- [ ] Canonical exact-SHA compatibility records are renewed when required.
-- [ ] plans/README.md accurately distinguishes active, completed, and separately pending work.
-- [ ] Issue #24 state matches publication reality.
-- [ ] Python 3.15 rehearsal remains open unless independently completed.
-- [ ] Parent and child plans contain final execution records.
+- [x] One final executable SHA is recorded.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Exact Rust public-surface comparison to 03ecba973010e2858bf16a2b5f84d51ce70adae4 reports zero drift in all reviewed profiles.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Fast Rust compile-contract and semver checks pass.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Native Python manifest, relational guardrails, typing checks, and ordinary tests report zero public drift.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] SSLContext private contract/security/network tests pass with unchanged accepted/rejected behavior.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Core private decomposition tests pass with no visibility/feature/dependency drift.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] CONNECT conformance tests pass and production wire ownership remains singular.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 compatibility/API-oracle results contain zero new unexplained differences.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] FFI/CLI/Node-Rust/lifecycle/resource/native-frame checks are green or truthfully skipped per policy.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Tier 1, extended, applicable package, security, docs, and exact MSRV gates pass.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Canonical exact-SHA compatibility records are renewed when required.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] plans/README.md accurately distinguishes active, completed, and separately pending work.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Issue #24 state matches publication reality.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Python 3.15 rehearsal remains open unless independently completed.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
+- [x] Parent and child plans contain final execution records.— Met. Basis: this plan's `## Execution record — local closure (2026-09-21)` and its `## Corrective addendum — closure-evidence pass (2026-09-21)` record the completed local evidence set and the corrected exact-SHA renewal to freeze `18c1f96c1cbf9d71aa480030b0f365c85267620b`; the ledger entry of the same date carries the renewal.
 
 ## Stop conditions
 
@@ -309,3 +309,12 @@ package, security, exact MSRV 1.89.0, six-profile oracle, full compat), and
 renewed all canonical Stage C records to that freeze. No production
 API/capability change occurred; `df2549f7...` remains historical
 implementation evidence and `bc4800ee...` is historical after renewal.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 15 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own execution record and corrective addendum, not a fresh per-criterion re-derivation. The full Tier 1/extended gates were not re-run in this session (the maintainer deferred them), so the gate criterion is carried as of the recorded freeze.

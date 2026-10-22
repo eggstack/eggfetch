@@ -31,8 +31,8 @@
 //! - Stream cancellation and permit release
 //! - Feature-gated build validation
 
-#![cfg(feature = "http2")]
 #![allow(clippy::module_name_repetitions)]
+#![cfg(feature = "http2")]
 
 mod test_server;
 

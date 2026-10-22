@@ -74,35 +74,68 @@ cargo check -p eggfetch-core --all-features         # clean
 
 ### Incomplete
 
-- [ ] Context manager exit has tested socket and stream behavior.
+- [ ] Context manager exit has tested socket and stream behavior. — Deferred (OI-1).
   - Close/race tests exercise context manager exit with concurrent requests.
   - No dedicated socket-level assertions after context exit.
-- [ ] Close/request races do not panic, deadlock, or leak resources.
+- [ ] Close/request races do not panic, deadlock, or leak resources. — Deferred (OI-2).
   - Tested: close during concurrent requests, concurrent close calls,
     close during streaming context manager exit.
   - No resource leak assertions (RSS/FD counts) in these tests.
-- [ ] Interpreter shutdown tests pass on Linux, macOS, and Windows.
+- [ ] Interpreter shutdown tests pass on Linux, macOS, and Windows. — Deferred (OI-3).
   - Subprocess tests verify clean shutdown on macOS (current platform).
   - Not tested on Linux or Windows.
-- [ ] Repeated-failure resource tests stabilize within committed thresholds.
+- [ ] Repeated-failure resource tests stabilize within committed thresholds. — Deferred (OI-4).
   - Rust tests verify RSS stabilization for connection refused, DNS failure,
     timeout, and mixed failures.
   - Only on Linux (RSS measurement via `/proc/self/status`).
   - macOS returns 0 for RSS (no RSS check).
-- [ ] Scheduled soak profiles produce retained machine-readable evidence.
+- [ ] Scheduled soak profiles produce retained machine-readable evidence. — Deferred (OI-5).
   - `soak_test.py` script exists and produces JSON output.
   - Not integrated into CI. No retained evidence from CI runs.
 
 ### Not started
 
-- [ ] No acceptance criterion is satisfied solely by documentation or a
+- [ ] No acceptance criterion is satisfied solely by documentation or a — Deferred (OI-6).
   unit test that bypasses the real connector.
   - Most timeout tests use real TCP connections to local test servers.
   - `connect_timeout.rs` unit tests use `MockConnector` (bypasses real
     connector) — acceptable for unit-level coverage.
-- [ ] `plans/httpx-drop-in-phase-1-status.md` links a green required CI
+- [ ] `plans/httpx-drop-in-phase-1-status.md` links a green required CI — Deferred (OI-7).
   run and exact SHA.
   - This file IS the status file. No CI run linked (PR not yet merged).
+
+## Open items (2026-10-22)
+
+The acceptance criteria listed below are **not met** and remain open. They are
+recorded here so this file's status and its unticked boxes tell the same story.
+The original boxes stay unticked and point at the open-item IDs below; the
+per-criterion reasons this file already records under each box are unchanged.
+Nothing here was waived, and this file's `## Status: partially complete` marker
+is unchanged.
+
+This file records `Status: partially complete` against SHA
+`c815d59c6a132228fb4d4784b29074bfb71ba752`. The open items are the criteria the
+file itself lists under `### Incomplete` and `### Not started`:
+
+- **OI-1** — context manager exit has tested socket and stream behavior
+  (close/race tests cover concurrent requests, but there are no dedicated
+  socket-level assertions after context exit).
+- **OI-2** — close/request races do not panic, deadlock, or leak resources
+  (the race scenarios are exercised, but there are no RSS/FD-count leak
+  assertions in those tests).
+- **OI-3** — interpreter shutdown tests pass on Linux, macOS, and Windows
+  (subprocess shutdown tests exist and verify macOS only).
+- **OI-4** — repeated-failure resource tests stabilize within committed
+  thresholds (RSS stabilization is measured on Linux only; macOS returns 0 for
+  RSS and therefore has no check).
+- **OI-5** — scheduled soak profiles produce retained machine-readable evidence
+  (`soak_test.py` produces JSON, but it is not integrated into CI and no CI run
+  retains the output).
+- **OI-6** — no acceptance criterion is satisfied solely by documentation or a
+  unit test that bypasses the real connector (`connect_timeout.rs` unit tests
+  use `MockConnector`).
+- **OI-7** — this status file links a green required CI run and an exact SHA
+  (no CI run is linked).
 
 ## Test counts
 

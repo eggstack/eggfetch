@@ -222,3 +222,12 @@ Corrective 02 is complete only when:
 ## Out of scope
 
 Do not add a generic Python-object extension map to core. Do not fabricate metadata Hyper does not expose. Do not broaden this phase into arbitrary HTTPX private-extension compatibility beyond the pinned public/httpcore extension behaviors already identified.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 13 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

@@ -48,7 +48,8 @@ impl PyRetry {
         clippy::too_many_arguments,
         clippy::needless_pass_by_value,
         clippy::unnecessary_wraps,
-        clippy::fn_params_excessive_bools
+        clippy::fn_params_excessive_bools,
+        reason = "the parameters are the Python `Retry(...)` keyword surface; the `statuses` set is consumed by the policy builder, the numeric options are validated here so the constructor can raise `ValueError`, and each bool is a separate documented policy switch"
     )]
     fn new(
         max_attempts: usize,

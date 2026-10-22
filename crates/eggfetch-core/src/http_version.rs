@@ -1,5 +1,7 @@
 //! HTTP version negotiation policy.
 
+use crate::error::Error;
+
 /// Policy controlling which HTTP protocol versions the client may negotiate.
 ///
 /// The default is [`HttpVersionPolicy::Auto`], which allows the client to
@@ -51,6 +53,58 @@ impl HttpVersionPolicy {
     }
 }
 
+/// Typed evidence about the HTTP/3 capability of the running build.
+///
+/// The value is resolved from the compiled feature set so that failure
+/// classification never has to inspect a rendered message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Http3Capability {
+    /// The `http3` feature is compiled in.
+    Compiled,
+    /// The `http3` feature is not compiled in.
+    NotCompiled,
+}
+
+impl Http3Capability {
+    /// The HTTP/3 capability of the running build.
+    pub(crate) const CURRENT: Self = if cfg!(feature = "http3") {
+        Self::Compiled
+    } else {
+        Self::NotCompiled
+    };
+
+    /// Returns `true` when this build can route HTTP/3 requests.
+    pub(crate) const fn is_available(self) -> bool {
+        matches!(self, Self::Compiled)
+    }
+}
+
+/// Classify a standard-route dispatch that has no usable Hyper client.
+///
+/// Two different operator problems share one failure point:
+///
+/// - the build has no HTTP/3 support while the caller asked for HTTP/3
+///   (a build capability gap), and
+/// - the request had no usable client for any other reason (a transport
+///   failure).
+///
+/// Reporting the second for the first misreports a build capability gap as a
+/// transport failure, so the two are separated here. The decision is derived
+/// from the typed policy value and the compiled capability, never from parsing
+/// a `Display` string.
+///
+/// Both outcomes stay inside the existing [`Error::Unsupported`] domain: no
+/// public error variant is added and the transport-failure taxonomy is
+/// unchanged. Only the message differs.
+pub(crate) fn missing_client_error(policy: HttpVersionPolicy) -> Error {
+    if matches!(policy, HttpVersionPolicy::Http3Only) && !Http3Capability::CURRENT.is_available() {
+        return Error::Unsupported(
+            "HTTP/3 is not supported by this build: the http3 feature was not compiled in".into(),
+        );
+    }
+    Error::Unsupported("HTTP client not available for this protocol".into())
+}
+
 /// Internal helper that resolves which protocol versions to enable on the
 /// connector based on the policy and compiled feature flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -68,7 +122,10 @@ impl HttpVersionPolicyEnabler {
             HttpVersionPolicy::Http2Only => Self(HttpVersionPolicy::Http1Only),
             #[cfg(not(feature = "http3"))]
             HttpVersionPolicy::Http3Only => Self(HttpVersionPolicy::Http1Only),
-            #[allow(unused_variables)]
+            #[allow(
+                unused_variables,
+                reason = "the `Auto` arm ignores the caller's HTTP/3 flag when the http2 or http3 feature is compiled out, so the binding is unused in those builds"
+            )]
             HttpVersionPolicy::Auto { allow_http3 } => {
                 #[cfg(not(feature = "transport-http2"))]
                 return Self(HttpVersionPolicy::Http1Only);
@@ -83,7 +140,10 @@ impl HttpVersionPolicyEnabler {
 
     /// Returns `true` if HTTP/1.1 should be enabled on the connector.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the HTTP/1.1 switch is only read by the ALPN and connector builders, which are compiled out when neither tls-rustls nor transport-http2 is enabled"
+    )]
     pub(crate) const fn enable_http1(self) -> bool {
         matches!(
             self.0,
@@ -93,7 +153,10 @@ impl HttpVersionPolicyEnabler {
 
     /// Returns `true` if HTTP/2 should be enabled on the connector.
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the HTTP/2 switch is only read by the ALPN and connector builders, which are compiled out when neither tls-rustls nor transport-http2 is enabled"
+    )]
     pub(crate) const fn enable_http2(self) -> bool {
         matches!(
             self.0,
@@ -103,7 +166,10 @@ impl HttpVersionPolicyEnabler {
 
     /// Returns `true` if HTTP/3 should be used (QUIC transport).
     #[must_use]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the HTTP/3 switch is only read by the HTTP/3 connector setup, which is compiled out when the http3 feature is disabled"
+    )]
     pub(crate) fn use_http3(self) -> bool {
         match self.0 {
             HttpVersionPolicy::Http3Only => true,
@@ -184,5 +250,72 @@ mod tests {
         assert!(enabler.enable_http1());
         assert!(!enabler.enable_http2());
         assert!(!enabler.use_http3());
+    }
+
+    #[test]
+    #[cfg(not(feature = "http3"))]
+    fn missing_client_error_names_the_http3_capability_gap() {
+        let error = missing_client_error(HttpVersionPolicy::Http3Only);
+        let message = error.to_string();
+        assert!(
+            message.contains("HTTP/3"),
+            "the failure must name HTTP/3: {message}"
+        );
+        assert!(
+            !message.contains("HTTP client not available"),
+            "the failure must not reuse the generic missing-client wording: {message}"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "http3")]
+    fn missing_client_error_keeps_the_generic_wording_when_http3_is_compiled() {
+        let error = missing_client_error(HttpVersionPolicy::Http3Only);
+        let message = error.to_string();
+        assert!(
+            message.contains("HTTP client not available"),
+            "a compiled-in HTTP/3 build has no capability gap to report: {message}"
+        );
+    }
+
+    #[test]
+    fn missing_client_error_keeps_the_generic_wording_for_other_policies() {
+        for policy in [
+            HttpVersionPolicy::Http1Only,
+            HttpVersionPolicy::Http2Only,
+            HttpVersionPolicy::Auto { allow_http3: false },
+            HttpVersionPolicy::Auto { allow_http3: true },
+        ] {
+            let message = missing_client_error(policy).to_string();
+            assert!(
+                message.contains("HTTP client not available"),
+                "unexpected classification for {policy:?}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn classification_is_typed_and_does_not_render_the_policy() {
+        // The classification is driven by the policy variant and the compiled
+        // capability, never by a rendered policy string: the produced message
+        // must not embed the policy's own rendering.
+        let message = missing_client_error(HttpVersionPolicy::Http3Only).to_string();
+        assert!(
+            !message.contains("Http3Only"),
+            "the classification must not embed a rendered policy: {message}"
+        );
+        assert!(
+            !message.contains("Auto"),
+            "the classification must not embed a rendered policy: {message}"
+        );
+    }
+
+    #[test]
+    fn http3_capability_matches_the_compiled_feature_set() {
+        assert_eq!(
+            Http3Capability::CURRENT.is_available(),
+            cfg!(feature = "http3"),
+            "the typed capability must track the compiled feature set"
+        );
     }
 }

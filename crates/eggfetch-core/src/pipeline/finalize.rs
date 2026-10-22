@@ -54,7 +54,10 @@ pub(super) fn apply_timeouts_and_lease(
 /// learning (learnable routes only), 101 upgrade accounting, decompression
 /// wrapping, decoded-size limiting, then read/total-timeout + pool-lease
 /// attachment.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the post-transport policy takes the response, the route facts and the limit inputs explicitly so one function owns the whole finalization sequence"
+)]
 pub(super) fn finalize_response(
     inner: &ClientInner,
     mut response: Response,

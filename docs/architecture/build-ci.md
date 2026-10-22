@@ -56,13 +56,17 @@ scripts/ci-requirements.txt`).
 
 | Step | Command |
 |------|---------|
+| H3 runner self-test | `python scripts/test_h3_qualification.py` (pure unit self-test of the runner's manifest/corpus validation; no socket, no QUIC peer, no `http3` feature, no artifact. Runner logic only — **no H3 conformance claim**, and H3 stays experimental) |
 | Rust formatting | `cargo fmt --all -- --check` |
-| Lint suppression | `bash scripts/check_lint_suppressions.sh` |
+| Lint suppression guard self-test | `bash scripts/check_lint_suppressions.sh --self-test` (asserts the guard's verdict for every supported suppression form; runs before the tree scan so a broken guard fails the tier) |
+| Lint suppression | `bash scripts/check_lint_suppressions.sh` (scans every `*.rs` file under `crates/` and `fuzz/`; rejects `warnings`, `clippy::all`, `clippy::pedantic`, `clippy::nursery`, `clippy::restriction` anywhere in the lint list of an `allow`, `deny` or `expect` attribute, with or without a `reason = "…"` field) |
 | Adapter feature ownership | `python scripts/check_adapter_features.py` (core stays transport-only; adapters own their feature additions) |
 | Release version/ref validation | `python scripts/test_validate_release_versions.py` |
 | Rust clippy | `cargo clippy --workspace --all-targets --all-features -- -D warnings` |
 | Rust tests | `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` (single-threaded: RSS tests) |
-| Rust API contracts | `RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1` across six profiles (default; `--no-default-features` with `http1`, `http2`, `standard-http1`, `native-http1` each + `tls-rustls`; `--all-features`). Bare `RUSTFLAGS=` overrides CI's `-D warnings`, which fails lean profiles on profile-specific dead code |
+| Rust API contracts | `RUSTFLAGS= cargo test -p eggfetch-core --test public_api_contracts -- --test-threads=1` across eight profiles (default; `--no-default-features` with `http1`, `http2`, `standard-http1`, `standard-http2`, `native-http1`, `native-http2` each + `tls-rustls`; `--all-features`). Bare `RUSTFLAGS=` overrides CI's `-D warnings`, which fails lean profiles on profile-specific dead code |
+| Rust lean behavioral contracts | `RUSTFLAGS= cargo test -p eggfetch-core --test lean_policy_tests --no-default-features --features standard-http1,tls-rustls -- --test-threads=1` and the same for `--test lean_route_tests`. The lean path is a supported profile, so its behavioral suites run under the lean profile in Tier 1. The gate names the two portable targets; the whole-suite lean compile coverage is the next row |
+| Rust feature-isolated profile whole-suite compile | `RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --all-targets`, and the same for `standard-http2,tls-rustls`, `native-http1,tls-rustls`, and `native-http2,tls-rustls`. Each feature-isolated profile must compile the **whole** core test suite, not only the two portable behavioral targets: every test target that cannot compile under a profile carries a file-level feature gate naming what it needs, so the gates stay green for the whole suite. These are compiles, not runs. Bare `RUSTFLAGS=` overrides CI's `-D warnings`, which fails lean and native profiles on profile-specific dead code |
 | Python build | `maturin develop -m crates/eggfetch-python/Cargo.toml` (active venv required; rebuild after every binding Rust change) |
 | Native Python API | `python scripts/check_native_python_api.py --self-test` (root exports, symbol kinds, exception MRO, important signatures, and version) |
 | Python typing surface | `python scripts/check_python_typing_surface.py --self-test` (stub syntax, manifest exports, exception bases, member/signature drift, async shape, and reviewed semantic contracts) |
@@ -80,12 +84,34 @@ soak, downstream, merge, and benchmarks. Install `cargo-public-api 0.52.0`
 and `cargo-semver-checks 0.49.0` and use the pinned nightly named in
 `compat/rust-public-api/README.md` before
 running the oracle. Tier 2 runs all of Tier 1 first, then the additional
-checks. All executed checks are fail-closed. Permitted explicit skips are:
-downstream when the artifact manifest is absent, and the Node JS surface when
-`node` or the built `eggfetch.node` artifact is missing (Tier 1 records the
-same Node skip). The API manifest oracle covers both facades (`httpx` 0.28.1
+checks. All executed checks are fail-closed. The only permitted explicit
+skip is the Node JS surface, when `node` or the built `eggfetch.node`
+artifact is missing (Tier 1 records the same Node skip). The API manifest
+oracle covers both facades (`httpx` 0.28.1
 and `httpx2` 2.12.0). The exact Rust 1.89.0 MSRV toolchain is required; its absence
 or any Cargo/compiler failure fails validation.
+
+The **downstream** step is release-blocking and fails closed: without
+`target/downstream-qualification/artifact-manifest.json` it fails with an
+actionable message instead of recording a skip, so `./scripts/check.sh
+extended` cannot complete on a checkout that lacks the artifact. The
+manifest must list the eggfetch wheel and the controlled httpx replacement
+wheel with verified SHA-256 hashes; the operator builds both, writes the
+manifest, and re-runs the tier (`compat/downstream/README.md`, "Update
+Process"; consumer `scripts/run_downstream_compat.py`). Nothing in the
+repository produces that manifest and no CI job does. The portfolio needs
+network access — the isolated runner downloads the pinned downstream
+packages and their wheels from PyPI and verifies their source hashes — and
+the gate says so before it runs.
+
+Tier 2's feature matrix and MSRV gate apply a bare `RUSTFLAGS=` to their
+profile-isolated rows (`--no-default-features` and its feature
+combinations): the lean and native profiles retain private helpers for other
+supported profiles, and CI's global `-D warnings` turns that
+profile-specific dead code into errors. The exemption stops there — the
+all-features rows, the workspace check and clippy keep `-D warnings`, so
+Tier 2's outcome depends on the code rather than on the caller's
+environment.
 
 ### HTTP/3 Qualification (manual, not CI)
 
@@ -176,7 +202,9 @@ Run manually via `workflow_dispatch` from `.github/workflows/pypi.yml`. The pipe
 - `unsafe_code = "forbid"` (except FFI/Node).
 - `missing_docs = "warn"` (workspace lints in `Cargo.toml`), `missing-docs-in-crate-items = true` (`.clippy.toml`).
 - Never use `allow(warnings)`, `allow(clippy::all)`, `allow(clippy::pedantic)` (except `crates/eggfetch-ffi/` and `crates/eggfetch-node/`), `allow(clippy::nursery)`, or `allow(clippy::restriction)`; blanket `deny(warnings|clippy::all|pedantic|nursery|restriction)` is likewise forbidden.
-- CI rejects blanket suppressions via `scripts/check_lint_suppressions.sh`.
+- The rule is on the lint list, not on the attribute body: a blanket lint is forbidden **anywhere** in the list of an `allow`, `deny` or `expect` attribute, including next to a `reason = "…"` field or other lints. `#[expect(...)]` has the same effect as `#[allow(...)]` and is forbidden identically.
+- CI rejects blanket suppressions via `scripts/check_lint_suppressions.sh`, which scans `crates/` **and** `fuzz/`. `crates/eggfetch-ffi/` and `crates/eggfetch-node/` stay exempt from the pedantic rule only (`allow`/`expect` of `clippy::pedantic`).
+- `scripts/check_lint_suppressions.sh --self-test` asserts the guard's verdicts and runs in Tier 1, so a broken guard fails the tier instead of passing silently.
 - Use specific lint names. Justify suppressions with a comment.
 
 ## MSRV

@@ -621,6 +621,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "high-level-url")]
     fn request_builder_without_auth_sets_disabled_and_clears_auth() {
         let client = crate::client::Client::builder().build();
         let req = client
@@ -636,6 +637,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "high-level-url")]
     fn request_builder_auth_clears_disabled() {
         let client = crate::client::Client::builder().build();
         let req = client

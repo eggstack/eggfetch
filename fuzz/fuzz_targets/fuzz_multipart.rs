@@ -40,12 +40,16 @@ fuzz_target!(|data: &[u8]| {
             let _ = mp.parts().len();
             let body = mp.into_body();
             let actual = body.len();
-            // content_length must match actual body length.
-            assert_eq!(
-                claimed,
-                actual,
-                "content_length ({claimed}) != body.len() ({actual})"
-            );
+            // content_length must match actual body length when it is known.
+            // It is `None` only when a part has an unknown (streaming) length,
+            // which cannot happen for the text part built above.
+            if let Some(claimed) = claimed {
+                assert_eq!(
+                    claimed,
+                    actual as u64,
+                    "content_length ({claimed}) != body.len() ({actual})"
+                );
+            }
             let _ = body.is_empty();
         }
     }

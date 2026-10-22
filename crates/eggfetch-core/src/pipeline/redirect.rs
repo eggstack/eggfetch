@@ -1,17 +1,16 @@
 //! Redirect handling: hop transformation and first-hop request assembly.
 //!
-//! `HopBuildParams` + `build_hop_request` form the single policy path shared
-//! by the redirects-disabled fast path and every iteration of the
-//! redirect-enabled loop, so the two entry paths cannot diverge except for
-//! redirect-loop behavior itself. `advance_redirect_hop` performs the single
-//! method/body/header transformation step per hop with exhaustive
-//! request-state handling and same-origin resolved-target semantics.
-
-use std::sync::Arc;
+//! First-hop assembly is owned by the shared [`super::hop`] builder, which
+//! the lean single-hop path uses as well, so the two entry paths cannot
+//! diverge except for redirect-loop behavior itself.
+//! `advance_redirect_hop` performs the single method/body/header
+//! transformation step per hop with exhaustive request-state handling and
+//! same-origin resolved-target semantics.
 
 use bytes::Bytes;
 
 use super::drain_response_body;
+use super::hop::{build_hop_request, HopBuildParams};
 use crate::body::RequestBody;
 use crate::client::Client;
 use crate::error::{Error, Result};
@@ -19,147 +18,7 @@ use crate::headers::Headers;
 use crate::redirect;
 use crate::request::Request;
 use crate::response::{HistoryEntry, Response};
-use crate::timeout::{Timeout, TimeoutPhase};
-
-/// Parameters for building one redirect-loop hop request.
-///
-/// This is the single policy path shared by the redirects-disabled fast
-/// path and every iteration of the redirect-enabled loop. Cookie injection,
-/// auth resolution, transport-hint handling, and credential scoping live
-/// here so the two entry paths cannot diverge.
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "hop policy is three orthogonal booleans (first-hop, credentials, cookies); an enum would obscure call sites"
-)]
-struct HopBuildParams {
-    method: http::Method,
-    url: url::Url,
-    headers: Headers,
-    body: RequestBody,
-    version: http::Version,
-    timeout: Timeout,
-    decompress: Option<bool>,
-    max_decoded_body_size: Option<usize>,
-    max_decompression_ratio: Option<f64>,
-    #[cfg(feature = "proxy")]
-    proxy_override: crate::request::ProxyOverride,
-    transport_hints: crate::transport_hints::TransportHints,
-    proxied_target: Option<crate::transport_hints::ResolvedTarget>,
-    auth: Option<crate::auth::AuthScheme>,
-    auth_disabled: bool,
-    /// True only for the first hop of the logical request.
-    is_first_hop: bool,
-    /// Preserve the request-scoped resolved destination on a same-origin hop.
-    preserve_resolved_target: bool,
-    /// False after a cross-origin redirect; gates client-auth reapplication.
-    credentials_allowed: bool,
-    /// False after a cross-origin redirect; gates cookie injection.
-    cookie_allowed: bool,
-    failure_context: Option<Arc<crate::error::RequestFailureContext>>,
-}
-
-/// Build one hop request through the shared first-hop policy path.
-///
-/// - Transport hints (`target`, `sni_hostname`, `trace`) attach only on the
-///   first hop; redirect hops clear them because the destination changed.
-/// - Per-request decompression, decoded-body limits, and proxy overrides
-///   persist across all hops.
-/// - Auth follows the cross-origin stripping policy; cookies are injected
-///   from the jar unless an explicit `cookie` header exists or the hop no
-///   longer allows cookies.
-/// - The effective auth is resolved and applied here so both the fast path
-///   and the redirect loop observe identical header state on the wire.
-///
-/// # Errors
-///
-/// Returns an error if cookie insertion or auth application fails.
-fn build_hop_request(client: &Client, params: HopBuildParams) -> Result<Request> {
-    let HopBuildParams {
-        method,
-        url,
-        headers,
-        body,
-        version,
-        timeout,
-        decompress,
-        max_decoded_body_size,
-        max_decompression_ratio,
-        #[cfg(feature = "proxy")]
-        proxy_override,
-        transport_hints,
-        proxied_target,
-        auth,
-        auth_disabled,
-        is_first_hop,
-        preserve_resolved_target,
-        credentials_allowed,
-        cookie_allowed,
-        failure_context,
-    } = params;
-
-    let mut hop = Request::new(method, url);
-    *hop.headers_mut() = headers;
-    hop.set_body(body);
-    hop.set_version(version);
-    hop.set_timeout(Some(timeout));
-    hop.set_decompress(decompress);
-    hop.set_max_decoded_body_size(max_decoded_body_size);
-    hop.set_max_decompression_ratio(max_decompression_ratio);
-    #[cfg(feature = "proxy")]
-    hop.set_proxy_override(proxy_override);
-    // Ordinary wire hints apply only on the first hop. A resolved destination
-    // is different: it remains valid for a same-origin redirect and is
-    // retained only when the redirect loop explicitly permits it. The SNI
-    // override is retained together with the pin: keeping the IP while
-    // dropping SNI would silently change the TLS identity mid-redirect.
-    if is_first_hop {
-        hop.set_transport_hints(transport_hints);
-        hop.set_proxied_target(proxied_target);
-    } else if preserve_resolved_target {
-        let resolved_hints = crate::transport_hints::TransportHints {
-            resolved_target: transport_hints.resolved_target,
-            sni_hostname: transport_hints.sni_hostname,
-            ..Default::default()
-        };
-        hop.set_transport_hints(resolved_hints);
-        hop.set_proxied_target(proxied_target);
-    }
-
-    hop.set_auth(if credentials_allowed { auth } else { None });
-    hop.set_auth_disabled(auth_disabled);
-    hop.set_failure_context(failure_context);
-
-    #[cfg(feature = "cookies")]
-    {
-        if !cookie_allowed {
-            hop.headers_mut().remove("cookie");
-        } else if !hop.headers().contains("cookie") {
-            if let Some(cookie_header) = client.config().cookie_jar.cookies_for_url(hop.url()) {
-                hop.headers_mut().insert("cookie", &cookie_header)?;
-            }
-        }
-    }
-    #[cfg(not(feature = "cookies"))]
-    let _ = (client, cookie_allowed);
-
-    {
-        let effective_auth = crate::auth::resolve_request_auth(
-            hop.auth(),
-            hop.is_auth_disabled(),
-            if credentials_allowed {
-                client.config().auth.as_ref()
-            } else {
-                None
-            },
-            hop.headers(),
-        )?;
-        if let Some(auth) = effective_auth {
-            auth.apply(hop.headers_mut())?;
-        }
-    }
-
-    Ok(hop)
-}
+use crate::timeout::TimeoutPhase;
 
 /// Result of advancing one redirect hop: the next hop's method, URL,
 /// headers, body, and version.
@@ -285,99 +144,33 @@ fn advance_redirect_hop(
 
 /// Send a request through the client, following redirects if enabled.
 ///
-/// This is the top-level entry point for the request pipeline. It
-/// handles header merging, timeout computation, cookie injection,
-/// authentication, the redirect loop, and response post-processing.
+/// This is the top-level entry point for the request pipeline. First-hop
+/// preparation (header merging, timeout computation, hop construction,
+/// cookie injection, authentication) is delegated to the shared
+/// [`super::hop`] builder that the lean path also uses; this function owns
+/// the redirect decision, the redirect loop, and response post-processing.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Result<Response> {
-    let crate::request::RequestParts {
-        method,
-        url,
-        headers: request_headers,
-        body,
-        version,
-        timeout: request_timeout,
-        redirect: request_redirect,
-        auth: req_auth,
-        auth_disabled: req_auth_disabled,
-        decompress: request_decompress,
-        max_decoded_body_size: request_max_decoded_body_size,
-        max_decompression_ratio: request_max_decompression_ratio,
-        proxy_override: request_proxy,
-        #[cfg(feature = "logical-retry")]
-            retry: _request_retry,
-        transport_hints: request_transport_hints,
-        proxied_target: request_proxied_target,
-        failure_context,
-    } = request.into_parts();
-
-    // Without the `proxy` feature the override has no transport effect.
-    #[cfg(not(feature = "proxy"))]
-    let _ = &request_proxy;
-
-    let mut merged_headers = client.config().default_headers.clone().into_inner();
-    for name in request_headers.keys() {
-        merged_headers.remove(name);
-    }
-    merged_headers.extend(request_headers.into_inner());
-    let headers = Headers::from(merged_headers);
-
-    let timeout = match client.config().timeout {
-        Some(client_timeout) => client_timeout.merge(request_timeout),
-        None => request_timeout.unwrap_or_default(),
-    };
-
+    // The effective redirect policy is resolved before the shared builder
+    // consumes the request: the builder owns the exhaustive request
+    // destructuring and must not depend on `redirects`-gated items.
+    let request_redirect = request.redirect().cloned();
     let effective_redirect = request_redirect
         .as_ref()
         .unwrap_or(&client.config().redirect);
+
+    let mut params = super::hop::prepare_first_hop(client, request);
+    let timeout = params.timeout;
 
     // Fast path: redirects disabled — send through the same first-hop
     // builder as the redirect-enabled path so the two cannot diverge except
     // for redirect-loop behavior itself.
     if !effective_redirect.follow {
-        let request = build_hop_request(
-            client,
-            HopBuildParams {
-                method,
-                url,
-                headers,
-                body,
-                version,
-                timeout,
-                decompress: request_decompress,
-                max_decoded_body_size: request_max_decoded_body_size,
-                max_decompression_ratio: request_max_decompression_ratio,
-                #[cfg(feature = "proxy")]
-                proxy_override: request_proxy,
-                transport_hints: request_transport_hints,
-                proxied_target: request_proxied_target,
-                auth: req_auth,
-                auth_disabled: req_auth_disabled,
-                is_first_hop: true,
-                preserve_resolved_target: false,
-                credentials_allowed: true,
-                cookie_allowed: true,
-                failure_context: failure_context.clone(),
-            },
-        )?;
+        let request = build_hop_request(client, params)?;
 
         let response = client.send_single_request(request, &timeout).await?;
 
-        #[cfg(feature = "cookies")]
-        {
-            let set_cookie_headers: Vec<String> = response
-                .headers()
-                .get_all("set-cookie")
-                .iter()
-                .filter_map(|v| v.to_str().ok().map(str::to_owned))
-                .collect();
-            if !set_cookie_headers.is_empty() {
-                client
-                    .config()
-                    .cookie_jar
-                    .update_from_response(response.url(), &set_cookie_headers);
-            }
-        }
+        super::hop::update_cookie_jar(client, &response);
 
         return Ok(response);
     }
@@ -386,16 +179,17 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
     let mut redirect_count = 0usize;
     let start_time = std::time::Instant::now();
 
-    let (mut replay_body, mut cur_body) = match body {
-        RequestBody::Empty => (Some(Bytes::new()), RequestBody::Empty),
-        RequestBody::Bytes(bytes) => (Some(bytes.clone()), RequestBody::Bytes(bytes)),
-        stream @ RequestBody::Stream { .. } => (None, stream),
-    };
+    let (mut replay_body, mut cur_body) =
+        match std::mem::replace(&mut params.body, RequestBody::Empty) {
+            RequestBody::Empty => (Some(Bytes::new()), RequestBody::Empty),
+            RequestBody::Bytes(bytes) => (Some(bytes.clone()), RequestBody::Bytes(bytes)),
+            stream @ RequestBody::Stream { .. } => (None, stream),
+        };
 
-    let mut cur_method = method;
-    let mut cur_url = url;
-    let mut cur_headers = headers;
-    let mut cur_version = version;
+    let mut cur_method = params.method;
+    let mut cur_url = params.url;
+    let mut cur_headers = params.headers;
+    let mut cur_version = params.version;
     #[cfg(feature = "cookies")]
     let mut cookie_header_allowed = true;
 
@@ -429,8 +223,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             {
                 cookie_header_allowed = false;
             }
-            if request_transport_hints.resolved_target.is_some() || request_proxied_target.is_some()
-            {
+            if params.transport_hints.resolved_target.is_some() || params.proxied_target.is_some() {
                 return Err(Error::ResolvedTargetRedirect);
             }
         }
@@ -444,15 +237,15 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 body: cur_body,
                 version: cur_version,
                 timeout: hop_timeout,
-                decompress: request_decompress,
-                max_decoded_body_size: request_max_decoded_body_size,
-                max_decompression_ratio: request_max_decompression_ratio,
+                decompress: params.decompress,
+                max_decoded_body_size: params.max_decoded_body_size,
+                max_decompression_ratio: params.max_decompression_ratio,
                 #[cfg(feature = "proxy")]
-                proxy_override: request_proxy.clone(),
-                transport_hints: request_transport_hints.clone(),
-                proxied_target: request_proxied_target.clone(),
-                auth: req_auth.clone(),
-                auth_disabled: req_auth_disabled,
+                proxy_override: params.proxy_override.clone(),
+                transport_hints: params.transport_hints.clone(),
+                proxied_target: params.proxied_target.clone(),
+                auth: params.auth.clone(),
+                auth_disabled: params.auth_disabled,
                 is_first_hop,
                 preserve_resolved_target: !is_cross_origin_redirect,
                 credentials_allowed,
@@ -460,7 +253,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
                 cookie_allowed: cookie_header_allowed,
                 #[cfg(not(feature = "cookies"))]
                 cookie_allowed: true,
-                failure_context: failure_context.clone(),
+                failure_context: params.failure_context.clone(),
             },
         )?;
 
@@ -468,21 +261,7 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
             .send_single_request(hop_request, &hop_timeout)
             .await?;
 
-        #[cfg(feature = "cookies")]
-        {
-            let set_cookie_headers: Vec<String> = response
-                .headers()
-                .get_all("set-cookie")
-                .iter()
-                .filter_map(|v| v.to_str().ok().map(str::to_owned))
-                .collect();
-            if !set_cookie_headers.is_empty() {
-                client
-                    .config()
-                    .cookie_jar
-                    .update_from_response(response.url(), &set_cookie_headers);
-            }
-        }
+        super::hop::update_cookie_jar(client, &response);
 
         if !redirect::is_redirect_status(response.status()) || !effective_redirect.follow {
             response.set_history(history);
@@ -554,8 +333,79 @@ pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use crate::timeout::Timeout;
     use crate::transport_hints::TransportHints;
+
+    /// The redirect path's first hop must be exactly the hop the shared
+    /// builder specifies. The lean path asserts the same expectation in its
+    /// own build, which is what proves the two paths cannot diverge.
+    #[tokio::test]
+    async fn redirect_path_prepares_the_expected_hop() {
+        use super::super::hop::test_support;
+
+        for with_request_auth in [true, false] {
+            test_support::clear_recorded();
+            let client = test_support::scenario_client();
+            let request = test_support::scenario_request(&client, with_request_auth);
+
+            // The dispatch itself fails (nothing listens on the port); the
+            // prepared hop is captured before the transport is reached.
+            let _ = send_with_redirects(&client, request).await;
+
+            let captured = test_support::take_recorded().expect("a prepared hop was captured");
+            let mut expected = test_support::expected_snapshot(with_request_auth);
+            // The redirect loop shrinks the hop's total deadline by the
+            // time already spent; the fast path does not. Compare against
+            // the loop's own bound so the assertion does not depend on
+            // wall-clock timing.
+            let original_total = expected.timeout.total;
+            expected.timeout.total = None;
+            let mut actual = captured.clone();
+            actual.timeout.total = None;
+            assert_eq!(
+                actual, expected,
+                "the redirect path's first hop must match the shared expectation"
+            );
+            if let Some(original_total) = original_total {
+                let shrunk = captured.timeout.total.expect("a total deadline");
+                let lower_bound = original_total
+                    .checked_sub(Duration::from_secs(1))
+                    .unwrap_or(Duration::ZERO);
+                assert!(
+                    shrunk <= original_total && shrunk > lower_bound,
+                    "shrunk total {shrunk:?} must stay within the original {original_total:?}"
+                );
+            }
+        }
+    }
+
+    /// The `Set-Cookie` jar update must leave the same jar state the lean
+    /// path leaves.
+    #[cfg(feature = "cookies")]
+    #[tokio::test]
+    async fn redirect_path_updates_the_cookie_jar() {
+        use crate::cookie::CookieJar;
+
+        use super::super::hop::test_support;
+
+        let (url, server) = test_support::spawn_set_cookie_server().await;
+        let client = Client::builder().cookie_jar(CookieJar::new()).build();
+
+        let response = client.get(&url).unwrap().send().await.expect("response");
+        assert_eq!(response.status(), http::StatusCode::OK);
+        server.await.expect("server task");
+
+        assert_eq!(
+            client
+                .cookies()
+                .cookies_for_url(&url::Url::parse(&url).expect("valid URL")),
+            Some(test_support::EXPECTED_COOKIE_HEADER.to_owned()),
+            "the redirect path must leave the same jar state as the lean path"
+        );
+    }
 
     fn test_url() -> url::Url {
         url::Url::parse("https://example.com/path").expect("valid test URL")

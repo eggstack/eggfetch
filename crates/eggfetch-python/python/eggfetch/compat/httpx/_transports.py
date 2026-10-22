@@ -157,6 +157,11 @@ class HTTPTransport(BaseTransport):
                 kwargs["uds"] = self._uds
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
+            # HTTPX-shaped surface: use HTTPX 0.28.1's `NO_PROXY` rules and
+            # normalize `socks5://` to `socks5h://`.  The native `eggfetch`
+            # surface keeps native semantics by default, so the compat
+            # transport opts in explicitly (ADR-0009 rule 5).
+            kwargs["proxy_env"] = "httpx"
             self._native_client = eggfetch.Client(**kwargs)
         return self._native_client
 
@@ -273,6 +278,11 @@ class AsyncHTTPTransport(AsyncBaseTransport):
                 kwargs["uds"] = self._uds
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
+            # HTTPX-shaped surface: use HTTPX 0.28.1's `NO_PROXY` rules and
+            # normalize `socks5://` to `socks5h://`.  The native `eggfetch`
+            # surface keeps native semantics by default, so the compat
+            # transport opts in explicitly (ADR-0009 rule 5).
+            kwargs["proxy_env"] = "httpx"
             self._native_client = eggfetch.AsyncClient(**kwargs)
         return self._native_client
 

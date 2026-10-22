@@ -524,29 +524,29 @@ Do not expand this corrective into:
 
 This corrective is complete only when all are true:
 
-- [ ] A deterministic regression is recorded red on the planning baseline for a response whose headers arrive before total but body exceeds total.
-- [ ] `Timeout.total` remains an absolute deadline through high-level response-body EOF/error and does not restart on first poll or chunk arrival.
-- [ ] A caller that waits until after total before first body poll receives `TimeoutPhase::Total`.
-- [ ] Continuous body progress cannot extend `Timeout.total`.
-- [ ] `Timeout.read` retains its per-chunk inactivity semantics and phase classification.
-- [ ] Deterministic read-vs-total precedence is tested.
-- [ ] Buffered and streaming high-level consumption paths share the corrected semantics.
-- [ ] Raw and decoded compressed response paths are covered.
-- [ ] Trailer completion cannot outlive total without surfacing `Total`.
-- [ ] Total-timeout termination releases the logical pool lease.
-- [ ] `NativeResponseBody` and `Client::execute_http_body()` enforce the same absolute total deadline.
-- [ ] `NativeHttpService` inherits the behavior without a duplicate timeout engine.
-- [ ] Redirect final bodies use the remaining original logical deadline rather than receiving a fresh total.
-- [ ] Retry aggregate total semantics remain unchanged and are re-proven where practical.
-- [ ] Proxy cached clients/connectors remain free of request-total/deadline state.
-- [ ] Existing decoded-body limits remain authoritative and no duplicate limit API is added.
-- [ ] Lean standard-route, full/default, proxy, and deterministic H3 regressions remain green.
-- [ ] No dependency, MSRV, public API, Python/CLI/FFI/Node default, or feature-graph change is introduced unless separately justified.
-- [ ] The external native HTTP body/TLS fixture passes.
-- [ ] Tier 1 passes before implementation commit.
-- [ ] Extended/package/security and exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0 qualification pass on the final release freeze.
-- [ ] Timeout/body documentation describes the absolute-total versus read-inactivity distinction accurately.
-- [ ] A coordinated published crates.io version containing the fix is recorded before downstream handoff is called complete.
+- [x] A deterministic regression is recorded red on the planning baseline for a response whose headers arrive before total but body exceeds total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `Timeout.total` remains an absolute deadline through high-level response-body EOF/error and does not restart on first poll or chunk arrival.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] A caller that waits until after total before first body poll receives `TimeoutPhase::Total`.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Continuous body progress cannot extend `Timeout.total`.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `Timeout.read` retains its per-chunk inactivity semantics and phase classification.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Deterministic read-vs-total precedence is tested.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Buffered and streaming high-level consumption paths share the corrected semantics.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Raw and decoded compressed response paths are covered.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Trailer completion cannot outlive total without surfacing `Total`.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Total-timeout termination releases the logical pool lease.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `NativeResponseBody` and `Client::execute_http_body()` enforce the same absolute total deadline.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] `NativeHttpService` inherits the behavior without a duplicate timeout engine.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Redirect final bodies use the remaining original logical deadline rather than receiving a fresh total.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Retry aggregate total semantics remain unchanged and are re-proven where practical.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Proxy cached clients/connectors remain free of request-total/deadline state.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Existing decoded-body limits remain authoritative and no duplicate limit API is added.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Lean standard-route, full/default, proxy, and deterministic H3 regressions remain green.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] No dependency, MSRV, public API, Python/CLI/FFI/Node default, or feature-graph change is introduced unless separately justified.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] The external native HTTP body/TLS fixture passes.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Tier 1 passes before implementation commit.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Extended/package/security and exact-SHA HTTPX 0.28.1 / HTTPX2 2.12.0 qualification pass on the final release freeze.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] Timeout/body documentation describes the absolute-total versus read-inactivity distinction accurately.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
+- [x] A coordinated published crates.io version containing the fix is recorded before downstream handoff is called complete.— Met. Basis: this plan's `## Closure record (2026-09-18)` records that its final closure pass was `plans/total-deadline-final-proof-qualification-release-closure.md`.
 
 ## Closure record template
 
@@ -650,3 +650,12 @@ Downstream handoff note: Total now spans body EOF/trailers; use
 Documentation-only descendant SHA: 842a3c35 (plus release commit 43c3b31).
 Remote CI: 35377996077 (842a3c35) success; 35385440508 (43c3b31) success.
 ```
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 23 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

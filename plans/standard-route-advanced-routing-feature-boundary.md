@@ -251,14 +251,14 @@ Also run the relevant feature-slice checks from the repository's extended matrix
 
 ## Exit criteria
 
-- [ ] Standard route has an explicit compile-time owner below existing compatibility aliases.
-- [ ] A supported standard-only H1 profile exists.
-- [ ] Advanced route state/dispatch is absent from that profile where technically practical.
-- [ ] Existing `native-http1` / `http1` and other established profiles retain current APIs and semantics.
-- [ ] Standard DNS/TLS/pool/timeout/failure/body behavior uses the same engine implementation.
-- [ ] Advanced routing tests remain green.
-- [ ] Measured linked-byte effect is recorded.
-- [ ] Tier 1 and focused feature checks pass.
+- [x] Standard route has an explicit compile-time owner below existing compatibility aliases.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] A supported standard-only H1 profile exists.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Advanced route state/dispatch is absent from that profile where technically practical.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Existing `native-http1` / `http1` and other established profiles retain current APIs and semantics.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Standard DNS/TLS/pool/timeout/failure/body behavior uses the same engine implementation.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Advanced routing tests remain green.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Measured linked-byte effect is recorded.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
+- [x] Tier 1 and focused feature checks pass.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the implemented feature design, which matches the `[features]` table of `crates/eggfetch-core/Cargo.toml`.
 
 ## Closure record (2026-09-18)
 
@@ -367,3 +367,12 @@ No change to roots, verification, SNI (logical-origin SNI retained in lean),
 TLS versions, crypto provider, proxy auth validation/redaction, PEM parsing,
 or typed failures. Pinned/SNI misuse fails closed; no silent standard-path
 fallback.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 8 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record plus the current manifest, not a fresh per-criterion re-derivation.

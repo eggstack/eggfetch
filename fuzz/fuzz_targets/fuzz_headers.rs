@@ -31,7 +31,7 @@ fuzz_target!(|data: &[u8]| {
 
     // Extend should never panic.
     let other = headers.clone();
-    headers.extend(other);
+    headers.extend(&other);
 
     // Remove should never panic.
     for (name, _) in headers.clone().iter() {

@@ -97,10 +97,8 @@ impl hyper_util::client::legacy::connect::Connection for UdsStream {
         let connected = hyper_util::client::legacy::connect::Connected::new();
         #[cfg(feature = "tls-rustls")]
         if let Self::Tls(tls) = self {
-            if let Some(alpn) = tls.get_ref().1.alpn_protocol() {
-                if alpn == b"h2" {
-                    connected = connected.negotiated_h2();
-                }
+            if super::negotiated_http2(tls.get_ref().1.alpn_protocol()) {
+                connected = connected.negotiated_h2();
             }
         }
         connected

@@ -76,6 +76,26 @@ impl std::fmt::Debug for ResolvedTarget {
     }
 }
 
+/// The diagnostic used when a wire request-target extension is not UTF-8.
+///
+/// The text is shared so every transport that decodes
+/// [`TransportHints::target`] reports the same failure.
+pub(crate) const TARGET_NOT_UTF8_MESSAGE: &str = "target extension is not valid UTF-8";
+
+/// Decode a wire request-target extension as UTF-8.
+///
+/// Every transport that honors [`TransportHints::target`] decodes the same
+/// bytes, so the decode and its diagnostic live here once.
+///
+/// # Errors
+///
+/// Returns [`crate::Error::InvalidUrl`] when the extension is not valid
+/// UTF-8.
+pub(crate) fn target_extension_str(target: &[u8]) -> crate::Result<&str> {
+    std::str::from_utf8(target)
+        .map_err(|_| crate::Error::InvalidUrl(TARGET_NOT_UTF8_MESSAGE.into()))
+}
+
 /// Typed transport-level hints carried on a request.
 ///
 /// These are *not* HTTP headers and do not affect logical URL semantics
@@ -164,5 +184,28 @@ impl NativeRequestOptions {
     pub fn transport_hints(mut self, transport_hints: TransportHints) -> Self {
         self.transport_hints = transport_hints;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{target_extension_str, TARGET_NOT_UTF8_MESSAGE};
+
+    #[test]
+    fn target_extension_decodes_valid_utf8() {
+        assert_eq!(
+            target_extension_str(b"/absolute/path").expect("valid"),
+            "/absolute/path"
+        );
+        assert_eq!(target_extension_str(b"*").expect("valid"), "*");
+    }
+
+    #[test]
+    fn target_extension_rejects_non_utf8_with_the_shared_message() {
+        let error = target_extension_str(&[0xff, 0xfe]).expect_err("invalid UTF-8 must fail");
+        assert!(
+            matches!(&error, crate::Error::InvalidUrl(message) if message == TARGET_NOT_UTF8_MESSAGE),
+            "got {error:?}"
+        );
     }
 }

@@ -55,7 +55,10 @@ pub(super) fn build_http_request_owned<B>(
 }
 
 /// UDS route: configured Unix-domain-socket client.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the UDS route forwards the request line, the transport hints and the remaining budget so the Unix-socket call reads in one piece"
+)]
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_uds_route(
     inner: &ClientInner,
@@ -104,7 +107,10 @@ pub(super) async fn send_uds_route(
 
 /// Custom-dialer route: caller-supplied raw-stream client, with per-request
 /// SNI override support.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the custom-dialer route forwards the request line, the failure context and the remaining budget so the caller-supplied dialer call reads in one piece"
+)]
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_custom_route(
     inner: &ClientInner,
@@ -140,7 +146,10 @@ pub(super) async fn send_custom_route(
 
 /// Specialized-direct route: static resolved destination or configured
 /// direct connector (socket options / local address).
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the specialized-direct route forwards the request line, the failure context and the remaining budget so the resolved-destination call reads in one piece"
+)]
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_direct_route(
     inner: &ClientInner,
@@ -157,9 +166,7 @@ pub(super) async fn send_direct_route(
     let resolved_client;
     let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
         let http_origin = crate::http_origin::HttpOrigin::from_url(&url).ok_or_else(|| {
-            Error::InvalidResolvedTarget(
-                "resolved destinations require an HTTP or HTTPS URL".into(),
-            )
+            crate::http_origin::EffectivePortSubject::ResolvedDestination.requires_http_url()
         })?;
         resolved_client = inner
             .resolved_client(
@@ -187,7 +194,10 @@ pub(super) async fn send_direct_route(
 }
 
 /// SNI-direct route: cached override client separating DNS/TCP from TLS.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the SNI route forwards the request line, the failure context and the remaining budget so the DNS/TCP and TLS split stays explicit"
+)]
 #[cfg(all(feature = "high-level-url", feature = "advanced-routing"))]
 pub(super) async fn send_sni_route(
     inner: &ClientInner,
@@ -238,10 +248,9 @@ pub(super) async fn send_hyper_request(
     transport_hints: &TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
 ) -> Result<Response> {
-    let hyper_client = inner
-        .hyper_client
-        .as_ref()
-        .ok_or_else(|| Error::Unsupported("HTTP client not available for this protocol".into()))?;
+    let hyper_client = inner.hyper_client.as_ref().ok_or_else(|| {
+        crate::http_version::missing_client_error(inner.config.http_version_policy)
+    })?;
 
     let uri = resolve_request_uri(&url, transport_hints)?;
     let hyper_request = build_hyper_request(method, uri, version, headers, body)?;

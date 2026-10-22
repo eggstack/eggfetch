@@ -24,7 +24,11 @@ pub(crate) struct PyAsyncBytesIterator {
 }
 
 impl PyAsyncBytesIterator {
-    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::elidable_lifetime_names,
+        reason = "the constructor consumes the response handle that keeps the stream alive, and the explicit `'py` lifetime is kept for pyo3 clarity rather than elided"
+    )]
     pub(super) fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
@@ -146,7 +150,11 @@ pub(crate) struct PyAsyncTextIterator {
 }
 
 impl PyAsyncTextIterator {
-    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::elidable_lifetime_names,
+        reason = "the constructor consumes the response handle that keeps the stream alive, and the explicit `'py` lifetime is kept for pyo3 clarity rather than elided"
+    )]
     pub(super) fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
@@ -250,7 +258,11 @@ pub(crate) struct PyAsyncLinesIterator {
 }
 
 impl PyAsyncLinesIterator {
-    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::elidable_lifetime_names,
+        reason = "the constructor consumes the response handle that keeps the stream alive, and the explicit `'py` lifetime is kept for pyo3 clarity rather than elided"
+    )]
     pub(super) fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,
@@ -366,7 +378,11 @@ pub(crate) struct PyAsyncRawBytesIterator {
 }
 
 impl PyAsyncRawBytesIterator {
-    #[allow(clippy::needless_pass_by_value, clippy::elidable_lifetime_names)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::elidable_lifetime_names,
+        reason = "the constructor consumes the response handle that keeps the stream alive, and the explicit `'py` lifetime is kept for pyo3 clarity rather than elided"
+    )]
     pub(super) fn new<'py>(
         resp: Py<PyStreamingResponse>,
         py: Python<'py>,

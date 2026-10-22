@@ -53,7 +53,10 @@ impl Headers {
     /// supplied validation rejects (e.g., `NUL`). User-facing `insert` /
     /// `append` always validate; `insert_raw` is only for trusted wire
     /// data already parsed by hyper or the proxy response reader.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the raw-insert path is only reached from the multipart and redirect features, so it is dead code when neither is enabled"
+    )]
     pub(crate) fn insert_raw(&mut self, name: HeaderName, value: HeaderValue) {
         self.inner.insert(name, value);
     }

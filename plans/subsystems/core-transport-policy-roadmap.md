@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: closed — M007 complete; subsystem returned to steady state
+Status: active — M008, M009 and M010 conditionally closed
 
 Long-term references:
 
@@ -15,6 +15,8 @@ Related ADRs:
 - `plans/adrs/ADR-0004-proxy-fallback-total-deadline.md`
 - `plans/adrs/ADR-0005-frozen-body-feature-containment.md`
 - `plans/adrs/ADR-0006-native-transport-failure-classification.md`
+- `plans/adrs/ADR-0008-uncompiled-protocol-request-semantics.md`
+- `plans/adrs/ADR-0009-compat-policy-authority.md`
 
 ## 1. Purpose and ownership boundary
 
@@ -289,6 +291,111 @@ dispatch and body classification proven by deterministic fixtures; no message
 parsing/dependency/feature growth; Tier 1/Tier 2 green with expected API delta
 and renewed exact-SHA binding.
 
+### Milestone 8 — Profile matrix completion
+
+Class: invariant. Status: conditionally closed.
+
+Implementation:
+`plans/implementation/core-transport-policy/008-profile-matrix-completion.md`.
+
+Closure record:
+`plans/closure/core-transport-policy/008-profile-matrix-completion.md`.
+
+Objective: make the supported feature-profile set fully covered by the
+verification gates, so that no declared profile is compiled only as a side
+effect of `--all-features`.
+
+Dependencies:
+- hard: none; the gap is a coverage gap, and both missing profiles already
+  compile at the baseline;
+- interface: the existing six-profile contract matrix in `scripts/check.sh`
+  and the six-profile Rust public-surface oracle in
+  `scripts/check_rust_public_api.py`.
+
+Deliverable boundary: `standard-http2` and `native-http2` are added to the
+stable compile-contract matrix and frozen in the public-surface oracle; the
+lean profile's behavioral suites run under the lean profile in Tier 1. No
+runtime behavior and no public surface change.
+
+User or operator value: a regression that breaks HTTP/2 in the URL-less
+native profile, or in the lean H2 profile, becomes visible in continuous
+integration instead of being masked by `--all-features`.
+
+Exit conditions: eight profiles compiled by the contract matrix; eight
+profiles frozen in the oracle with no existing snapshot changed; the lean
+behavioral suites green under the lean profile; Tier 1 and Tier 2 green with
+renewed exact-SHA binding.
+
+Deferred: whole-suite lean-profile coverage (M009); the lint-guard and
+downstream-gate defects (release-verification M006).
+
+### Milestone 9 — Lean path single-sourcing and full-suite profile coverage
+
+Class: infrastructure. Status: ready.
+
+Implementation:
+`plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md`.
+
+Objective: remove the request-preparation logic duplicated between the lean
+path and the redirect path, and make the whole test suite compile under the
+lean profile.
+
+Dependencies:
+- hard: M008, because the lean behavioral gate this milestone extends must
+  land first;
+- interface: ADR-0002 pipeline phase ownership; the lean path stays a
+  deliberate footprint trade-off recorded in
+  `plans/high-level-policy-footprint-feature-boundary.md`.
+
+Deliverable boundary: one shared, feature-independent preparation builder
+serves both paths; the exhaustive `Request::into_parts()` destructuring
+exists in exactly one place; thirteen test targets gain precise file-level
+feature gates so the whole suite compiles under the lean profile. The lean
+profile's behavior and footprint are unchanged.
+
+User or operator value: a change to how headers, timeouts, cookies or
+credentials are prepared can no longer be applied in one copy and missed in
+another, and the lean profile can be gated as a whole.
+
+Exit conditions: exactly one exhaustive destructuring; identical prepared
+hops from both paths; whole suite compiles under `standard-http1,tls-rustls`;
+lean footprint unchanged; Tier 1 and Tier 2 green with renewed exact-SHA
+binding.
+
+Deferred: the remaining internal duplication clusters (M010).
+
+### Milestone 10 — Core duplicate-helper consolidation
+
+Class: infrastructure + polish. Status: ready.
+
+Implementation:
+`plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md`.
+
+Objective: consolidate the seven confirmed clusters of duplicated helper
+logic in `eggfetch-core` so that each rule is implemented once.
+
+Dependencies:
+- hard: M009, so that the remaining duplication inventory is accurate;
+- interface: ADR-0002 phase ownership; ADR-0006 failure classification
+  preserved; ADR-0005 containment preserved.
+
+Deliverable boundary: one resolved-target/SNI client builder; one
+effective-port validation; one custom-dialing incompatibility ladder; one
+consistently-validating origin normalization; one post-handshake ALPN `h2`
+check; one `HyperClientPolicy` constructor; one shared UTF-8 target-extension
+error. All private; no public API change.
+
+User or operator value: the engine's helper inventory becomes auditable, and
+a rule change can no longer land in one copy and not another. Cluster D also
+resolves a live divergence in which URLs are accepted as origins.
+
+Exit conditions: each cluster implemented exactly once; pool keying unchanged
+for every supported URL shape; error kinds and shared message text
+unchanged; Tier 1 and Tier 2 green with renewed exact-SHA binding.
+
+Deferred: nothing within the engine; the redirect-policy authority question
+that crosses the facade boundary is owned by python-httpx-compat M005.
+
 ## 8. Cross-cutting requirements
 
 Timeout/pool ownership per ADR-0004; trust semantics per the TLS workstream;
@@ -318,6 +425,21 @@ error-classification capability with Tier 2/public-API/exact-SHA evidence
 and handed publication to release-verification. Live Stage C truth remains
 owned by the canonical qualification ledger rather than this roadmap.
 
+The subsystem reopens for M008–M010, registered from a repository audit that
+found the supported-profile set under-covered by the gates, the lean path
+carrying an unexercised duplicate of the redirect preparation, and seven
+further internal duplication clusters. M008 and M009 are sequenced, and M010
+follows M009. None of the three changes runtime behavior.
+
+M008 was implemented and is **conditionally closed** on 2026-10-22: the
+contract matrix now covers eight profiles, the lean profile's behavioral
+suites run in Tier 1, and the Rust public-surface oracle freezes eight
+profiles with two new tool-generated snapshots that were measured to be
+byte-identical to their H1 counterparts. Its outstanding condition is the
+Stage C rebinding and the frozen-SHA Tier 1/2/3 gates, because the milestone
+changes validation scripts and API snapshots — both executable inputs. M009 is
+unblocked and may proceed.
+
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
@@ -331,3 +453,6 @@ owned by the canonical qualification ledger rather than this roadmap.
 | M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
 | M006C2 post-closure reconciliation/workflow retirement | closed | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | — |
 | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md` | Publication deferred to release-verification M003 intake (exact-pin downstream adoption blocked until then) |
+| M008 profile matrix completion | conditionally closed | `plans/implementation/core-transport-policy/008-profile-matrix-completion.md` | `plans/closure/core-transport-policy/008-profile-matrix-completion.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M009 may proceed. |
+| M009 lean path single-sourcing | conditionally closed | `plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md` | `plans/closure/core-transport-policy/009-lean-path-single-sourcing.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M010 may proceed. |
+| M010 core duplicate-helper consolidation | conditionally closed | `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md` | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. |

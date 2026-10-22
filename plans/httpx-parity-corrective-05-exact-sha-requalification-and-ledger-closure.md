@@ -346,3 +346,12 @@ Corrective 05 and the entire post-Phase-06 corrective program are complete only 
 ## Out of scope
 
 Do not use this phase to chase unreleased HTTPX master changes, add FunctionAuth ahead of the next stable rebaseline, expand Python-version support, or introduce new release automation. Any executable feature discovered after the freeze belongs in a later plan and requires its own qualification cycle.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 21 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

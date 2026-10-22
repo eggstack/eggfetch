@@ -16,7 +16,10 @@
 //!   then free).
 //! - All callback functions must be `extern "C"`.
 
-#![allow(unsafe_code)]
+#![allow(
+    unsafe_code,
+    reason = "the C ABI boundary needs raw-pointer handling in every module; the crate-level allowance is what makes those blocks compile"
+)]
 
 /// Run an exported FFI operation without allowing a Rust panic to unwind
 /// across the C ABI. The operation's documented sentinel value is returned
@@ -37,6 +40,7 @@ mod client;
 mod error;
 mod ffi_response;
 mod handle;
+mod protocol;
 mod request;
 mod response;
 mod runtime;

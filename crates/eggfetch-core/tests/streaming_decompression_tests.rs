@@ -6,6 +6,16 @@
     clippy::items_after_statements,
     clippy::manual_let_else
 )]
+// Every test in this target is gated on a compression codec feature. Under a
+// profile that compiles none of them out — for example the lean profile — the
+// file would otherwise compile with an entirely dead body. The file-level gate
+// names the codecs the target actually needs.
+#![cfg(any(
+    feature = "compression-gzip",
+    feature = "compression-brotli",
+    feature = "compression-zstd",
+    feature = "compression-deflate"
+))]
 
 //! Streaming decompression chunk-boundary regressions (issue #24).
 //!

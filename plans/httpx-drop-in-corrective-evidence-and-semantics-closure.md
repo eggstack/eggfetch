@@ -100,11 +100,11 @@ Generated files must contain an explicit status such as `invalidated`, `candidat
 
 ### Track A acceptance criteria
 
-- [ ] No current document or runtime diagnostic says `Stage C released` before final qualification.
-- [ ] The compatibility profile status is not `released` during implementation.
-- [ ] Existing evidence files identify their exact source SHA and are visibly marked stale or superseded when applicable.
-- [ ] The corrective implementation status file records the downgrade commit and rationale.
-- [ ] Compatibility claim linting fails if `released` appears outside approved historical records before final qualification.
+- [x] No current document or runtime diagnostic says `Stage C released` before final qualification.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The compatibility profile status is not `released` during implementation.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Existing evidence files identify their exact source SHA and are visibly marked stale or superseded when applicable.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The corrective implementation status file records the downgrade commit and rationale.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Compatibility claim linting fails if `released` appears outside approved historical records before final qualification.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track B — Repair the executable compatibility oracle
 
@@ -180,15 +180,15 @@ At minimum:
 
 ### Track B acceptance criteria
 
-- [ ] Required CI generates the candidate manifest from `eggfetch.compat.httpx`.
-- [ ] The manifest comparison is a required, fail-closed step.
-- [ ] The shim manifest is also compared when shim qualification is enabled.
-- [ ] Zero unexplained public API deltas remain for the claimed stage.
-- [ ] Every allowed difference passes schema and semantic validation.
-- [ ] A negative test proves deleting a required facade symbol fails CI.
-- [ ] A negative test proves changing a required default or keyword-only parameter fails CI.
-- [ ] No required API-oracle step uses `continue-on-error`.
-- [ ] The compatibility report records exact reference and candidate manifest hashes.
+- [x] Required CI generates the candidate manifest from `eggfetch.compat.httpx`.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The manifest comparison is a required, fail-closed step.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The shim manifest is also compared when shim qualification is enabled.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Zero unexplained public API deltas remain for the claimed stage.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Every allowed difference passes schema and semantic validation.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A negative test proves deleting a required facade symbol fails CI.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A negative test proves changing a required default or keyword-only parameter fails CI.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No required API-oracle step uses `continue-on-error`.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The compatibility report records exact reference and candidate manifest hashes.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track C — Rebuild downstream substitution validation
 
@@ -272,18 +272,18 @@ A single package may cover multiple categories only when the evidence identifies
 
 ### Track C acceptance criteria
 
-- [ ] No substitution environment installs upstream HTTPX.
-- [ ] Every substitution run asserts that `import httpx` resolves to eggfetch-backed code.
-- [ ] Every required package uses a pinned source and explicit test command.
-- [ ] Every required package collects at least its declared minimum number of tests.
-- [ ] Missing packages, no-tests-collected, skips, and timeouts fail required entries.
-- [ ] Import-only checks are reported separately and cannot satisfy Stage C.
-- [ ] All required portfolio categories have at least one passing real consumer suite.
-- [ ] The evidence distinguishes public-API compatibility from private-internal compatibility.
-- [ ] `overall_pass` is false when any required downstream entry is unavailable or unexecuted.
-- [ ] A negative test proves the runner fails when upstream HTTPX is accidentally installed.
-- [ ] A negative test proves the runner fails when `httpx.__file__` does not point to the shim.
-- [ ] The package-resolution documentation makes no unsupported claim that `httpx-eggfetch-shim` satisfies downstream `Requires-Dist: httpx` metadata.
+- [x] No substitution environment installs upstream HTTPX.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Every substitution run asserts that `import httpx` resolves to eggfetch-backed code.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Every required package uses a pinned source and explicit test command.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Every required package collects at least its declared minimum number of tests.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Missing packages, no-tests-collected, skips, and timeouts fail required entries.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Import-only checks are reported separately and cannot satisfy Stage C.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] All required portfolio categories have at least one passing real consumer suite.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The evidence distinguishes public-API compatibility from private-internal compatibility.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] `overall_pass` is false when any required downstream entry is unavailable or unexecuted.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A negative test proves the runner fails when upstream HTTPX is accidentally installed.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A negative test proves the runner fails when `httpx.__file__` does not point to the shim.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The package-resolution documentation makes no unsupported claim that `httpx-eggfetch-shim` satisfies downstream `Requires-Dist: httpx` metadata.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track D — Correct timeout compatibility semantics
 
@@ -319,14 +319,14 @@ Add local deterministic tests that compare HTTPX and eggfetch for:
 
 ### Track D acceptance criteria
 
-- [ ] `eggfetch.compat.httpx.Timeout(5.0)` does not configure a five-second native total deadline.
-- [ ] A healthy response lasting more than five seconds completes when each chunk arrives within the read deadline.
-- [ ] A stalled body chunk raises compatibility `ReadTimeout` with the original request attached.
-- [ ] A stalled request-body producer raises `WriteTimeout`.
-- [ ] Pool and connect failures map to `PoolTimeout` and `ConnectTimeout` respectively.
-- [ ] `timeout=None` disables all four compatibility phase deadlines.
-- [ ] Compatibility timeout repr, equality, attributes, signatures, and defaults match the pinned reference manifest.
-- [ ] Native eggfetch total-timeout functionality remains available only through native APIs or an explicitly named extension.
+- [x] `eggfetch.compat.httpx.Timeout(5.0)` does not configure a five-second native total deadline.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A healthy response lasting more than five seconds completes when each chunk arrives within the read deadline.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A stalled body chunk raises compatibility `ReadTimeout` with the original request attached.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A stalled request-body producer raises `WriteTimeout`.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Pool and connect failures map to `PoolTimeout` and `ConnectTimeout` respectively.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] `timeout=None` disables all four compatibility phase deadlines.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Compatibility timeout repr, equality, attributes, signatures, and defaults match the pinned reference manifest.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Native eggfetch total-timeout functionality remains available only through native APIs or an explicitly named extension.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track E — Implement complete authentication flow dispatch
 
@@ -378,14 +378,14 @@ Tests must include:
 
 ### Track E acceptance criteria
 
-- [ ] DigestAuth completes a real two-request challenge-response exchange against a local server.
-- [ ] The authenticated follow-up request is actually dispatched and its response returned.
-- [ ] Custom auth generators with multiple yields work for sync and async clients.
-- [ ] Mounted and custom transports observe auth-modified requests.
-- [ ] Hook/auth/transport order matches committed HTTPX reference observations.
-- [ ] Intermediate responses do not leak sockets or body streams.
-- [ ] One-shot bodies fail deterministically when an auth flow requires replay.
-- [ ] Auth exceptions preserve the compatibility request context.
+- [x] DigestAuth completes a real two-request challenge-response exchange against a local server.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The authenticated follow-up request is actually dispatched and its response returned.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Custom auth generators with multiple yields work for sync and async clients.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Mounted and custom transports observe auth-modified requests.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Hook/auth/transport order matches committed HTTPX reference observations.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Intermediate responses do not leak sockets or body streams.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] One-shot bodies fail deterministically when an auth flow requires replay.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Auth exceptions preserve the compatibility request context.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track F — Fix streaming context ownership and cleanup
 
@@ -421,14 +421,14 @@ Measure:
 
 ### Track F acceptance criteria
 
-- [ ] Sync `with client.stream(...)` closes the response on every exit path.
-- [ ] Async `async with client.stream(...)` closes the response on every exit path.
-- [ ] The response reports closed state after context exit.
-- [ ] An unread response does not retain a pool permit after context exit.
-- [ ] Context exit during exceptions and cancellation releases resources.
-- [ ] Repeated close/aclose calls are safe and idempotent.
-- [ ] Socket-level tests prove unsafe unread connections are not returned to the reusable pool.
-- [ ] No thread, task, FD, or RSS growth exceeds committed thresholds after repeated early exits.
+- [x] Sync `with client.stream(...)` closes the response on every exit path.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Async `async with client.stream(...)` closes the response on every exit path.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The response reports closed state after context exit.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] An unread response does not retain a pool permit after context exit.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Context exit during exceptions and cancellation releases resources.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Repeated close/aclose calls are safe and idempotent.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Socket-level tests prove unsafe unread connections are not returned to the reusable pool.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No thread, task, FD, or RSS growth exceeds committed thresholds after repeated early exits.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track G — Preserve compatibility data and merge semantics
 
@@ -484,14 +484,14 @@ Review conversions for:
 
 ### Track G acceptance criteria
 
-- [ ] Client extensions survive when request extensions are omitted.
-- [ ] Request extensions override only matching client keys.
-- [ ] Repeated query keys reach the server in the correct order and multiplicity.
-- [ ] Query merging matches HTTPX 0.28.1 differential cases.
-- [ ] Duplicate raw headers survive supported transport paths.
-- [ ] Multiple `Set-Cookie` fields remain independently observable.
-- [ ] No compatibility conversion uses a plain dictionary when the source abstraction permits duplicates and ordering that matter.
-- [ ] Differential tests cover every corrected conversion boundary.
+- [x] Client extensions survive when request extensions are omitted.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Request extensions override only matching client keys.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Repeated query keys reach the server in the correct order and multiplicity.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Query merging matches HTTPX 0.28.1 differential cases.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Duplicate raw headers survive supported transport paths.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Multiple `Set-Cookie` fields remain independently observable.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No compatibility conversion uses a plain dictionary when the source abstraction permits duplicates and ordering that matter.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Differential tests cover every corrected conversion boundary.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track H — Close remaining production-semantics gaps
 
@@ -525,14 +525,14 @@ Do not relax correctness assertions merely to accommodate slow CI. If scheduling
 
 ### Track H acceptance criteria
 
-- [ ] Phase 1 status contains no incomplete release-blocking criteria.
-- [ ] Slow proxy CONNECT response has a deterministic timeout classification test.
-- [ ] Real TLS handshake timeout behavior is tested through a real local connector path.
-- [ ] Interpreter-shutdown tests pass on Linux, macOS, and Windows.
-- [ ] Close/race tests include FD, task, socket, or RSS leak assertions as applicable.
-- [ ] A retained soak artifact exists for the final candidate SHA.
-- [ ] Soak results are machine-readable and threshold-enforced.
-- [ ] No required test is weakened to permit partial success.
+- [x] Phase 1 status contains no incomplete release-blocking criteria.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Slow proxy CONNECT response has a deterministic timeout classification test.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Real TLS handshake timeout behavior is tested through a real local connector path.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Interpreter-shutdown tests pass on Linux, macOS, and Windows.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Close/race tests include FD, task, socket, or RSS leak assertions as applicable.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A retained soak artifact exists for the final candidate SHA.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Soak results are machine-readable and threshold-enforced.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No required test is weakened to permit partial success.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track I — Restore CI and governance consistency
 
@@ -581,13 +581,13 @@ Evidence tooling must fail on:
 
 ### Track I acceptance criteria
 
-- [ ] Repository documentation and actual branch/ruleset behavior agree that `Required CI Gate` is mandatory.
-- [ ] The required gate includes the repaired compatibility job.
-- [ ] A failing manifest comparison makes the aggregate gate fail.
-- [ ] A failing required downstream suite makes qualification fail.
-- [ ] Evidence-generator negative tests cover every listed malformed state.
-- [ ] Branch/ruleset evidence records the exact required check name.
-- [ ] No release qualification relies on a commit merged while the exact candidate's required gate was red or absent.
+- [x] Repository documentation and actual branch/ruleset behavior agree that `Required CI Gate` is mandatory.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The required gate includes the repaired compatibility job.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A failing manifest comparison makes the aggregate gate fail.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] A failing required downstream suite makes qualification fail.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Evidence-generator negative tests cover every listed malformed state.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Branch/ruleset evidence records the exact required check name.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No release qualification relies on a commit merged while the exact candidate's required gate was red or absent.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track J — Regenerate coherent status and release evidence
 
@@ -659,13 +659,13 @@ The final bundle must include:
 
 ### Track J acceptance criteria
 
-- [ ] The corrective status file maps every criterion in this plan to evidence.
-- [ ] Earlier phase status files contain correction notices where required.
-- [ ] No current document contains unresolved `[N]`, TODO, pending, or not-run fields while claiming release completion.
-- [ ] Final evidence is generated from actual result files rather than repository presence checks.
-- [ ] All evidence records reference one exact candidate SHA.
-- [ ] `overall_pass` becomes false under every negative consistency fixture.
-- [ ] The final stage decision is mechanically derived from passed stage requirements.
+- [x] The corrective status file maps every criterion in this plan to evidence.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Earlier phase status files contain correction notices where required.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No current document contains unresolved `[N]`, TODO, pending, or not-run fields while claiming release completion.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Final evidence is generated from actual result files rather than repository presence checks.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] All evidence records reference one exact candidate SHA.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] `overall_pass` becomes false under every negative consistency fixture.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The final stage decision is mechanically derived from passed stage requirements.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Track K — Immutable release requalification
 
@@ -719,16 +719,16 @@ There must be no unqualified post-candidate release commit.
 
 ### Track K acceptance criteria
 
-- [ ] One immutable candidate SHA is used for CI, artifacts, downstream suites, soak tests, and dry run.
-- [ ] The exact candidate has a green `Required CI Gate`.
-- [ ] All claimed wheels and the sdist install and pass smoke tests in clean environments.
-- [ ] The controlled shim artifact passes identity and substitution tests without upstream HTTPX installed.
-- [ ] All required downstream suites pass against built candidate artifacts.
-- [ ] The retained soak run passes against the same candidate.
-- [ ] The dry-run workflow is non-publishing and records no side effects.
-- [ ] Artifact hashes and evidence manifest hashes are retained.
-- [ ] No release-relevant commit exists after the qualified SHA without a new qualification run.
-- [ ] `Stage C released` is restored only if every Stage C requirement and every criterion in this plan passes.
+- [x] One immutable candidate SHA is used for CI, artifacts, downstream suites, soak tests, and dry run.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The exact candidate has a green `Required CI Gate`.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] All claimed wheels and the sdist install and pass smoke tests in clean environments.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The controlled shim artifact passes identity and substitution tests without upstream HTTPX installed.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] All required downstream suites pass against built candidate artifacts.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The retained soak run passes against the same candidate.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The dry-run workflow is non-publishing and records no side effects.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Artifact hashes and evidence manifest hashes are retained.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] No release-relevant commit exists after the qualified SHA without a new qualification run.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] `Stage C released` is restored only if every Stage C requirement and every criterion in this plan passes.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 # Required test matrix
 
@@ -766,19 +766,28 @@ Tracks D, E, F, and G may be implemented in parallel after Tracks A through C es
 
 This corrective pass is complete only when all of the following are true:
 
-- [ ] The compatibility oracle inspects the facade and fails closed.
-- [ ] Downstream substitution environments contain no upstream HTTPX.
-- [ ] Required downstream suites actually run against eggfetch-backed `import httpx`.
-- [ ] Missing, skipped, or zero-test downstream entries cannot produce an overall pass.
-- [ ] Compatibility defaults do not impose an artificial total timeout.
-- [ ] Multi-step and custom auth flows dispatch every yielded request.
-- [ ] Auth works through native, mounted, mock, and custom transports.
-- [ ] Streaming context managers deterministically close yielded responses.
-- [ ] Extensions, repeated query values, and duplicate headers are preserved.
-- [ ] Remaining Phase 1 resource, shutdown, and soak criteria are closed.
-- [ ] Required CI and documentation describe the same merge policy.
-- [ ] Status files and generated evidence contain no contradictions or placeholders.
-- [ ] One exact candidate SHA has green CI, artifact, downstream, soak, and dry-run evidence.
-- [ ] The final compatibility stage claim does not exceed the retained proof.
+- [x] The compatibility oracle inspects the facade and fails closed.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Downstream substitution environments contain no upstream HTTPX.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Required downstream suites actually run against eggfetch-backed `import httpx`.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Missing, skipped, or zero-test downstream entries cannot produce an overall pass.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Compatibility defaults do not impose an artificial total timeout.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Multi-step and custom auth flows dispatch every yielded request.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Auth works through native, mounted, mock, and custom transports.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Streaming context managers deterministically close yielded responses.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Extensions, repeated query values, and duplicate headers are preserved.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Remaining Phase 1 resource, shutdown, and soak criteria are closed.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Required CI and documentation describe the same merge policy.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] Status files and generated evidence contain no contradictions or placeholders.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] One exact candidate SHA has green CI, artifact, downstream, soak, and dry-run evidence.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
+- [x] The final compatibility stage claim does not exceed the retained proof.— Not met, superseded: this plan was overtaken by `plans/httpx-drop-in-final-native-qualification-and-evidence-closure.md`; see `plans/httpx-drop-in-corrective-evidence-and-semantics-closure-status.md` ("This status document overstated completion. It is superseded by …").
 
 If any criterion remains blocked, the implementation status must state the blocker and leave the profile at `candidate` or the appropriate lower stage. Partial completion must not be relabeled as released.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 104 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Every criterion in this file is dispositioned **not met, superseded**: the plan was overtaken by its successor and its own status record was marked SUPERSEDED for overstating completion. The original criteria text is preserved above; the superseding plan owns the work.

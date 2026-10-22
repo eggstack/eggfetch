@@ -764,3 +764,12 @@ The implementation agent must provide:
 - final status decision: `complete`, `partially implemented`, or `blocked`.
 
 “Complete” is permitted only when all global acceptance criteria pass. A partial result must retain `Stage C candidate` and must not restore the previous no-blockers declaration.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 115 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

@@ -504,3 +504,12 @@ Corrective 08 is complete only when:
 Only after every item above passes may the repository again describe the current executable tree as **Stage C qualified** for the documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface.
 
 After that point, HTTPX parity work should reopen only for a newly discovered concrete defect, an intentionally expanded supported surface, or a newly pinned HTTPX version. Documentation cleanup proceeds separately so it cannot blur or invalidate the executable qualification boundary.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 61 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

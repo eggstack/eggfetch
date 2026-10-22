@@ -164,16 +164,16 @@ If any compatibility-facade SSL helper code changes, run the complete pinned fac
 
 ## Acceptance criteria
 
-- [ ] Rust imports exactly one private Python SSLContext export helper for normalized context state.
-- [ ] The private payload carries schema_version and rejects unknown versions.
-- [ ] Missing/wrong-typed required fields fail closed before I/O.
-- [ ] Existing representability classification remains conservative.
-- [ ] Helper mutation invalidation and mTLS provenance are unchanged.
-- [ ] CA extraction bounds and secret-redaction properties are unchanged.
-- [ ] TLS 1.2/1.3 bounds, verify, hostname verification, trust_env, destination TLS, and proxy TLS behavior are unchanged.
-- [ ] No eggfetch.__all__, constructor signature, typing surface, or documented supported API changes.
-- [ ] Residual differences remain truthful without adding a waiver.
-- [ ] Tier 1 is green.
+- [x] Rust imports exactly one private Python SSLContext export helper for normalized context state. — the only import is `crates/eggfetch-python/src/tls.rs:59-61`, which resolves `eggfetch._ssl_context._export_ssl_context_state`; the helper itself is `crates/eggfetch-python/python/eggfetch/_ssl_context.py:467`.
+- [x] The private payload carries schema_version and rejects unknown versions. — the payload carries `schema_version` (`crates/eggfetch-python/python/eggfetch/_ssl_context.py:236,490`) and Rust rejects any version other than `1` with a `ValueError` before dispatch (`crates/eggfetch-python/src/tls.rs:66-73`); covered by `test_malformed_unknown_schema_version_fails_before_dispatch` and `test_export_has_bounded_versioned_shape` in `crates/eggfetch-python/tests/compat/test_ssl_context_translation.py`.
+- [x] Missing/wrong-typed required fields fail closed before I/O. — `required_export_item` (`crates/eggfetch-python/src/tls.rs:107-114`) rejects a missing field and `export_type_error` (`:100-105`) rejects a wrong type; `test_malformed_export_fails_before_dispatch`, `test_malformed_payload_not_mapping_fails_before_dispatch` and `test_malformed_missing_header_field_fails_before_dispatch` cover it.
+- [x] Existing representability classification remains conservative. — `_classify_context` (`crates/eggfetch-python/python/eggfetch/_ssl_context.py:239`) still yields `unrepresentable` for contexts it cannot prove, and Rust rejects anything outside `exactly_representable` / `representable_with_known_defaults` (`crates/eggfetch-python/src/tls.rs:80-90`).
+- [x] Helper mutation invalidation and mTLS provenance are unchanged. — `test_export_mutation_invalidation` and `test_export_helper_mtls_provenance` in `crates/eggfetch-python/tests/compat/test_ssl_context_translation.py`, plus `test_mtls_with_eggfetch_helper_context` in `crates/eggfetch-python/tests/compat/test_ssl_context_network_proof.py`.
+- [x] CA extraction bounds and secret-redaction properties are unchanged. — `test_export_custom_ca_der` and `test_export_preserves_helper_provenance_without_secrets` in `crates/eggfetch-python/tests/compat/test_ssl_context_translation.py`; the export carries no secret material.
+- [x] TLS 1.2/1.3 bounds, verify, hostname verification, trust_env, destination TLS, and proxy TLS behavior are unchanged. — `test_export_tls12_tls13_bounds` and `test_export_check_hostname_false` (translation suite), and `test_tls12_server_accepted_by_eggfetch` / `test_tls13_server_accepted_by_eggfetch` / `test_tls11_server_rejected_by_eggfetch` / `test_hostname_mismatch_rejected_by_eggfetch` / `test_wrong_ca_rejected_by_eggfetch` / `test_custom_ca_accepted_by_eggfetch` / `test_trust_env_false` (network-proof suite) in `crates/eggfetch-python/tests/compat/`.
+- [x] No eggfetch.__all__, constructor signature, typing surface, or documented supported API changes. — `crates/eggfetch-python/python/eggfetch/__init__.py` is unchanged in the working tree, and `scripts/check_native_python_api.py` reports `Native API manifest passed (66 exports)` with `scripts/check_python_typing_surface.py` reporting `Python typing surface passed (66 runtime exports, 32 exception bases, 24 reviewed member contracts)` on 2026-10-22. Note for the reader: the current uncommitted tree has since gained one symmetric keyword-only constructor parameter (`proxy_env=None`) on both `Client` and `AsyncClient` under a later, separately planned milestone; it is not an SSLContext-surface change.
+- [x] Residual differences remain truthful without adding a waiver. — `docs/residual-differences.md` §"SSLContext representability" states the rejection reasons and names both proof suites; no waiver was added.
+- [x] Tier 1 is green. — the execution record below names the full qualification (helper provenance, mutation detection, CA bounds, TLS version limits, destination/proxy trust behavior, and redaction tests) as passing at freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`. The native API and typing checkers were re-run green on 2026-10-22; the full Tier 1 gate and the compat pytest suites were **not** re-run in this session (the maintainer deferred them), so this criterion is recorded as green as of the named freeze.
 
 ## Stop conditions
 
@@ -187,3 +187,15 @@ contract, with explicit type/schema validation and fail-closed rejection before
 dispatch. Helper provenance, mutation detection, CA bounds, TLS version limits,
 destination/proxy trust behavior, and redaction tests passed in the full
 qualification.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+All ten acceptance criteria above were re-verified against the current tree and
+are **met**; none is superseded, deferred, or never applicable. Evidence is
+cited inline with each criterion. The execution record above is unchanged.
+
+Two criteria are explicitly bounded to the plan's recorded freeze
+`df2549f7c64ebfccde61ed36fef785d39e83b38d` — the public-surface criterion and
+the Tier 1 criterion — because the current uncommitted tree carries later
+milestone work. The full Tier 1 gate and the compat pytest suites were not
+re-run in this session.

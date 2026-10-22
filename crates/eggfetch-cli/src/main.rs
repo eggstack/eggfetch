@@ -21,7 +21,11 @@ use serde_json::{json, Value};
 use std::io::IsTerminal;
 use tokio::io::AsyncWriteExt;
 
-#[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    reason = "the CLI dispatch is one linear request/response flow that reads worse once split into helpers; the float allowance is scoped to the retry backoff factor"
+)]
 async fn run(cli: Cli) -> Result<()> {
     if let Some(shell) = cli.generate_completion {
         let mut cmd = <Cli as clap::CommandFactory>::command();
@@ -175,8 +179,10 @@ async fn run(cli: Cli) -> Result<()> {
     }
 
     let http_version_policy = if cli.http2 {
+        require_capability(ProtocolCapability::Http2)?;
         HttpVersionPolicy::Http2Only
     } else if cli.http3 {
+        require_capability(ProtocolCapability::Http3)?;
         HttpVersionPolicy::Http3Only
     } else if cli.http1 {
         HttpVersionPolicy::Http1Only
@@ -1149,6 +1155,8 @@ pub(crate) use output::{
 };
 mod files;
 pub(crate) use files::{create_output_file, derive_filename};
+mod protocol;
+pub(crate) use protocol::{require as require_capability, ProtocolCapability};
 
 #[cfg(test)]
 use errors::{EXIT_CONNECT, EXIT_PROTOCOL, EXIT_STATUS, EXIT_TIMEOUT, EXIT_USAGE};

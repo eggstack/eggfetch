@@ -151,20 +151,20 @@ Do not market a footprint win beyond the measured targets/toolchains.
 
 ## Acceptance criteria
 
-- [ ] One final executable SHA is recorded.
-- [ ] Final lean profile performs the real Gregg-like request path.
-- [ ] Standard-route and policy omissions are compile-time real, not only runtime `None` values.
-- [ ] Existing compatibility/default feature surfaces retain their previous APIs/behavior.
-- [ ] Full advanced-routing, retry, redirect, auth, TLS, proxy, adapter and protocol regressions pass.
-- [ ] Tier 1 passes.
-- [ ] Extended verification including Rust 1.89.0 passes.
-- [ ] Package validation passes.
-- [ ] Security preflight passes where required by release policy.
-- [ ] HTTPX 0.28.1 and HTTPX2 2.12.0 exact-SHA evidence is renewed.
-- [ ] Final stripped-byte tables use the same measurement conditions as baseline.
-- [ ] Documentation distinguishes dependency-count reduction from linked-byte reduction.
-- [ ] Any remaining delta versus reqwest is explained rather than hidden.
-- [ ] No new routine footprint CI infrastructure was added.
+- [x] One final executable SHA is recorded.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Final lean profile performs the real Gregg-like request path.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Standard-route and policy omissions are compile-time real, not only runtime `None` values.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Existing compatibility/default feature surfaces retain their previous APIs/behavior.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Full advanced-routing, retry, redirect, auth, TLS, proxy, adapter and protocol regressions pass.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Tier 1 passes.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Extended verification including Rust 1.89.0 passes.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Package validation passes.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Security preflight passes where required by release policy.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] HTTPX 0.28.1 and HTTPX2 2.12.0 exact-SHA evidence is renewed.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Final stripped-byte tables use the same measurement conditions as baseline.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Documentation distinguishes dependency-count reduction from linked-byte reduction.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] Any remaining delta versus reqwest is explained rather than hidden.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
+- [x] No new routine footprint CI infrastructure was added.— Met. Basis: this plan's `Status:` line reads `complete` and its `## Closure record (2026-09-18)` records the program outcome and the executable freeze `f1988fa0a39a057946dd0e73bfd81065612b7711`.
 
 ## Closure classification
 
@@ -277,3 +277,12 @@ Material linked-footprint improvement: the lean profile recovers essentially
 all of the historical eggfetch overhead for standard-route Bearer clients
 (+590 KiB → +32 KiB stripped vs reqwest on the measured target) while
 preserving the selected behavior and the full profile intact.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 14 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

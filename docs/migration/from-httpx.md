@@ -238,6 +238,31 @@ Both support `max_redirects`:
 r = client.get(url, follow_redirects=True, max_redirects=5)
 ```
 
+### Redirect credentials and proxy environment
+
+Two HTTPX behaviours are intentionally **not** reproduced by the native
+`eggfetch` client. Use `eggfetch.compat.httpx` (or `eggfetch.compat.httpx2`)
+when you need HTTPX 0.28.1's exact behaviour.
+
+**Redirect credentials.** HTTPX keeps `Authorization` across a canonical
+`http:80` -> `https:443` same-host upgrade, keeps `Proxy-Authorization` on
+every hop, keeps `Referer`/`Origin` across origins, and drops an explicit
+`Cookie` on every redirect. The engine is stricter: credentials survive only
+while the origin is unchanged, `Proxy-Authorization` is always dropped, and
+`Referer`/`Origin` are dropped on a cross-origin hop. See
+`docs/residual-differences.md`. The compatibility facade matches HTTPX
+exactly.
+
+**Redirect methods.** HTTPX rewrites every non-`HEAD` `302` to `GET`; the
+engine rewrites only `POST` to `GET` and preserves other methods (and their
+bodies). The compatibility facade matches HTTPX exactly.
+
+**Proxy environment.** HTTPX's `NO_PROXY` matching treats a `localhost` entry
+as the hostname `localhost` only, and HTTPX resolves SOCKS destinations at
+the proxy. The native client uses eggfetch's own rules (a `localhost` entry
+also covers the loopback IP literals) and keeps `socks5://` as local DNS.
+Pass `proxy_env="httpx"` to the native client to opt into the HTTPX rules.
+
 ## HTTP/2
 
 Both libraries support HTTP/2 as an opt-in feature.

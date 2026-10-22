@@ -177,3 +177,12 @@ The baseline is an engineering inventory, not qualification evidence.
 - [ ] parity IDs/probes exist for implementation work;
 - [ ] 0.28.1 compatibility machinery remains independently green;
 - [ ] HTTPX2 remains explicitly unqualified until later plans and final freeze complete.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 23 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

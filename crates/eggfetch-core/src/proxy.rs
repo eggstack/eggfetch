@@ -655,15 +655,11 @@ impl Proxy {
             Error::InvalidProxyUrl(format!("invalid resolved proxy peers: {error}"))
         })?;
         let expected_port = self.config().port()?;
-        if target
-            .addresses()
-            .iter()
-            .any(|address| address.port() != expected_port)
-        {
-            return Err(Error::InvalidProxyUrl(format!(
-                "all resolved proxy peers must use the proxy URL's effective port {expected_port}"
-            )));
-        }
+        crate::http_origin::validate_effective_port(
+            crate::http_origin::EffectivePortSubject::ResolvedProxyPeer,
+            target.addresses(),
+            expected_port,
+        )?;
         self.resolved_addresses = Some(target.addresses().to_vec().into());
         Ok(self)
     }

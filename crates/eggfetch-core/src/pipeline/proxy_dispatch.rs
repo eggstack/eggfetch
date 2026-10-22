@@ -23,7 +23,10 @@ use crate::transport_hints::{ResolvedTarget, TransportHints};
 ///
 /// `effective_proxy` is the prepared proxy decision; `None` is a caller
 /// error because route selection only picks this path when a proxy applies.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the proxy route forwards the request line, the proxy decision and the remaining-budget inputs explicitly so the proxy dispatch stays a single call"
+)]
 pub(super) async fn send_proxy_route(
     inner: &ClientInner,
     method: &http::Method,

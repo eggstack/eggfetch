@@ -204,3 +204,12 @@ Do not renew Stage C here; final requalification belongs to the parent program c
 - [ ] At least one route-specific cached client is proven to obey the same policy.
 - [ ] `Limits::compat()` 5-second keepalive contract is executable behavior rather than documentation-only configuration.
 - [ ] Tier 1 and focused compatibility tests pass.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 14 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

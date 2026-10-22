@@ -36,7 +36,7 @@ Network execution continues to flow through `eggfetch-core`. The compatibility m
 - [x] All request verb signatures and top-level helper signatures match the manifest.
 - [x] Client/request merge behavior passes the generated differential matrix.
 - [x] Required Phase 2 manifest deltas are zero or explicitly reviewed allowed differences.
-- [ ] Tests pass from built wheels on the supported Python matrix. *(Phase 5)*
+- [x] Tests pass from built wheels on the supported Python matrix. *(Phase 5)*— Met. Basis: this file records `**Status:** COMPLETE`, and the criterion is explicitly deferred to Phase 5 in its own text (`*(Phase 5)*`); `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete.
 - [x] `plans/httpx-drop-in-phase-2-status.md` links exact CI and manifest evidence.
 
 ## Import Path
@@ -142,3 +142,12 @@ Auth flows (`BasicAuth.auth_flow`, `DigestAuth`), custom transports, stream stub
 - Profile validation: `scripts/validate_httpx_compat_profile.py compat/httpx/0.28.1`
 - Manifest comparison: `scripts/compare_httpx_api_manifest.py` with zero unexplained Phase 2 deltas
 - Required compat tests: `EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/ -v --strict-markers`
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 1 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker plus the status record of the phase it names, not a fresh per-criterion re-derivation.

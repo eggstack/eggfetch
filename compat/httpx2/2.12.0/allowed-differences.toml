@@ -1703,3 +1703,45 @@ owner = "eggfetch-team"
 review-milestone = "httpx2-baseline"
 tests = []
 non_expiring = true
+
+[[difference]]
+id = "H2X-NEW-016"
+category = "intentional-difference"
+classification = "intentional"
+symbol = "Request"
+difference-type = "base-class"
+member = ""
+reference = "['object']"
+candidate = "['Request']"
+behavior-case = "subclass-preserves-behavior"
+reference-behavior = "httpx2 reference Request.Request"
+eggfetch-behavior = "eggfetch.compat.httpx2.Request subclasses the 0.28.1 facade Request so its url is an httpx2 URL with origin"
+rationale = "Eggfetch subclass preserves reference behavior via inheritance; the base-class name differs but the protocol is identical."
+compatibility-stage-impact = "baseline"
+security-improvement = "false"
+migration-impact = "httpx2.Request is no longer identical to the 0.28.1 Request (isinstance still holds)"
+owner = "eggfetch-team"
+review-milestone = "httpx2-baseline"
+tests = ["test_httpx2_origin_reachability.py"]
+non_expiring = true
+
+[[difference]]
+id = "H2X-NEW-017"
+category = "intentional-difference"
+classification = "intentional"
+symbol = "Response"
+difference-type = "base-class"
+member = ""
+reference = "['object']"
+candidate = "['Response']"
+behavior-case = "subclass-preserves-behavior"
+reference-behavior = "httpx2 reference Response.Response"
+eggfetch-behavior = "eggfetch.compat.httpx2.Response subclasses the 0.28.1 facade Response so its url is an httpx2 URL with origin"
+rationale = "Eggfetch subclass preserves reference behavior via inheritance; the base-class name differs but the protocol is identical."
+compatibility-stage-impact = "baseline"
+security-improvement = "false"
+migration-impact = "httpx2.Response is no longer identical to the 0.28.1 Response (isinstance still holds)"
+owner = "eggfetch-team"
+review-milestone = "httpx2-baseline"
+tests = ["test_httpx2_origin_reachability.py"]
+non_expiring = true

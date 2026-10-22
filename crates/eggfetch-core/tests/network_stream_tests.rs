@@ -1,3 +1,6 @@
+// This target exercises the local-address and Unix-domain-socket routing options, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -21,6 +24,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(all(feature = "advanced-routing", feature = "high-level-url"))]
 //! Tests for network stream, upgraded stream, and connection metadata.
 
 use std::io::{Read, Write};

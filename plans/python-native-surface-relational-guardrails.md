@@ -130,16 +130,16 @@ If executable binding code changes, also run the relevant HTTPX/HTTPX2 compact c
 
 ## Acceptance criteria
 
-- [ ] Client/AsyncClient constructor parity is mechanically enforced.
-- [ ] request/stream sync-async mirror relationships are mechanically enforced.
-- [ ] common HTTP verb method relationships are mechanically enforced.
-- [ ] top-level helper versus reusable-client intentional differences are explicit and tested.
-- [ ] runtime exports, root package exports, reviewed stubs, and native manifest remain one coherent support contract.
-- [ ] semantic typing differences that inspect.signature cannot express are retained and tested.
-- [ ] No native Python public signature, property, exception hierarchy, or return shape changed.
-- [ ] No new public export was added.
-- [ ] No large code-generation layer obscures the supported signatures.
-- [ ] Tier 1 remains green.
+- [x] Client/AsyncClient constructor parity is mechanically enforced. — `scripts/check_native_python_api.py:42-46` compares the `Client` and `AsyncClient` constructor contracts as one reviewed contract, and `scripts/check_native_python_api.py --self-test` (green on 2026-10-22) mutates each constructor to prove the check fires.
+- [x] request/stream sync-async mirror relationships are mechanically enforced. — the reviewed `mirror_methods` set (`request`, `stream`, `get`, `post`, `put`, `patch`, `delete`, `head`, `options`) is compared across `Client` and `AsyncClient` at `scripts/check_native_python_api.py:46-51`, with matching mutation self-tests.
+- [x] common HTTP verb method relationships are mechanically enforced. — the same `mirror_methods` comparison covers the nine common HTTP verb methods; `scripts/check_native_python_api.py --self-test` proves a single changed parameter name/order/default is rejected.
+- [x] top-level helper versus reusable-client intentional differences are explicit and tested. — the intentional differences are encoded at `scripts/check_native_python_api.py:53-74` (top-level helpers omit the reusable-client-only keywords) and each difference is asserted by its own mutation self-test (`:186`, `:192`, `:201`, `:212`).
+- [x] runtime exports, root package exports, reviewed stubs, and native manifest remain one coherent support contract. — `crates/eggfetch-python/tests/native_api_manifest.json` is the single reviewed contract (66 exports, symbol kinds, exception bases and MRO, signatures, members, semantic contracts); `scripts/check_native_python_api.py` reports `Native API manifest passed (66 exports)` on 2026-10-22.
+- [x] semantic typing differences that inspect.signature cannot express are retained and tested. — the manifest's `semantic_contracts` section records them explicitly, and `scripts/check_python_typing_surface.py --self-test` reports `Python typing surface passed (66 runtime exports, 32 exception bases, 24 reviewed member contracts)` on 2026-10-22.
+- [x] No native Python public signature, property, exception hierarchy, or return shape changed. — for this plan's own scope at its recorded freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`, yes: the guardrails were added as checks, not as signature edits. Note for the reader: the *current uncommitted* tree has since gained one symmetric keyword-only constructor parameter (`proxy_env=None`) on both `Client` and `AsyncClient` under a later, separately planned milestone — see the diff in `crates/eggfetch-python/tests/native_api_manifest.json`. The parity condition still holds, because both constructors changed identically and the checker is green.
+- [x] No new public export was added. — the manifest export count is unchanged at 66 (`Native API manifest passed (66 exports)`); the guardrails introduced no runtime export.
+- [x] No large code-generation layer obscures the supported signatures. — the enforcement is a plain declarative manifest plus a Python checker; the PyO3 declarations remain concrete, as the execution record below states.
+- [x] Tier 1 remains green. — the execution record below names the native API, typing, 578 routine Python tests, and extended compatibility qualification as passing at freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`. The manifest and typing checkers were re-run green on 2026-10-22; the full Tier 1 gate was **not** re-run in this session (the maintainer deferred it), so this criterion is recorded as green as of the named freeze.
 
 ## Stop conditions
 
@@ -155,3 +155,14 @@ sync/async/top-level relationships with explicit intentional deltas and
 mutation self-tests. Concrete PyO3 declarations were retained. Native API,
 typing, 578 routine Python tests, and the extended compatibility qualification
 passed without public-surface drift.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+All ten acceptance criteria above were re-verified against the current tree and
+are **met**; none is superseded, deferred, or never applicable. Evidence is
+cited inline with each criterion. The execution record above is unchanged.
+
+Two criteria are explicitly bounded to the plan's recorded freeze
+`df2549f7c64ebfccde61ed36fef785d39e83b38d` — the public-signature criterion and
+the Tier 1 criterion — because the current uncommitted tree carries later
+milestone work. The full Tier 1 gate was not re-run in this session.

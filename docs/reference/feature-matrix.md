@@ -33,6 +33,33 @@ Node.js (eggfetch-node, experimental).
 | `tracing` | No | N/A | N/A |
 | `test-util` | No | N/A | N/A |
 
+### Supported core profiles and gate coverage
+
+The complete set of supported `eggfetch-core` profiles, and the gate that
+covers each one. Every profile below is compiled in isolation by the Tier 1
+contract matrix (`scripts/check.sh`, `tier1_rust_api_contracts`) and frozen by
+the Tier 2 Rust public-surface oracle (`scripts/check_rust_public_api.py`);
+no supported profile is covered only as a side effect of `--all-features`.
+
+| Profile | Cargo recipe | Tier 1 contract matrix | Tier 2 public-surface oracle | Other gates |
+| --- | --- | --- | --- | --- |
+| Ordinary default | `eggfetch-core = { version = "0.2" }` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+| H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | yes | yes | Tier 2 feature matrix and the feature-gated tests (compression, proxy) build on this feature set |
+| H2 deterministic HTTPS | `default-features = false, features = ["http2", "tls-rustls"]` | yes | yes | — |
+| H1 lean Bearer client | `default-features = false, features = ["standard-http1", "tls-rustls"]` | yes | yes | Tier 1 lean behavioral suites `lean_policy_tests` and `lean_route_tests` run under this profile |
+| H2 lean Bearer client | `default-features = false, features = ["standard-http2", "tls-rustls"]` | yes | yes | — |
+| H1 native embedding | `default-features = false, features = ["native-http1", "tls-rustls"]` | yes | yes | — |
+| H2 native embedding | `default-features = false, features = ["native-http2", "tls-rustls"]` | yes | yes | — |
+| All features | `default-features = false, features = ["..."]` (`--all-features`) | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+
+The contract matrix owns compile shape; the oracle owns the frozen public
+surface (`compat/rust-public-api/<profile>.txt`). The H1 and H2 members of
+each family differ only in the selected transport, which is private, so their
+snapshots are byte-identical. The remaining core test targets do not compile
+under the lean profile; only the two named lean suites run there, and
+whole-suite lean compilation is tracked separately by core-transport-policy
+M009.
+
 ## API surface by language
 
 ### Rust (eggfetch-core)

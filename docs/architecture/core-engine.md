@@ -20,7 +20,7 @@ Focused subset for the engine lifecycle (client → request → pipeline → res
 | `error` | Yes | `Error` enum, `TransportFailureKind` generic classifier, `RequestFailure` opt-in detail wrapper, `NetworkFailureKind` classifier, `Result<T>` alias |
 | `transport_hints` | Yes | `ResolvedTarget`, `TransportHints`, `NativeRequestOptions` — protocol-neutral wire overrides usable without `high-level-url` |
 | `service` | Yes | `NativeHttpService` — always-ready `tower_service::Service` adapter over native frame execution |
-| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `high-level-url` + `logical-retry`), `redirect` (requires `high-level-url` + `redirects`), `lean` (requires `high-level-url` without `redirects`), `prepare`, `route`, `hyper_dispatch` (requires `transport-http1`/`transport-http2`), `proxy_dispatch` (requires `proxy`), `h3_dispatch` (requires `http3`), `finalize` (requires `high-level-url`), plus short `mod` entry points |
+| `pipeline/` | Crate-internal | Request lifecycle orchestration split by responsibility: `retry` (requires `high-level-url` + `logical-retry`), `redirect` (requires `high-level-url` + `redirects`), `lean` (requires `high-level-url` without `redirects`), `hop` (shared request preparation, requires `high-level-url`), `prepare`, `route`, `hyper_dispatch` (requires `transport-http1`/`transport-http2`), `proxy_dispatch` (requires `proxy`), `h3_dispatch` (requires `http3`), `finalize` (requires `high-level-url`), plus short `mod` entry points |
 | `transport` | Mixed | Public seams (`alt_svc`, `dialer`, `direct_connector`, `lifecycle`, `metrics`) plus crate-internal dispatch (`direct`, `uds`, `proxy`, `socks`, `connect`, `http3`, `hyper_client`, `standard_resolver`, `connect_timeout`) |
 | `stream` | Crate-internal | Response-body timeout (crate-private `BodyTimeoutStream` via `body_timeout_stream` in `stream::body_timeout`: read inactivity + absolute total) plus a separate per-chunk write timeout (crate-private `WriteTimeoutStream` via `write_timeout_stream` in `stream::write_timeout`) |
 
@@ -269,14 +269,48 @@ send_with_retry()           ← retry loop (pipeline::retry)
     send_single_request()   ← one HTTP round-trip (pipeline::mod orchestration)
 ```
 
+### Shared request preparation (`pipeline::hop`)
+
+Both request paths prepare their first hop through one builder in
+`pipeline::hop`. The module is ungated with respect to `redirects`, so the
+lean single-hop path (`pipeline::lean`, used when `redirects` is absent) and
+the redirect path (`pipeline::redirect`) prepare requests through exactly the
+same code. The two paths differ only in what they do *after* preparation:
+the lean path sends one hop and returns, the redirect path evaluates the
+redirect decision and may build a further hop.
+
+The builder owns, in this order:
+
+1. the exhaustive `Request::into_parts()` destructuring, so a new request
+   field fails to compile here rather than being silently dropped;
+2. the default/request header merge (request headers replace same-named
+   client defaults);
+3. the client/request timeout merge (per field);
+4. hop request construction, carrying every request field onto the hop;
+5. cookie-jar injection, skipped when the hop already carries a `Cookie`
+   header;
+6. auth resolution and application;
+7. the `Set-Cookie` jar update, applied after the response arrives and
+   before it is returned to the caller.
+
+The redirect policy override is deliberately *not* handled in `pipeline::hop`:
+the module must not depend on `redirects`-gated items, so the redirect path
+resolves the effective policy from the request before handing it to the
+builder. `retry_request` and `advance_redirect_hop` remain the only places a
+*subsequent* hop request is constructed.
+
 ### send_single_request phases:
 
 Preparation (`pipeline::prepare` → `PreparedRequest`) centralizes
 request policy so transports own only connection/protocol work:
 
-1. Header merge (client defaults + request overrides) and timeout merging
-    (per-field) happen in `pipeline::redirect::send_with_redirects()` when `redirects` is enabled, and are duplicated in `pipeline::lean::send_lean()` otherwise (the redirect module is bypassed entirely there); the hop itself is built
-    by the shared `HopBuildParams` builder (cookies, auth, hints).
+1. Request preparation is single-sourced in `pipeline::hop` (see above): the
+   exhaustive request destructuring, the header merge (client defaults +
+   request overrides), the per-field timeout merge, the hop construction
+   (cookies, auth, transport hints), and the `Set-Cookie` jar update. Both
+   `pipeline::redirect::send_with_redirects()` and
+   `pipeline::lean::send_lean()` call it, so there is one copy of each
+   operation in the engine.
 2. Preparation normalizes accept-encoding, Content-Length, user-agent, and
    H2-forbidden headers, validates request size, resolves the wire URI
    (`target` override), wraps stream bodies with the write timeout,
@@ -299,6 +333,37 @@ request policy so transports own only connection/protocol work:
    final stream boundary for every consumption mode; no Tokio timer is
    created at finalization so bodies can cross runtimes before first poll.
    Public `ResponseBody` variant shapes are unchanged.
+
+### Shared rule helpers (crate-private)
+
+Several routing rules used to be spelled out at more than one call site.
+Each of them now has exactly one crate-private implementation; the call
+sites keep their own argument values, error kinds, and diagnostics.
+
+| Rule | Single implementation | Call sites |
+|---|---|---|
+| Effective-port validation for a caller-supplied destination | `http_origin::validate_effective_port()` / `http_origin::validate_url_effective_port()`, discriminated by `http_origin::EffectivePortSubject` | `pipeline::prepare` (resolved and proxied destinations), `pipeline` (native resolved destination), `request` (resolved and proxied destinations), `proxy` (resolved proxy peers) |
+| Custom-dialing incompatibility ladder | `pipeline::custom_dialing::custom_dialing_conflict()` | `pipeline::prepare` (high-level preparation phase) and `pipeline` (native dispatch path and the high-level dispatch boundary) |
+| Origin normalization (scheme, host, effective port) | `http_origin::HttpOrigin::from_url()` | `pool::OriginKey::from_url()` / `from_url_with_proxy_scheme()` |
+| Post-handshake ALPN `h2` detection | `transport::negotiated_http2()` | `transport::connect`, `transport::uds`, `transport::direct_connector`, `transport::socks` |
+| Wire request-target UTF-8 decode | `transport_hints::target_extension_str()` | `pipeline::prepare`, `transport::connect`, `transport::proxy` |
+| Cached direct route client construction | `client::routes::build_direct_client()`, discriminated by `DirectRouteBinding` | the resolved-target route cache and the SNI route cache |
+
+The phase ownership is unchanged by the consolidation:
+
+- The effective-port check still runs in the preparation phase, before the
+  pool guard is acquired and before any connection attempt, and it still
+  consumes neither a request deadline nor a pool permit.
+- The custom-dialing ladder still evaluates the same arms in the same order
+  in each path. The high-level path evaluates the four common arms during
+  preparation and the built-in-proxy arm at the dispatch boundary; the native
+  path evaluates the four common arms and has no built-in-proxy arm. The
+  built-in-proxy arm therefore stays last, and a request that violates
+  several combinations still produces the same first error.
+- `HttpOrigin::from_url()` returning `None` remains a hard error for the
+  caller, while `OriginKey::from_url()` returning `None` remains a soft
+  degrade (the request simply has no pool key). The two `None`s are not
+  merged.
 
 ### Connector lifecycle ordering
 
@@ -330,14 +395,16 @@ All persistent H1/H2 Hyper clients are built through one crate-private
 module rather than repeating builder/lifecycle/cache plumbing per route:
 
 - `HyperClientPolicy` owns the shared builder knobs (canceled-request
-  retry, H2-only selection, idle timeout, per-host idle cap). Persistent
-  singletons (standard, direct, UDS, custom dialer) use `persistent()`;
-  cached/isolated routes use `cached_route()`; the forward-proxy cache uses
+  retry, H2-only selection, idle timeout, per-host idle cap). One
+  constructor (`new()`) serves every family; the forward-proxy cache uses
   `forward_route()`, which never sets `http2_only` because the proxy leg is
-  H1 absolute-form framing. Every persistent family receives the same
-  resolved idle timeout and effective per-host cap from `Pool`; when a
-  timeout is configured the policy also installs the Hyper pool timer the
-  timeout requires for background eviction (see
+  H1 absolute-form framing. The persistent singletons (standard, direct,
+  UDS, custom dialer) and the cached/isolated routes resolve the *same*
+  idle timeout and effective per-host cap from `Pool`; the only difference
+  is when the caller resolves them (the singletons at build time from the
+  builder's pool configuration, the route caches at use time from the live
+  `Pool`). When a timeout is configured the policy also installs the Hyper
+  pool timer the timeout requires for background eviction (see
   [core-timeout-pool.md](core-timeout-pool.md)).
 - `build_hyper_client()` wraps each route connector as `route connector ->
   ConnectTimeout -> LifecycleConnector` and builds the legacy client with a

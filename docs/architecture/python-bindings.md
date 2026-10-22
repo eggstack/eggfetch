@@ -294,6 +294,27 @@ asyncio-supported surface on the ledger-bound SHA above. HTTP/3 remains separate
 experimental; its retained label and blockers do not weaken or extend either
 compatibility profile.
 
+### Proxy-environment semantics
+
+`Client` and `AsyncClient` accept a keyword-only `proxy_env` option that
+selects the rule set used to interpret proxy configuration:
+
+- `proxy_env=None` (default) or `proxy_env="native"` uses eggfetch's own
+  rules: environment `NO_PROXY` is parsed with `NoProxy::parse` (a
+  `localhost` entry covers the loopback IP literals), and an explicit
+  `socks5://` proxy URL keeps its local-DNS meaning.
+- `proxy_env="httpx"` uses HTTPX 0.28.1's rules: environment `NO_PROXY` is
+  parsed with `NoProxy::parse_httpx` (a `localhost` entry matches the
+  hostname `localhost` only), and `socks5://` is normalized to `socks5h://`
+  so the SOCKS proxy resolves the destination hostname.
+
+Any other value raises `ValueError`. The default is the native rule set, so
+native callers never inherit compatibility-only semantics. The HTTPX
+compatibility facades (`eggfetch.compat.httpx` and `eggfetch.compat.httpx2`,
+including `HTTPTransport`/`AsyncHTTPTransport`) opt into `proxy_env="httpx"`
+explicitly; `eggfetch.compat.httpx2` inherits that opt-in through the shared
+base facade and needs no separate configuration.
+
 ### Architecture Overview
 
 The facade sits between the user and the native PyO3 bindings:
@@ -336,14 +357,16 @@ Plus transport/test doubles shipped with the facade (`_auth`, `_asgi`, `_mock`, 
 
 `eggfetch/compat/httpx2/` subclasses/re-exports the 0.28.1 facade — no
 ~97 KB client fork. Shared semantics are re-exported unchanged
-(`_asgi/_cookies/_mock/_request/_response/_stream/_transports/_wsgi` from
-`httpx`); profile-specific modules subclass or wrap:
+(`_asgi/_cookies/_mock/_stream/_transports/_wsgi` from `httpx`);
+profile-specific modules subclass or wrap:
 
 | Module | Purpose |
 |--------|---------|
 | `httpx2/__init__.py` | Public 2.12.0 surface + truststore `create_ssl_context` |
 | `httpx2/_auth.py` | Re-exports shared auth + `FunctionAuth` callable adapter |
 | `httpx2/_urls.py` | `URL.origin` + frozen `Origin` (scheme/IDNA/ports/IPv6) |
+| `httpx2/_request.py` | Subclassed `Request`; its `url` is always an httpx2 `URL` |
+| `httpx2/_response.py` | Subclassed `Response`; its `url` is always an httpx2 `URL` |
 | `httpx2/_client.py` | Subclasses base clients + `query()`/`sse()`/`websocket()` |
 | `httpx2/_api.py` | Top-level helpers incl. `query` + `websocket` |
 | `httpx2/_headers.py` | Subclassed `Headers` with `\|`/`\|=` merge operators |
@@ -354,6 +377,13 @@ Plus transport/test doubles shipped with the facade (`_auth`, `_asgi`, `_mock`, 
 | `httpx2/_sse.py` | `EventSource`/`ServerSentEvent` framing over streamed responses |
 | `httpx2/websockets/` | Optional WebSocket (wsproto framing over 101 `network_stream`) |
 
+The httpx2 `URL` delta is reachable from every URL a user observes: the
+httpx2 `Request`/`Response` are 0.28.1 subclasses whose `url` is an httpx2
+`URL`, and the httpx2 clients return httpx2 responses (redirect hops
+included). Type identity with the 0.28.1 classes is intentionally gone
+(`httpx2.Request is httpx.Request` is now `False`); the `isinstance`
+relationships still hold. The 0.28.1 facade gains no `origin`/`Origin`.
+
 Behavior hardening owned by core/facade boundaries: IPv6 CIDR `NO_PROXY`
 (versioned parser), chained-decoder cap (native 4 vs reference 5,
 intentionally stricter), multipart `try_header` validation, WSGI framing.
@@ -361,6 +391,7 @@ Parity cases `H2X-API/META/AUTH/TLS/PROXY/COMP/MP/WSGI` (core) plus
 `H2X-SSE-001/002`, `H2X-WS-001..003` (streaming) in
 `compat/httpx2/2.12.0/parity-cases.toml`; differential tests
 `test_httpx2_api_parity.py` + `test_httpx2_behavior.py` (core),
+`test_httpx2_origin_reachability.py` (observable `origin` paths),
 `test_httpx2_sse.py` + `test_httpx2_websocket.py` (streaming).
 Packaging: SSE needs no extra dependency; WS needs `wsproto` (+ `anyio`
 for async sessions) only when used — `Client.websocket`/`connect_ws`

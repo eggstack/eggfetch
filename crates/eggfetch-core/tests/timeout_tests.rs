@@ -21,6 +21,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(feature = "high-level-url")]
 //! Timeout integration tests for eggfetch-core.
 
 mod test_server;

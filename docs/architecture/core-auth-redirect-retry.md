@@ -25,7 +25,43 @@ canceled-idle-request retry (`retry_canceled_requests`) is transport policy
 and stays available in every profile. Typed DNS/refused/timeout failures,
 body caps, pooling, TLS, and high-level response semantics are unchanged.
 Lean coverage lives in `crates/eggfetch-core/tests/lean_policy_tests.rs`
-(passes under both lean and full feature sets).
+(passes under both lean and full feature sets). The two request paths are
+additionally pinned against each other by the preparation-equivalence
+fixture: `crates/eggfetch-core/tests/lean_path_equivalence.rs` (lean
+profile) and `crates/eggfetch-core/tests/redirect_path_equivalence.rs`
+(`redirects` profile) capture the outgoing request of their own path and
+compare it against the same expectation in
+`crates/eggfetch-core/tests/hop_equivalence_support.rs`, so a divergence
+between the paths breaks one of the two builds. The crate-internal
+counterpart (`pipeline::hop`'s test support) compares the prepared hop
+itself — including the merged timeout and the transport hints, which are not
+observable on the wire.
+
+## Shared Request Preparation
+
+Auth, cookie, header, and timeout preparation happen in one place:
+`pipeline::hop`, the shared request-preparation builder. It is ungated with
+respect to `redirects`, so the lean single-hop path (`pipeline::lean`) and
+the redirect path (`pipeline::redirect`) prepare requests through exactly the
+same code and differ only in what they do *after* preparation.
+
+The builder performs, in this order: the exhaustive `Request::into_parts()`
+destructuring (so a new request field fails to compile here rather than
+being silently dropped), the default/request header merge, the
+client/request timeout merge, hop request construction, cookie-jar
+injection, auth resolution and application, and the `Set-Cookie` jar update
+after the response arrives.
+
+Two consequences for the policy features described below:
+
+- **Auth precedence is resolved once.** `resolve_request_auth()` is called
+  from the shared builder, so the request-level/client-level precedence and
+  the `ConflictingAuth` rule behave identically on the lean path and on the
+  redirect path.
+- **The redirect policy override is not handled here.** The builder must not
+  depend on `redirects`-gated items, so `pipeline::redirect` resolves the
+  effective redirect policy from the request before handing it to the
+  builder.
 
 ## Authentication
 

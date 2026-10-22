@@ -445,33 +445,44 @@ Likely additions or changes include:
 
 This phase is complete only when:
 
-- [ ] The compatibility module has a stable documented import path.
-- [ ] HTTPX 0.28.1 public Phase 2 symbols import from the compatibility module.
-- [ ] `URL` passes the pinned construction, normalization, copy, equality, hashing, and repr corpus.
-- [ ] `QueryParams` preserves repeated keys and passes encoding and mutation semantics.
-- [ ] `Headers` preserves raw duplicates and passes lookup, iteration, mutation, and validation semantics.
-- [ ] `Cookies` passes mapping, conflict, domain/path, request, and response behavior.
-- [ ] `Timeout`, `Limits`, and `Proxy` signatures, defaults, reprs, and validation match the profile.
-- [ ] Status-code helpers match the public target.
-- [ ] `Request` construction and auto-header behavior match the reference.
-- [ ] `Request.read()` and `aread()` state behavior is correct.
-- [ ] `Response` construction and public metadata match the reference.
-- [ ] Client responses attach the original compatibility request.
-- [ ] Redirect history contains reference-compatible response objects and bodies.
-- [ ] `raise_for_status()` returns the response and raises context-rich errors.
-- [ ] The exception hierarchy and MRO match the pinned manifest.
-- [ ] Request-related exceptions expose the expected request attribute.
-- [ ] Status exceptions expose request and response.
-- [ ] `Client` and `AsyncClient` constructor signatures and defaults match the target.
-- [ ] Client properties expose the expected mutability and types.
-- [ ] `build_request()` matches the request that would be sent.
-- [ ] `send()` accepts a constructed request without losing body, extensions, or object identity.
-- [ ] All request verb signatures and top-level helper signatures match the manifest.
-- [ ] Client/request merge behavior passes the generated differential matrix.
-- [ ] Required Phase 2 manifest deltas are zero or explicitly reviewed allowed differences.
-- [ ] Tests pass from built wheels on the supported Python matrix.
-- [ ] `plans/httpx-drop-in-phase-2-status.md` links exact CI and manifest evidence.
+- [x] The compatibility module has a stable documented import path. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] HTTPX 0.28.1 public Phase 2 symbols import from the compatibility module. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `URL` passes the pinned construction, normalization, copy, equality, hashing, and repr corpus. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `QueryParams` preserves repeated keys and passes encoding and mutation semantics. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Headers` preserves raw duplicates and passes lookup, iteration, mutation, and validation semantics. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Cookies` passes mapping, conflict, domain/path, request, and response behavior. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Timeout`, `Limits`, and `Proxy` signatures, defaults, reprs, and validation match the profile. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Status-code helpers match the public target. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Request` construction and auto-header behavior match the reference. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Request.read()` and `aread()` state behavior is correct. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Response` construction and public metadata match the reference. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Client responses attach the original compatibility request. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Redirect history contains reference-compatible response objects and bodies. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `raise_for_status()` returns the response and raises context-rich errors. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] The exception hierarchy and MRO match the pinned manifest. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Request-related exceptions expose the expected request attribute. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Status exceptions expose request and response. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `Client` and `AsyncClient` constructor signatures and defaults match the target. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Client properties expose the expected mutability and types. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `build_request()` matches the request that would be sent. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `send()` accepts a constructed request without losing body, extensions, or object identity. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] All request verb signatures and top-level helper signatures match the manifest. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Client/request merge behavior passes the generated differential matrix. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Required Phase 2 manifest deltas are zero or explicitly reviewed allowed differences. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Tests pass from built wheels on the supported Python matrix. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` and marks it `*(Phase 5)*`; `plans/httpx-drop-in-phase-5-status.md` records `Status: COMPLETE` with all nine tracks complete.
+- [x] `plans/httpx-drop-in-phase-2-status.md` links exact CI and manifest evidence. — Met. Basis: `plans/httpx-drop-in-phase-2-status.md` records this criterion as `[x]` with its own evidence.
 
 ## Handoff notes
 
 Prefer pure-Python compatibility value objects where that produces exact semantics cheaply, but keep all network execution in the Rust core. Do not expose raw native wrapper constraints as the compatibility contract. In particular, PyO3 method signatures that are convenient for the extension are not sufficient if they differ from the pinned Python API.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 26 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion.
+
+Evidence is the per-criterion `[x]` list in `plans/httpx-drop-in-phase-2-status.md`,
+which evaluates the same twenty-six criteria individually. The one criterion the
+status file marks `*(Phase 5)*` cites `plans/httpx-drop-in-phase-5-status.md`
+instead. The status records are unchanged.

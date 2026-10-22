@@ -10,6 +10,13 @@
 //! hostname cannot be represented by the `http` crate's URI type, the caller
 //! must provide an appropriate ASCII/punycode URI. No IDNA transformation is
 //! performed here.
+//!
+//! The module also owns the one effective-port rule: a caller-supplied
+//! destination must use the effective port of the logical origin it belongs
+//! to. Every place that checks that rule uses the helpers below, so the
+//! comparison and the per-subject diagnostics cannot drift apart.
+
+use std::net::SocketAddr;
 
 use crate::error::{Error, Result};
 
@@ -113,8 +120,14 @@ impl HttpOrigin {
             ));
         }
         // `Uri::host` for IPv6 authorities returns the bracketed form
-        // (`[::1]`); strip one bracket pair for canonical storage so IPv6
-        // pool keys and SNI identity match the high-level `url` form.
+        // (`[::1]`); strip one bracket pair for canonical storage.
+        //
+        // The high-level `url::Url` form keeps the brackets (`Url::host_str`
+        // returns `[::1]`), so the native and high-level pool keys for the
+        // same IPv6 endpoint differ by those brackets. That divergence is
+        // recorded rather than papered over: changing it would alter pool
+        // keying, which is out of scope for the origin normalization.
+        //
         // DNS names are ASCII-lowercased for canonical identity; no IDNA
         // transformation is performed.
         let canonical_host = if host.starts_with('[') && host.ends_with(']') && host.len() >= 2 {
@@ -182,8 +195,10 @@ impl HttpOrigin {
             return None;
         }
         let port = url.port_or_known_default()?;
-        // `url::Url::host_str` already strips IPv6 brackets; lowercase for
-        // canonical identity to match `from_uri`.
+        // `url::Url::host_str` keeps the IPv6 brackets (`[::1]`), unlike
+        // `Uri::host` handling in `from_uri`; lowercase for canonical
+        // identity. The two constructors therefore disagree on the IPv6 host
+        // form; see the note in `from_uri`.
         Some(Self {
             scheme,
             host: host.to_ascii_lowercase(),
@@ -228,6 +243,110 @@ impl std::fmt::Display for HttpOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://{}:{}", self.scheme.as_str(), self.host, self.port)
     }
+}
+
+/// Subject of an effective-port validation.
+///
+/// A caller-supplied destination must use the effective port of the logical
+/// origin it belongs to. The three subjects differ in the diagnostic they
+/// produce and in the error kind they use, but they share one comparison.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EffectivePortSubject {
+    /// A caller-supplied resolved destination for the request's own origin.
+    ResolvedDestination,
+    /// A caller-supplied proxied destination for the request's own origin.
+    ProxiedDestination,
+    /// A caller-supplied resolved peer for the proxy endpoint.
+    #[cfg_attr(
+        not(feature = "proxy"),
+        allow(
+            dead_code,
+            reason = "the proxy-peer subject only exists in the proxy profile"
+        )
+    )]
+    ResolvedProxyPeer,
+}
+
+impl EffectivePortSubject {
+    /// The error produced when the logical URL is not a usable HTTP(S) URL.
+    ///
+    /// Two rules reach this diagnostic: the effective-port check, which
+    /// needs the URL's known port, and the route-key construction, which
+    /// needs a canonical HTTP(S) origin. The proxy-peer subject never
+    /// reaches this path: it resolves its expected port from the proxy URL,
+    /// which reports its own diagnostic (`proxy scheme ... has no known
+    /// default port`) before the comparison runs. The arm is kept so the
+    /// subject set stays exhaustive.
+    pub(crate) fn requires_http_url(self) -> Error {
+        match self {
+            Self::ResolvedDestination => Error::InvalidResolvedTarget(
+                "resolved destinations require an HTTP or HTTPS URL".into(),
+            ),
+            Self::ProxiedDestination => Error::InvalidResolvedTarget(
+                "proxied destinations require an HTTP or HTTPS URL".into(),
+            ),
+            Self::ResolvedProxyPeer => Error::InvalidProxyUrl(
+                "resolved proxy peers require the proxy URL's effective port".into(),
+            ),
+        }
+    }
+
+    /// The error produced when a supplied address uses a different port.
+    pub(crate) fn port_mismatch(self, expected_port: u16) -> Error {
+        match self {
+            Self::ResolvedDestination => Error::InvalidResolvedTarget(format!(
+                "all resolved destinations must use the URL's effective port {expected_port}"
+            )),
+            Self::ProxiedDestination => Error::InvalidResolvedTarget(format!(
+                "all proxied destinations must use the URL's effective port {expected_port}"
+            )),
+            Self::ResolvedProxyPeer => Error::InvalidProxyUrl(format!(
+                "all resolved proxy peers must use the proxy URL's effective port {expected_port}"
+            )),
+        }
+    }
+}
+
+/// Validate that every supplied address uses the origin's effective port.
+///
+/// # Errors
+///
+/// Returns the subject's port-mismatch error when any supplied address uses a
+/// port other than `expected_port`.
+pub(crate) fn validate_effective_port(
+    subject: EffectivePortSubject,
+    addresses: &[SocketAddr],
+    expected_port: u16,
+) -> Result<()> {
+    if addresses
+        .iter()
+        .any(|address| address.port() != expected_port)
+    {
+        return Err(subject.port_mismatch(expected_port));
+    }
+    Ok(())
+}
+
+/// Validate that every supplied address uses the request URL's effective port.
+///
+/// The effective port is the URL's explicit port, or the scheme's default
+/// when the URL carries none.
+///
+/// # Errors
+///
+/// Returns the subject's known-port error when the URL has no effective port,
+/// or the subject's port-mismatch error when a supplied address uses a
+/// different port.
+#[cfg(feature = "high-level-url")]
+pub(crate) fn validate_url_effective_port(
+    subject: EffectivePortSubject,
+    url: &url::Url,
+    addresses: &[SocketAddr],
+) -> Result<()> {
+    let expected_port = url
+        .port_or_known_default()
+        .ok_or_else(|| subject.requires_http_url())?;
+    validate_effective_port(subject, addresses, expected_port)
 }
 
 #[cfg(test)]

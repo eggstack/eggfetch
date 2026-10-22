@@ -21,8 +21,8 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
-#![cfg(feature = "http3")]
 #![allow(clippy::unnested_or_patterns)]
+#![cfg(feature = "http3")]
 
 //! HTTP/3 interoperability and production-graduation evidence.
 //!

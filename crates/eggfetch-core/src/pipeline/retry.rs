@@ -99,7 +99,10 @@ async fn dispatch_attempt(client: &Client, request: Request) -> Result<Response>
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the retry loop keeps the attempt budget checks, the backoff computation and the replayable-body guard in one linear flow"
+)]
 pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result<Response> {
     let body_replayable = request.body().is_replayable();
 

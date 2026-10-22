@@ -32,7 +32,10 @@ impl PyBasicAuth {
         self.inner.username()
     }
 
-    #[allow(clippy::unused_self)]
+    #[allow(
+        clippy::unused_self,
+        reason = "the `__repr__` protocol fixes the receiver; the redacted text deliberately shows no credentials"
+    )]
     fn __repr__(&self) -> String {
         "BasicAuth(<redacted>)".to_string()
     }
@@ -78,7 +81,10 @@ impl PyNoAuth {
         Self
     }
 
-    #[allow(clippy::unused_self)]
+    #[allow(
+        clippy::unused_self,
+        reason = "the `__repr__` protocol fixes the receiver; this credential type carries no state to print"
+    )]
     fn __repr__(&self) -> String {
         "NOAUTH".to_string()
     }

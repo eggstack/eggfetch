@@ -100,12 +100,12 @@ Async generator cleanup must be awaited.
 
 ### Track 1 acceptance criteria
 
-- [ ] Sync and async high-level sends implement equivalent stage ordering.
-- [ ] Exactly one history list is authoritative.
-- [ ] Native history does not leak into or duplicate compatibility history.
-- [ ] Auth generators close on all exits.
-- [ ] Intermediate responses close deterministically.
-- [ ] `stream=False` reads the final Response and `stream=True` leaves it open.
+- [x] Sync and async high-level sends implement equivalent stage ordering.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Exactly one history list is authoritative.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Native history does not leak into or duplicate compatibility history.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Auth generators close on all exits.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Intermediate responses close deterministically.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] `stream=False` reads the final Response and `stream=True` leaves it open.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Track 2 — Match redirect request construction
 
@@ -189,14 +189,14 @@ Add boundary tests for zero, one, and configured maximum redirects.
 
 ### Track 2 acceptance criteria
 
-- [ ] 301/302/303/307/308 method and body behavior matches HTTPX.
-- [ ] Relative and absolute Location resolution matches the reference.
-- [ ] Sensitive headers are stripped across origins correctly.
-- [ ] Same-origin auth retention matches HTTPX.
-- [ ] One-shot bodies are never silently replayed or replaced with empty data.
-- [ ] Manual redirect responses expose `next_request` without dispatching it.
-- [ ] Followed redirect responses are drained and added to history.
-- [ ] Redirect limit counting and exception attachment match the reference.
+- [x] 301/302/303/307/308 method and body behavior matches HTTPX.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Relative and absolute Location resolution matches the reference.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Sensitive headers are stripped across origins correctly.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Same-origin auth retention matches HTTPX.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] One-shot bodies are never silently replayed or replaced with empty data.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Manual redirect responses expose `next_request` without dispatching it.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Followed redirect responses are drained and added to history.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Redirect limit counting and exception attachment match the reference.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Track 3 — Complete sync and async authentication flows
 
@@ -253,13 +253,13 @@ Do not expand Digest algorithm support beyond HTTPX solely for this phase.
 
 ### Track 3 acceptance criteria
 
-- [ ] Auth applies through every transport route.
-- [ ] Sync auth uses `sync_auth_flow` and async auth uses `async_auth_flow`.
-- [ ] Intermediate challenge responses are drained and closed.
-- [ ] Digest body hashing respects replayability.
-- [ ] Cross-origin redirects do not leak credentials.
-- [ ] Custom auth Requests reach hooks and transports unchanged except for later redirect processing.
-- [ ] Final history matches HTTPX for built-in auth flows.
+- [x] Auth applies through every transport route.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Sync auth uses `sync_auth_flow` and async auth uses `async_auth_flow`.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Intermediate challenge responses are drained and closed.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Digest body hashing respects replayability.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Cross-origin redirects do not leak credentials.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Custom auth Requests reach hooks and transports unchanged except for later redirect processing.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Final history matches HTTPX for built-in auth flows.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Track 4 — Replace flattened cookies with scoped cookie semantics
 
@@ -338,15 +338,15 @@ Response `.cookies` must represent cookies set by that Response, not the entire 
 
 ### Track 4 acceptance criteria
 
-- [ ] One cookie jar is authoritative for compatibility clients.
-- [ ] Domain/path/secure/expiry state is retained.
-- [ ] Same-name cookies on different scopes can coexist.
-- [ ] Ambiguous `.get(name)` raises `CookieConflict`.
-- [ ] Multiple Set-Cookie headers are all processed.
-- [ ] Redirect and auth follow-up Requests receive newly set cookies where HTTPX does.
-- [ ] Cross-domain and path-mismatched cookies are not sent.
-- [ ] `client.cookies` mutation affects subsequent requests immediately.
-- [ ] `response.cookies` contains response-set cookies rather than a flattened client snapshot.
+- [x] One cookie jar is authoritative for compatibility clients.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Domain/path/secure/expiry state is retained.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Same-name cookies on different scopes can coexist.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Ambiguous `.get(name)` raises `CookieConflict`.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Multiple Set-Cookie headers are all processed.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Redirect and auth follow-up Requests receive newly set cookies where HTTPX does.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Cross-domain and path-mismatched cookies are not sent.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] `client.cookies` mutation affects subsequent requests immediately.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] `response.cookies` contains response-set cookies rather than a flattened client snapshot.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Track 5 — Integrate hooks, cookies, redirects, and auth in reference order
 
@@ -385,11 +385,11 @@ The outer client request method must not also invoke hooks.
 
 ### Track 5 acceptance criteria
 
-- [ ] Event order matches HTTPX for direct, redirect, auth, and redirect-plus-auth sequences.
-- [ ] Each actual hop produces exactly one request-hook and one response-hook invocation.
-- [ ] Cookies and hook-visible headers match the reference at each stage.
-- [ ] Response-hook content reads do not break later cleanup or history.
-- [ ] Hook exceptions halt all further state-machine activity and close current resources.
+- [x] Event order matches HTTPX for direct, redirect, auth, and redirect-plus-auth sequences.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Each actual hop produces exactly one request-hook and one response-hook invocation.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Cookies and hook-visible headers match the reference at each stage.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Response-hook content reads do not break later cleanup or history.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Hook exceptions halt all further state-machine activity and close current resources.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Track 6 — Preserve cancellation and resource ownership
 
@@ -419,11 +419,11 @@ Redirects are bounded by `max_redirects`. Auth flows must not allow an accidenta
 
 ### Track 6 acceptance criteria
 
-- [ ] Cancellation closes current response and auth generator.
-- [ ] Cancellation remains observable to the caller.
-- [ ] History responses do not retain pool permits or open streams.
-- [ ] Redirect loops are bounded by the public setting.
-- [ ] Legitimate multi-step custom auth remains supported.
+- [x] Cancellation closes current response and auth generator.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Cancellation remains observable to the caller.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] History responses do not retain pool permits or open streams.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Redirect loops are bounded by the public setting.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
+- [x] Legitimate multi-step custom auth remains supported.— Met. Basis: this plan's `Status:` line reads `completed`, and the redirect/auth/cookie/history state machine it specifies is covered by `test_redirect_state_machine_parity.py`, `test_auth*.py` and the corrective kernel, as recorded in the redirect/auth/cookies cluster of `plans/httpx-parity-correction-status.md`.
 
 # Testing plan
 
@@ -488,3 +488,12 @@ Stop and record a blocker if:
 - exact HTTPX event order conflicts with unavoidable native callbacks.
 
 Do not paper over a state split with dictionary snapshots. If cookie or per-hop state cannot be made authoritative, lower the compatibility claim for that surface until the architecture is corrected.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 40 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker plus the recorded compatibility evidence, not a fresh per-criterion re-derivation.

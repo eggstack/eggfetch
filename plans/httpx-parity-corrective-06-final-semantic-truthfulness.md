@@ -596,3 +596,12 @@ Corrective 06 is complete only when all of the following are true:
 When these criteria are met, stop executable work. Record the final executable/test commit SHA and hand that exact SHA to `plans/httpx-parity-corrective-07-final-exact-sha-requalification.md`.
 
 Any executable change after that handoff invalidates the frozen SHA and requires restarting Corrective 07 from its first qualification step.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 51 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

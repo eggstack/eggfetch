@@ -64,8 +64,8 @@ Add at least one regression that fails against the planning baseline for the sta
 
 Acceptance:
 
-- [ ] The closure record identifies one test that is red on the baseline for the intended reason and green after the fix.
-- [ ] The reproduced failure requires reuse of the same cached client followed by a fresh physical connection/tunnel attempt; a test that merely creates two independent clients is insufficient.
+- [x] The closure record identifies one test that is red on the baseline for the intended reason and green after the fix.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] The reproduced failure requires reuse of the same cached client followed by a fresh physical connection/tunnel attempt; a test that merely creates two independent clients is insufficient.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
 
 ### 2. Remove request-total state from reusable proxy client factories
 
@@ -84,9 +84,9 @@ Do **not** create a second client cache keyed by timeout buckets.
 
 Acceptance:
 
-- [ ] No cached proxy-client factory accepts a logical request's `remaining_total`, absolute deadline, or equivalent request-lifetime budget.
-- [ ] Different `Timeout.total` values for otherwise compatible requests do not create distinct route-cache entries.
-- [ ] Existing connection-scoped `connect` timeout distinctions remain explicit where the connector requires them.
+- [x] No cached proxy-client factory accepts a logical request's `remaining_total`, absolute deadline, or equivalent request-lifetime budget.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] Different `Timeout.total` values for otherwise compatible requests do not create distinct route-cache entries.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] Existing connection-scoped `connect` timeout distinctions remain explicit where the connector requires them.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
 
 ### 3. Remove request-total state from the cached connectors themselves
 
@@ -121,9 +121,9 @@ If implementation discovers that some connection-establishment subphase is curre
 
 Acceptance:
 
-- [ ] Neither reusable proxy connector stores a logical request total timeout or derived absolute deadline.
-- [ ] Connector establishment remains bounded by existing connect/phase policy where configured.
-- [ ] No public timeout type or semantics are broadened to accomplish this correction.
+- [x] Neither reusable proxy connector stores a logical request total timeout or derived absolute deadline.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] Connector establishment remains bounded by existing connect/phase policy where configured.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] No public timeout type or semantics are broadened to accomplish this correction.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
 
 ### 4. Keep the current request total deadline authoritative at dispatch
 
@@ -139,10 +139,10 @@ Do not move the total timeout outside the logical request/redirect/retry machine
 
 Acceptance:
 
-- [ ] A short-budget request cannot inherit a longer predecessor's setup allowance.
-- [ ] A long-budget request cannot inherit a shorter predecessor's setup allowance.
-- [ ] `TimeoutPhase::Total` remains the result when the current logical total budget is what expires.
-- [ ] `TimeoutPhase::Connect` remains the result when the configured connection-establishment budget expires first.
+- [x] A short-budget request cannot inherit a longer predecessor's setup allowance.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] A long-budget request cannot inherit a shorter predecessor's setup allowance.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] `TimeoutPhase::Total` remains the result when the current logical total budget is what expires.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] `TimeoutPhase::Connect` remains the result when the configured connection-establishment budget expires first.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
 
 ### 5. Preserve the legacy multi-target/fallback path
 
@@ -159,8 +159,8 @@ Explicitly confirm that:
 
 Acceptance:
 
-- [ ] Existing multi-target CONNECT tests remain green.
-- [ ] No cached-client optimization is extended to a route whose semantics require per-attempt request state.
+- [x] Existing multi-target CONNECT tests remain green.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
+- [x] No cached-client optimization is extended to a route whose semantics require per-attempt request state.— Met. Basis: this plan's `## Closure record — 2026-09-16` records the executed corrective and its evidence.
 
 ## Required regression tests
 
@@ -437,3 +437,12 @@ and downstream artifact qualification remain outside this corrective's scope.
 Documentation-only descendant SHA: `0da37ab` (the documentation-only closure
 commit descended from the executable freeze; subsequent profile/ledger edits
 are also documentation-only).
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 14 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

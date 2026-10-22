@@ -214,7 +214,10 @@ impl PyNetworkStream {
     /// `Mutex<Option<UpgradedStream>>` so the underlying IO is shared
     /// and one side can drive the read while the other side drives the
     /// write.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the shared-wrapper constructor documents the contract for driving one upgraded stream from both the sync and the async side; no in-crate caller constructs it yet"
+    )]
     pub(crate) fn from_shared_inner(
         inner: SharedStreamInner,
         variant: StreamVariant,
@@ -515,7 +518,10 @@ impl PyNetworkStream {
 ///
 /// Mirrors the shape of HTTPX's `network_stream.get_extra_info()` return
 /// value for compatibility testing.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the helper pins the HTTPX `get_extra_info()` payload shape next to the stream type it mirrors; it is not registered as a Python function yet"
+)]
 #[pyfunction]
 fn extra_info_dict<'py>(
     py: Python<'py>,

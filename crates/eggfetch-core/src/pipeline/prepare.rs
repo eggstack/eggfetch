@@ -218,8 +218,7 @@ pub(super) fn resolve_request_uri(
         .map_err(|e| Error::InvalidUrl(format!("failed to convert url to URI: {e}")))?;
     if let Some(ref target) = transport_hints.target {
         validate_target(target)?;
-        let target = std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        let target = crate::transport_hints::target_extension_str(target)?;
         // Hyper's legacy client requires an absolute URI to select a
         // connector, then converts that URI to origin-form on the wire. Keep
         // the logical scheme/authority for connector routing and TLS while
@@ -255,8 +254,7 @@ pub(super) fn resolve_native_request_uri(
 ) -> Result<http::Uri> {
     if let Some(ref target) = transport_hints.target {
         validate_target(target)?;
-        let target_str = std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        let target_str = crate::transport_hints::target_extension_str(target)?;
         // Same wire-target logic as the high-level helper: Hyper's legacy
         // client requires an absolute URI for connector selection, then
         // converts to origin-form on the wire. Preserve `*` support.
@@ -334,35 +332,19 @@ pub(super) async fn prepare_single_request(
     }
 
     if let Some(target) = &transport_hints.resolved_target {
-        let expected_port = url.port_or_known_default().ok_or_else(|| {
-            Error::InvalidResolvedTarget(
-                "resolved destinations require an HTTP or HTTPS URL".into(),
-            )
-        })?;
-        if target
-            .addresses()
-            .iter()
-            .any(|address| address.port() != expected_port)
-        {
-            return Err(Error::InvalidResolvedTarget(format!(
-                "all resolved destinations must use the URL's effective port {expected_port}"
-            )));
-        }
+        crate::http_origin::validate_url_effective_port(
+            crate::http_origin::EffectivePortSubject::ResolvedDestination,
+            &url,
+            target.addresses(),
+        )?;
     }
 
     if let Some(target) = &proxied_target {
-        let expected_port = url.port_or_known_default().ok_or_else(|| {
-            Error::InvalidResolvedTarget("proxied destinations require an HTTP or HTTPS URL".into())
-        })?;
-        if target
-            .addresses()
-            .iter()
-            .any(|address| address.port() != expected_port)
-        {
-            return Err(Error::InvalidResolvedTarget(format!(
-                "all proxied destinations must use the URL's effective port {expected_port}"
-            )));
-        }
+        crate::http_origin::validate_url_effective_port(
+            crate::http_origin::EffectivePortSubject::ProxiedDestination,
+            &url,
+            target.addresses(),
+        )?;
     }
 
     #[cfg(feature = "tls-rustls")]
@@ -451,29 +433,23 @@ pub(super) async fn prepare_single_request(
 
     #[cfg(feature = "advanced-routing")]
     if inner.config.dialer.is_some() {
-        if transport_hints.resolved_target.is_some() {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with caller-supplied resolved destinations".into(),
-            ));
-        }
-        if inner.direct_connector_config.is_some() {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with local-address or socket-option routing".into(),
-            ));
-        }
-        if inner.config.uds_configured {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with Unix-domain routing".into(),
-            ));
-        }
-        #[cfg(feature = "http3")]
-        if matches!(
-            inner.config.http_version_policy,
-            crate::HttpVersionPolicy::Http3Only
-        ) {
-            return Err(Error::Unsupported(
-                "custom dialing is incompatible with HTTP/3".into(),
-            ));
+        let arms = super::custom_dialing::CustomDialingState {
+            has_resolved_target: transport_hints.resolved_target.is_some(),
+            has_local_address_or_socket_options: inner.direct_connector_config.is_some(),
+            has_uds: inner.config.uds_configured,
+            #[cfg(feature = "http3")]
+            is_http3_only: matches!(
+                inner.config.http_version_policy,
+                crate::HttpVersionPolicy::Http3Only
+            ),
+            #[cfg(not(feature = "http3"))]
+            is_http3_only: false,
+            // The built-in-proxy arm belongs to the dispatch boundary, which
+            // runs after this phase; see `pipeline::send_single_request`.
+            has_built_in_proxy: None,
+        };
+        if let Some(conflict) = super::custom_dialing::custom_dialing_conflict(arms) {
+            return Err(conflict.error());
         }
     }
 
@@ -484,7 +460,6 @@ pub(super) async fn prepare_single_request(
                 Some(ref proxy_config) => {
                     let is_tunnel = url.scheme() == "https";
                     OriginKey::from_url_with_proxy_scheme(
-                        url.scheme(),
                         &url,
                         proxy_config.host(),
                         Some(proxy_config.port()?),
@@ -492,12 +467,12 @@ pub(super) async fn prepare_single_request(
                         is_tunnel,
                     )
                 }
-                None => OriginKey::from_url(url.scheme(), &url),
+                None => OriginKey::from_url(&url),
             }
         }
         #[cfg(not(feature = "proxy"))]
         {
-            OriginKey::from_url(url.scheme(), &url)
+            OriginKey::from_url(&url)
         }
     } else {
         None

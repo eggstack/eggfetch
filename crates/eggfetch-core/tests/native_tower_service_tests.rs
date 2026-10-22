@@ -1,9 +1,13 @@
+// This target exercises the redirect-following client builder, which the lean profile compiles out.
+// It therefore requires `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     clippy::expect_used,
     clippy::unwrap_used,
     clippy::large_futures
 )]
+#![cfg(feature = "redirects")]
 
 //! Tests for the Tower adapter over the native frame-preserving body path.
 

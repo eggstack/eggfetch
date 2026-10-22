@@ -353,7 +353,10 @@ impl Response {
     ///
     /// Used by transports that parse the HTTP/1.x status line directly
     /// and can extract the original reason phrase.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the wire reason phrase is only set by the proxy and CONNECT transports, which are compiled out when the proxy feature is disabled"
+    )]
     pub(crate) fn set_wire_reason_phrase(&mut self, reason: Option<String>) {
         self.wire_reason_phrase = reason;
     }

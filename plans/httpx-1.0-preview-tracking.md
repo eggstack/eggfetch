@@ -108,3 +108,12 @@ Do not create automated polling, a new CI job, or a release watcher as part of t
 - [ ] a clear RC/stable implementation trigger is documented;
 - [ ] no unstable preview API has become an EggFetch compatibility promise;
 - [ ] any qualification-sensitive tooling changes occur before final parent-program freeze.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 16 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

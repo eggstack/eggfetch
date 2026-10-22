@@ -1076,3 +1076,12 @@ The implementing agent must report all of the following:
 - final compatibility designation.
 
 The intended closure is a narrow final correction: preserve the now-solid direct/UDS/SOCKS architecture, close the remaining HTTP proxy and environment-pattern contract gaps, correct the socket-option reference record, and leave the repository with one auditable Stage C qualification bound to one executable SHA.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 29 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

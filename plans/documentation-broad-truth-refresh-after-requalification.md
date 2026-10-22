@@ -619,3 +619,12 @@ The broad documentation truth refresh is complete only when:
 ## Closure statement
 
 After this plan closes, the repository should have one coherent documentation story: eggfetch is a Rust-native HTTP client platform with a native Python sync/async API and an exact-SHA-qualified, explicitly bounded HTTPX 0.28.1 asyncio compatibility facade. Requests migration should be documented as a practical migration path rather than a drop-in guarantee, and process/platform/release claims should match the checked-in normative policies and tooling.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 55 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

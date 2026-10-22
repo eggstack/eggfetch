@@ -21,6 +21,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(feature = "high-level-url")]
 //! Repeated-failure resource stabilization tests.
 //!
 //! Verifies that after repeated connection failures (connection refused,

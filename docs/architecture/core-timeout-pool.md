@@ -31,6 +31,14 @@ Timeouts are configured at two levels:
 
 Request-level overrides are per-field: only fields present in the request-level `Timeout` replace the corresponding client-level fields.
 
+The merge itself lives in the shared request-preparation builder
+(`pipeline::hop`), which both the lean single-hop path and the redirect
+loop call. There is exactly one merge site, so the per-field rule cannot
+diverge between the two request paths. The merged timeout is the hop's
+timeout: it is written onto the prepared hop request and passed to
+`send_single_request()`, which is the only owner of the remaining-total
+computation and the pool deadline.
+
 ### Implementation
 
 | Phase | Enforcement |
@@ -202,6 +210,37 @@ Port uses the scheme's default when not explicit. Examples:
 - `http://example.com` and `https://example.com` are independent.
 - `http://example.com:8080` is distinct from `http://example.com`.
 - Direct and proxied requests to the same destination have independent slots.
+
+#### One origin normalization
+
+`OriginKey::from_url()` (and the proxied `from_url_with_proxy_scheme()`)
+reduce through `http_origin::HttpOrigin::from_url()`, so the pool origin and
+the native origin share one rule:
+
+- the scheme must be HTTP or HTTPS;
+- the host must not be empty;
+- the host is ASCII-lowercased (no IDNA/punycode conversion is performed by
+  the core; native callers own that before building an `http::Uri`);
+- the port is the explicit port, or the scheme's default.
+
+`HttpOrigin::from_url()` returning `None` is a hard error for the caller (the
+URL is not a usable HTTP(S) origin). `OriginKey::from_url()` returning `None`
+is a soft degrade: the request simply has no pool key and falls back to the
+global permit. The two `None`s are deliberately not merged.
+
+The stricter rule changes no observable behavior: the high-level client
+rejects a non-HTTP(S) scheme at the client boundary
+(`Client::get("ftp://…")` fails before any request is built), so no such URL
+can reach the origin normalization.
+
+One residual divergence is measured and recorded rather than papered over:
+the high-level path builds the pool origin from the URL *host*
+(`url::Url::host_str()` returns the bracketed `[::1]` for IPv6), while the
+native path builds it from the URI *authority* (`http::Uri::host()` returns
+`[::1]`, which `HttpOrigin::from_uri()` strips to `::1`). The same IPv6
+endpoint therefore produces two different pool keys depending on the entry
+path. Changing that would alter pool keying, which is out of scope here;
+see `docs/residual-differences.md`.
 
 ### PoolGuard
 

@@ -4,7 +4,7 @@ from typing import Any, Self
 
 from eggfetch.compat.httpx import (
     Client as _HttpxClient,
-    Response,
+    Response as _HttpxResponse,
 )
 
 __description__: str
@@ -12,7 +12,13 @@ __title__: str
 __version__: str
 
 
-class Client(_HttpxClient): ...
+class Response(_HttpxResponse):
+    url: Any
+
+
+class Client(_HttpxClient):
+    def get(self, url: str, **kwargs: Any) -> Response: ...
+    def request(self, method: str, url: str, **kwargs: Any) -> Response: ...
 
 
 class AsyncClient:

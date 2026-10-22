@@ -517,7 +517,10 @@ impl TlsConfig {
     ///
     /// Returns an error if the trust store, client certificates, or
     /// protocol versions cannot be configured.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the QUIC client config is only built by the HTTP/3 transport, which is compiled out when the http3 feature is disabled"
+    )]
     pub(crate) fn build_quic_rustls_config(&self) -> Result<rustls::ClientConfig> {
         let root_store = self.build_root_store()?;
 

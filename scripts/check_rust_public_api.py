@@ -24,8 +24,16 @@ PROFILES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("--no-default-features", "--features", "standard-http1,tls-rustls"),
     ),
     (
+        "standard-http2-tls-rustls",
+        ("--no-default-features", "--features", "standard-http2,tls-rustls"),
+    ),
+    (
         "native-http1-tls-rustls",
         ("--no-default-features", "--features", "native-http1,tls-rustls"),
+    ),
+    (
+        "native-http2-tls-rustls",
+        ("--no-default-features", "--features", "native-http2,tls-rustls"),
     ),
     ("all-features", ("--all-features",)),
 )
@@ -124,7 +132,7 @@ def main() -> int:
 
     if not args.skip_semver:
         # The semver checker accepts a single feature set per invocation.  The
-        # exact snapshot loop above remains the stronger six-profile oracle;
+        # exact snapshot loop above remains the stronger eight-profile oracle;
         # the semver pass uses the default profile as its stable cross-check.
         _run_semver(semver, ())
 

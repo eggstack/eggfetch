@@ -1,3 +1,6 @@
+// This target exercises the custom `Dialer` trait, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -23,6 +26,7 @@
     clippy::cast_possible_truncation,
     clippy::uninlined_format_args
 )]
+#![cfg(all(feature = "advanced-routing", feature = "high-level-url"))]
 //! Hermetic Windows-TLS response-completeness reproducer and isolation matrix.
 //!
 //! Corrective fixture for `plans/implementation/core-transport-policy/006-`

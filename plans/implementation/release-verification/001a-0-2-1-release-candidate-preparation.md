@@ -152,19 +152,19 @@ candidate. Open/requalify first.
 
 ## 9. Acceptance criteria
 
-- [ ] all coordinated manifests/pyproject are exactly `0.2.1`;
-- [ ] internal dependency versions are coherent;
-- [ ] changelog contains an accurate `0.2.1` section;
-- [ ] `v0.2.0` remains untouched;
-- [ ] `v0.2.1` is absent before publication;
-- [ ] tag-to-current delta and Stage-C-to-candidate delta are classified;
-- [ ] Tier 1 green;
-- [ ] Tier 2 green;
-- [ ] Tier 3 green;
-- [ ] release/version topology validators green;
-- [ ] candidate worktree clean;
-- [ ] exact candidate SHA recorded;
-- [ ] Stage C disposition explicitly recorded.
+- [x] all coordinated manifests/pyproject are exactly `0.2.1`;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] internal dependency versions are coherent;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] changelog contains an accurate `0.2.1` section;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] `v0.2.0` remains untouched;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] `v0.2.1` is absent before publication;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] tag-to-current delta and Stage-C-to-candidate delta are classified;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] Tier 1 green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] Tier 2 green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] Tier 3 green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] release/version topology validators green;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] candidate worktree clean;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] exact candidate SHA recorded;— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
+- [x] Stage C disposition explicitly recorded.— Met. Basis: this plan's `Status:` line reads `closed`, and `plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md` records the candidate SHA `41757569123c0b8038550b956d8b244ab55094a6` and the per-criterion evidence for this milestone.
 
 ## 10. Closure
 
@@ -176,3 +176,20 @@ Record candidate SHA, version audit, both delta audits, Tier 1/2/3 results,
 Stage C disposition, and the explicit handoff to M002.
 
 After closure, M002 becomes the sole ready release task.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 13 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The plan's `Status: closed` marker is unchanged.
+
+Evidence is the closure record
+`plans/closure/release-verification/001a-0-2-1-release-candidate-preparation.md`,
+which records the immutable candidate SHA
+`41757569123c0b8038550b956d8b244ab55094a6` and the version audit, both delta
+audits, Tier 1/2/3 results and the Stage C disposition for this milestone.
+
+Scope note for the reader: these criteria describe the **0.2.1** release candidate.
+The coordinated public version has since advanced to **0.2.2**, so the
+version-specific criteria are green *as of the recorded 0.2.1 candidate*, not
+against the current `0.2.2` tree.

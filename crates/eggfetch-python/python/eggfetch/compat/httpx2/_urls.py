@@ -66,10 +66,70 @@ class Origin:
 class URL(_BaseURL):
     """HTTPX2-compatible URL with ``origin`` property."""
 
+    __slots__ = ()
+
+    def __new__(cls, url="", *, base_url=None):
+        """Return an httpx2 ``URL`` even when handed a 0.28.1 ``URL``.
+
+        The 0.28.1 constructor returns its argument unchanged when that
+        argument is already a ``URL``.  Inherited unchanged, that would hand
+        a 0.28.1 URL back to an httpx2 caller, and a 0.28.1 URL has no
+        ``origin``.  A foreign URL is adopted with its parsed parts copied
+        verbatim, exactly as :func:`_as_httpx2_url` does, so the result is an
+        httpx2 URL without re-parsing.
+        """
+        if isinstance(url, _BaseURL) and not isinstance(url, cls):
+            instance = object.__new__(cls)
+            instance._parts = url._parts
+            instance._raw = url._raw
+            return instance
+        return super().__new__(cls, url, base_url=base_url)
+
     @property
     def origin(self) -> Origin:
         """Return the URL origin as an immutable, hashable ``Origin``."""
         return Origin(self)
+
+    def copy_with(self, url=None, params=None):
+        """Return a copy of this URL as an httpx2 ``URL``.
+
+        The 0.28.1 class rebuilds copies with its own ``URL`` class, which
+        would drop ``origin`` from the copy.
+        """
+        return _as_httpx2_url(super().copy_with(url=url, params=params))
+
+    def join(self, other: "URL") -> "URL":
+        """Resolve *other* against *self*, returning an httpx2 ``URL``."""
+        return _as_httpx2_url(super().join(other))
+
+
+def _as_httpx2_url(value) -> URL:
+    """Return *value* as an httpx2 :class:`URL`.
+
+    Mirrors the 0.28.1 URL coercion: a 0.28.1 URL is adopted with its
+    parsed parts unchanged, anything else is parsed by the httpx2 ``URL``
+    class itself.  The httpx2 facade never hands out a URL without
+    ``origin``.
+    """
+    if isinstance(value, URL):
+        return value
+    if isinstance(value, _BaseURL):
+        adopted = object.__new__(URL)
+        adopted._parts = value._parts
+        adopted._raw = value._raw
+        return adopted
+    return URL(value)
+
+
+def _upgrade_httpx2_url(value):
+    """Upgrade a 0.28.1 URL to an httpx2 URL, leaving other values alone.
+
+    Used where the 0.28.1 class copies a foreign ``request.url`` verbatim
+    instead of coercing it, so a non-URL value has to survive unchanged.
+    """
+    if isinstance(value, _BaseURL):
+        return _as_httpx2_url(value)
+    return value
 
 
 __all__ = ["Origin", "QueryParams", "URL"]

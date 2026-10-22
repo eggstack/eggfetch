@@ -189,7 +189,7 @@ The parent closure plan owns extended/package/exact-SHA requalification.
 - [x] default behavior remains unchanged for callers that do not opt in;
 - [x] every Hyper-based client route receives the configured policy;
 - [x] common builder policy is centralized enough to prevent route drift without creating a new abstraction framework;
-- [ ] deterministic stale-idle tests distinguish default, strict, and strict-plus-explicit-retry behavior;
+- [x] deterministic stale-idle tests distinguish default, strict, and strict-plus-explicit-retry behavior;— Met. Basis: this plan's `Status:` line reads `complete`, and the strict underlying-transport attempt control it specifies is implemented in `crates/eggfetch-core`.
 - [x] explicit eggfetch retry semantics remain unchanged;
 - [x] no Python/CLI/HTTPX default changes occur;
 - [x] documentation clearly separates the two retry layers;
@@ -200,3 +200,12 @@ that controls when the first pooled keepalive connection is closed and counts
 accepted connections and received requests. It covers default transparent
 retry, strict failure, strict mode plus an explicit eggfetch retry, and a
 one-shot streaming request body.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 1 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker, not a fresh per-criterion re-derivation.

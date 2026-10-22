@@ -1,4 +1,8 @@
+// This target exercises the custom `Dialer` trait and the retry policy builder, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and `logical-retry` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(missing_docs, clippy::large_futures)]
+#![cfg(all(feature = "advanced-routing", feature = "logical-retry"))]
 
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};

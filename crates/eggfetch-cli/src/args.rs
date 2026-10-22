@@ -6,7 +6,10 @@ use std::path::PathBuf;
 /// Eggfetch: a fast, modern HTTP client.
 #[derive(Parser)]
 #[command(name = "eggfetch", version, about, long_about = None)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "every bool here is a distinct clap switch; grouping them into nested option structs would change the command-line surface"
+)]
 pub(crate) struct Cli {
     /// Target URL.
     pub(crate) url: String,

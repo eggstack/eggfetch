@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: closed — M005 0.2.2 publication complete; steady state
+Status: active — M006 and M007 conditionally closed
 
 Long-term references:
 
@@ -209,6 +209,95 @@ GitHub Release `401746856` present, fresh Rust/Python install smoke green,
 and closure evidence recorded. One low-severity compatibility-fixture finding
 was routed to M003; no high-severity finding remains open.
 
+### Milestone 6 — Verification guard hardening
+
+Class: invariant. Status: ready.
+
+Implementation:
+`plans/implementation/release-verification/006-verification-guard-hardening.md`.
+
+Objective: close four defects in the repository's own verification tooling
+that currently let a regression pass unnoticed or let a release gate report
+success while doing nothing.
+
+Dependencies:
+- hard: none;
+- interface: `docs/verification-policy.md`, whose rule that Tier 2 "fails,
+  never skips" is extended from the toolchain gate to the downstream
+  portfolio;
+- interface: the bare-`RUSTFLAGS=` treatment that the Tier 1 contract matrix
+  already applies and documents.
+
+Deliverable boundary: the lint-suppression guard matches blanket lints in any
+attribute position including the repository's own `reason = "…"` idiom,
+covers `expect`, scans `fuzz/`, and gains a `--self-test` that asserts it
+*rejects* what it must reject; the downstream Tier 2 step fails rather than
+skips, or gains a repository-owned artifact producer, and no longer refers to
+a workflow that does not exist; `tier2_feature_matrix` and `tier2_msrv` apply
+the bare-`RUSTFLAGS=` treatment so Tier 2's outcome no longer depends on the
+caller's environment; the H3 qualification runner's self-test runs in Tier 1
+without any network access.
+
+User or operator value: four states that currently report success while
+providing no signal stop doing so, and Tier 2 becomes environment
+independent.
+
+Exit conditions: the lint guard's self-test is green in Tier 1 and fails when
+the guard is broken; the downstream step does not report success while
+skipping; Tier 2's feature matrix and MSRV gate pass with and without
+`RUSTFLAGS="-D warnings"` while the all-features check still fails on a
+warning; the H3 self-test runs in Tier 1 with no H3 conformance claim; CI
+remains a single job; Tier 1/2 green with renewed exact-SHA binding.
+
+Deferred: H3 graduation and any network-dependent H3 qualification, which
+remain separately gated; adding any CI job or matrix.
+
+### Milestone 7 — Planning and documentation truthfulness hygiene
+
+Class: polish. Status: ready.
+
+Implementation:
+`plans/implementation/release-verification/007-planning-and-documentation-hygiene.md`.
+
+Objective: make the repository's planning and qualification records state
+what is actually true.
+
+Dependencies:
+- hard: release-verification M006 for the lint-suppression justification
+  pass, because M006 corrects the guard that should have caught it;
+- otherwise none; this is a records milestone and must not delay the
+  correctness milestones.
+
+Deliverable boundary: every unticked acceptance criterion under `plans/` is
+classified and dispositioned, with `plans/core-private-module-decomposition.md`
+handled individually because another plan cites it as a prerequisite; the
+pending-maintainer-actions section returns to the top of `plans/README.md`
+and `AGENTS.md` becomes accurate again; `fuzz/Cargo.lock` is refreshed off the
+stale `eggfetch-core 0.1.0` pin; the compat profiles' historical SHA comment
+history moves out of the machine-read files into the canonical ledger with
+their machine-readable content byte-identical; the two near-identical httpx
+replacement packages are reconciled; every `allow`/`expect` attribute in
+`crates/*/src` carries a justification.
+
+User or operator value: a reader can rely on the planning records. At the
+baseline 83 plan files carry 2,197 unchecked acceptance criteria beside
+completion records, `AGENTS.md` points at a section that does not exist, and
+the compat profiles retain eleven historical SHAs in comments.
+
+Exit conditions: no plan file carries a complete execution record while
+retaining unticked boxes describing unmet conditions; `AGENTS.md` is accurate;
+`fuzz/Cargo.lock` records `eggfetch-core 0.2.2`; both profiles' machine-readable
+content is byte-identical; the replacement packages are reconciled with the
+publish guard and identity verification still passing; every suppression is
+justified with no lint set changed; Tier 1/2 green.
+
+Deferred: moving the 249 flat legacy plan files into `plans/archive/`; the
+CLI's 581-line `run()` decomposition, which needs a maintainer ownership
+decision because no subsystem roadmap owns the CLI adapter; the `tracing`
+feature's missing test and consumer, which is a capability decision; the Node
+adapter's missing tests and the FFI's missing capabilities, which are
+registered gated futures.
+
 ## 8. Cross-cutting requirements
 
 Security preflight live before publication; Trusted Publishing (OIDC) for
@@ -239,6 +328,27 @@ public version. M003 remains standing process, never "complete," and now holds
 one low-severity fixture finding. HTTPX 1.0 and H3 retain their independent
 external gates.
 
+The subsystem reopens for M006 and M007, registered from a repository audit
+that found the lint-suppression guard unable to match the repository's own
+suppression idiom, a release-blocking downstream gate that silently skipped,
+a Tier 2 feature matrix that failed under the flag CI sets, an H3 tooling
+self-test that no tier ran, and planning records whose acceptance criteria
+were never evaluated.
+
+**Standing Stage C intake (added 2026-10-22).** Four milestones were
+implemented and conditionally closed outside this subsystem on 2026-10-22:
+TLS/protocol M005, python-httpx-compat M004 and M005, and core transport
+M008. Each changes executable inputs, so each invalidates the live Stage C
+binding, and none is committed yet. The rebinding work — commit the tree,
+freeze the SHA, run the full Tier 1 / Tier 2 / Tier 3 qualification on it,
+and rebind both HTTPX profiles in `compat/httpx/0.28.1/profile.toml` and
+`compat/httpx2/2.12.0/profile.toml` plus the ledger's Stage C SHA — is
+release-verification intake work and is tracked as pending maintainer action 2
+in `plans/registry.md`. It is deliberately **not** folded into M006 or M007:
+M006 hardens the gates and M007 is polish, while the rebinding is a
+qualification run against a specific frozen commit and must not be coupled to
+either.
+
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
@@ -250,3 +360,5 @@ external gates.
 | M004 0.2.1 tagged release finalization | closed | `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |
 | M005 0.2.2 M007 publication | closed | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | `plans/closure/release-verification/005-0-2-2-m007-publication.md` | — |
+| M006 verification guard hardening | conditionally closed | `plans/implementation/release-verification/006-verification-guard-hardening.md` | `plans/closure/release-verification/006-verification-guard-hardening.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M007 may proceed. |
+| M007 planning/documentation truthfulness hygiene | conditionally closed | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. |

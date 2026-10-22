@@ -15,8 +15,11 @@ dependencies = ["eggfetch>=0.1.0"]
 [project.urls]
 Homepage = "https://github.com/eggstack/eggfetch"
 
-[tool.setuptools.packages.find]
-include = ["httpx*"]
+[tool.setuptools]
+# The runtime code lives once, in the shared replacement source. This package
+# maps its `httpx` package at it instead of keeping a second copy.
+packages = ["httpx"]
+package-dir = {httpx = "../httpx-replacement-source/httpx"}
 
 [tool.setuptools.package-data]
 httpx = ["py.typed"]

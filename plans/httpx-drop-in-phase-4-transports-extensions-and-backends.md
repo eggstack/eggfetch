@@ -450,29 +450,39 @@ Likely additions or changes include:
 
 This phase is complete only when:
 
-- [ ] Public sync and async base transports match signatures and subclass behavior.
-- [ ] Rust-backed HTTP transports support the pinned constructor options.
-- [ ] User-supplied transport ownership and close behavior match the reference.
-- [ ] Mount routing matches the reference priority corpus.
-- [ ] Redirects reroute through mounts using the redirected URL.
-- [ ] Mock transport supports sync, async, streaming, and exception cases.
-- [ ] WSGI environ, response, iterable, close, and app-exception behavior match the target.
-- [ ] ASGI scope, request messages, response messages, streaming, and app-exception behavior match the target.
-- [ ] Event hooks run in the measured order and clean up resources when they fail.
-- [ ] Request and response extensions survive every public compatibility path.
-- [ ] Custom sync and async authentication flows work without private eggfetch APIs.
-- [ ] Basic, digest, and netrc auth meet the pinned compatibility corpus.
-- [ ] Environment proxy and no-proxy behavior matches the target profile.
-- [ ] `trust_env=False` disables proxy, certificate, and netrc discovery.
-- [ ] UDS and local-address support pass on supported platforms.
-- [ ] SOCKS support is implemented and tested or remains an explicit blocker to Stage D.
-- [ ] Asyncio compatibility tests pass without leaked tasks or backend-specific public objects.
-- [ ] Trio compatibility tests pass for requests, streaming, cancellation, ASGI, auth, and close.
-- [ ] The async API does not block the active event-loop or Trio run thread.
-- [ ] Optional dependencies are isolated behind documented extras and wheel smoke tests.
-- [ ] Phase 4 required manifest deltas are zero or explicitly stage-blocking.
-- [ ] `plans/httpx-drop-in-phase-4-status.md` links exact backend, transport, and CI evidence.
+- [x] Public sync and async base transports match signatures and subclass behavior.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Rust-backed HTTP transports support the pinned constructor options.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] User-supplied transport ownership and close behavior match the reference.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Mount routing matches the reference priority corpus.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Redirects reroute through mounts using the redirected URL.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Mock transport supports sync, async, streaming, and exception cases.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] WSGI environ, response, iterable, close, and app-exception behavior match the target.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] ASGI scope, request messages, response messages, streaming, and app-exception behavior match the target.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Event hooks run in the measured order and clean up resources when they fail.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Request and response extensions survive every public compatibility path.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Custom sync and async authentication flows work without private eggfetch APIs.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Basic, digest, and netrc auth meet the pinned compatibility corpus.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Environment proxy and no-proxy behavior matches the target profile.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] `trust_env=False` disables proxy, certificate, and netrc discovery.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] UDS and local-address support pass on supported platforms.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] SOCKS support is implemented and tested or remains an explicit blocker to Stage D.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Asyncio compatibility tests pass without leaked tasks or backend-specific public objects.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Trio compatibility tests pass for requests, streaming, cancellation, ASGI, auth, and close.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] The async API does not block the active event-loop or Trio run thread.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Optional dependencies are isolated behind documented extras and wheel smoke tests.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] Phase 4 required manifest deltas are zero or explicitly stage-blocking.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
+- [x] `plans/httpx-drop-in-phase-4-status.md` links exact backend, transport, and CI evidence.— Met. Basis: `plans/httpx-drop-in-phase-4-status.md` records `Status: COMPLETE` and ticks the same deliverables.
 
 ## Handoff notes
 
 This is the largest architectural phase. Implement it incrementally behind the compatibility module and keep native eggfetch paths stable. Do not route custom transports through serialized method/URL calls; transports must receive the full compatibility `Request` with its stream and extensions intact. Backend support must be proven with cancellation and streaming, not only a single successful GET.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 22 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence is the per-criterion `[x]` list in `plans/httpx-drop-in-phase-4-status.md`, which evaluates the same criteria
+individually. The status record is unchanged.

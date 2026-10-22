@@ -17,7 +17,10 @@ use crate::runtime::blocking_send;
 #[no_mangle]
 pub unsafe extern "C" fn eggfetch_client_new() -> *mut ClientHandle {
     crate::ffi_guard!(ptr::null_mut(), {
-        Box::into_raw(Box::new(ClientHandle(Client::new())))
+        Box::into_raw(Box::new(ClientHandle {
+            client: Client::new(),
+            missing_capability: None,
+        }))
     })
 }
 
@@ -64,7 +67,7 @@ pub unsafe extern "C" fn eggfetch_client_request(
         let Ok(http_method) = method_str.parse() else {
             return ptr::null_mut();
         };
-        match client.0.request(http_method, &url_str) {
+        match client.client.request(http_method, &url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -88,7 +91,7 @@ pub unsafe extern "C" fn eggfetch_client_get(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.get(&url_str) {
+        match client.client.get(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -112,7 +115,7 @@ pub unsafe extern "C" fn eggfetch_client_post(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.post(&url_str) {
+        match client.client.post(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -136,7 +139,7 @@ pub unsafe extern "C" fn eggfetch_client_put(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.put(&url_str) {
+        match client.client.put(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -160,7 +163,7 @@ pub unsafe extern "C" fn eggfetch_client_patch(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.patch(&url_str) {
+        match client.client.patch(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -184,7 +187,7 @@ pub unsafe extern "C" fn eggfetch_client_delete(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.delete(&url_str) {
+        match client.client.delete(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -208,7 +211,7 @@ pub unsafe extern "C" fn eggfetch_client_head(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.head(&url_str) {
+        match client.client.head(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -232,7 +235,7 @@ pub unsafe extern "C" fn eggfetch_client_options(
         let Some(url_str) = crate::handle::cstr_to_string(url) else {
             return ptr::null_mut();
         };
-        match client.0.options(&url_str) {
+        match client.client.options(&url_str) {
             Ok(rb) => Box::into_raw(Box::new(RequestHandle(Some(rb)))),
             Err(_) => ptr::null_mut(),
         }
@@ -307,6 +310,14 @@ pub unsafe extern "C" fn eggfetch_client_send(
 
             // Send the request and read the body in a single async block to
             // avoid cross-runtime issues with streaming body handles.
+            //
+            // Fail closed first: a strict HTTP-version policy this build
+            // cannot honor is rejected with a named cause before any
+            // connection is attempted, instead of silently negotiating a
+            // different protocol.
+            if crate::handle::reject_missing_capability(client, err_out) {
+                return ptr::null_mut();
+            }
             let result = blocking_send(async move {
                 let mut resp = Box::pin(rb.send()).await?;
                 let status = resp.status().as_u16();

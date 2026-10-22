@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: closed — M004 caller-owned H3 datagram routing implemented and fully qualified. H3 graduation remains separately gated
+Status: active — M005 registered and dependency-ready. H3 graduation remains separately gated
 
 Long-term references:
 
@@ -14,6 +14,7 @@ Related ADRs:
 - `plans/adrs/ADR-0004-proxy-fallback-total-deadline.md`
 - `plans/adrs/ADR-0005-frozen-body-feature-containment.md`
 - `plans/adrs/ADR-0007-caller-owned-h3-datagram-routing.md`
+- `plans/adrs/ADR-0008-uncompiled-protocol-request-semantics.md`
 
 ## 1. Purpose and ownership boundary
 
@@ -178,6 +179,55 @@ Tier 1/2/3 green, exact-SHA Stage C renewal, closure record accepted.
 Deferred: per-request route override, MASQUE/CONNECT-UDP, QUIC migration,
 0-RTT, H3 application datagrams and graduation.
 
+### Milestone 5 — Uncompiled-protocol fail-closed at adapter boundaries
+
+Class: capability. Status: conditionally closed.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md`.
+
+Closure record:
+`plans/closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md`.
+
+Accepted ADR:
+`plans/adrs/ADR-0008-uncompiled-protocol-request-semantics.md` (accepted
+2026-10-22).
+
+Objective: make a strict protocol request that the built artifact cannot
+honor fail closed, with an error that names the missing capability, at every
+adapter boundary that exposes a user-facing protocol control.
+
+Dependencies:
+- hard: none;
+- interface: accepted ADR-0008;
+- interface: the engine's documented native-caller downgrade, which stays
+  unchanged.
+
+Deliverable boundary: `eggfetch-cli --http2` and `--http3` fail with a
+capability-naming error on a build without the capability instead of
+silently downgrading or reporting a missing client; the CLI expresses
+`http2`/`http3` as crate features forwarding to the core features;
+`eggfetch_client_builder_http_version` rejects a strict policy the linked
+build cannot honor; the engine distinguishes "no HTTP/3 support" from "no
+usable client" without a new error variant; `docs/architecture/cli.md` states
+the implemented behavior.
+
+User or operator value: a user who asks for HTTP/2 or HTTP/3 through the CLI
+or the FFI either gets that protocol or a clear error naming what the build
+lacks. At the baseline `--http2` silently issues HTTP/1.1 and `--http3`
+reports "HTTP client not available for this protocol", which misreports a
+build capability as a transport failure.
+
+Exit conditions: strict requests fail closed with a named cause in both
+adapters; `Auto` still downgrades to HTTP/1.1 without failing; the engine's
+native-caller downgrade contract unchanged; the default CLI feature set
+unchanged and the new features opt-in; public API oracle unchanged; Tier
+1/2/3 green with renewed exact-SHA Stage C binding for both profiles.
+
+Deferred: H3 graduation, which remains separately gated; enabling `http2` or
+`http3` in the CLI by default, which is a separate capability decision; the
+FFI's missing non-protocol capabilities.
+
 ## 8. Cross-cutting requirements
 
 Trust construction explicit per profile; `Proxy(headers=…)` rides the proxy
@@ -204,6 +254,21 @@ on `ubuntu-latest` / Python 3.12.14 (run `37511735210`). The subsystem holds at
 steady state with H3 still experimental. Graduation remains controlled by the separate Phase
 4 evidence trigger, and no future milestone is unblocked by this closure.
 
+The subsystem reopens for M005, registered from a repository audit that found
+the CLI and FFI silently downgrading a strict protocol request the linked
+build cannot honor, and the CLI reporting a missing Hyper client where the
+real cause is a missing HTTP/3 capability. M005 changes no engine
+negotiation logic and does not affect H3's experimental status.
+
+M005 was implemented and is **conditionally closed** on 2026-10-22: the CLI
+`--http2` silent downgrade and the CLI `--http3` misleading error are closed,
+and the FFI's unguarded strict policy now fails closed. The engine's
+documented native-caller downgrade is unchanged; only the `Http3Only` error
+text and classification changed, with no new error variant and no new public
+surface. Its outstanding condition is the Stage C rebinding and the frozen-SHA
+Tier 1/2/3 gates, because the milestone changes Rust sources, tests, and crate
+manifests.
+
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
@@ -212,3 +277,4 @@ steady state with H3 still experimental. Graduation remains controlled by the se
 | M002 route pinning/egress | closed | legacy program §7 | legacy closure | — |
 | M003 H3 retained-experimental | closed | legacy program §7 | legacy + evidence ledger | Graduation evidence (gated future) |
 | M004 caller-owned H3 datagram routing | closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/2/3 green including full compat suite (1934 passed) + API manifests on `ubuntu-latest`/3.12.14, run `37511735210`; H3 stays experimental |
+| M005 uncompiled-protocol fail-closed | conditionally closed | `implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | `closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | ADR-0008 accepted; Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates; maintainer decision on a strict-HTTP/3 FFI policy value |

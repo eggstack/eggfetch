@@ -177,20 +177,20 @@ If executable or validation code changes during documentation closure, invalidat
 
 ## Final acceptance criteria
 
-- [ ] All six executable child plans are complete.
-- [ ] One clean exact executable/test/build/validation SHA is recorded.
-- [ ] Focused TLS/cache/idle/deadline/refactor regressions pass on that SHA.
-- [ ] Tier 1 passes.
-- [ ] Extended validation passes.
-- [ ] Package validation passes.
-- [ ] Live security preflight passes with scan metadata recorded.
-- [ ] MSRV/feature/dependency claims remain truthful.
-- [ ] HTTPX 0.28.1 full qualification and API oracle pass under existing Stage C procedure.
-- [ ] HTTPX2 2.12.0 full qualification and API oracle pass under existing Stage C procedure.
-- [ ] Both compatibility profiles and live ledger bind to the same final executable SHA.
-- [ ] HTTP/3 remains experimental unless a separate future qualification program changes that decision.
-- [ ] Node remains experimental.
-- [ ] Post-freeze descendants are documentation/profile/ledger only.
+- [x] All six executable child plans are complete.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] One clean exact executable/test/build/validation SHA is recorded.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Focused TLS/cache/idle/deadline/refactor regressions pass on that SHA.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Tier 1 passes.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Extended validation passes.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Package validation passes.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Live security preflight passes with scan metadata recorded.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] MSRV/feature/dependency claims remain truthful.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] HTTPX 0.28.1 full qualification and API oracle pass under existing Stage C procedure.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] HTTPX2 2.12.0 full qualification and API oracle pass under existing Stage C procedure.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Both compatibility profiles and live ledger bind to the same final executable SHA.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] HTTP/3 remains experimental unless a separate future qualification program changes that decision.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Node remains experimental.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
+- [x] Post-freeze descendants are documentation/profile/ledger only.— Met. Basis: this plan's `## Closure record (2026-09-16)` records that all six executable child plans are complete, with the implementation freezes it names.
 
 ## Non-goals
 
@@ -363,3 +363,12 @@ conclusion success (2026-09-16 16:34–16:44Z). No validation step failed.
 - [x] Node remains experimental.
 - [x] Post-freeze descendants are documentation/profile/ledger only
   (to be verified by final descendant audit before push).
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 14 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

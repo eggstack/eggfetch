@@ -23,3 +23,28 @@ The stable compile contracts are in
 normal profile checks.  Do not regenerate a snapshot to accept an accidental
 API change; an intentional public change requires a separate versioned API
 plan.
+
+## Profiles
+
+The oracle freezes eight profiles — every supported `eggfetch-core` profile is
+compiled in isolation, so none is covered only as a side effect of
+`--all-features`:
+
+| Snapshot | Cargo feature set |
+| --- | --- |
+| `default.txt` | default features |
+| `http1-tls-rustls.txt` | `--no-default-features --features http1,tls-rustls` |
+| `http2-tls-rustls.txt` | `--no-default-features --features http2,tls-rustls` |
+| `standard-http1-tls-rustls.txt` | `--no-default-features --features standard-http1,tls-rustls` |
+| `standard-http2-tls-rustls.txt` | `--no-default-features --features standard-http2,tls-rustls` |
+| `native-http1-tls-rustls.txt` | `--no-default-features --features native-http1,tls-rustls` |
+| `native-http2-tls-rustls.txt` | `--no-default-features --features native-http2,tls-rustls` |
+| `all-features.txt` | `--all-features` |
+
+`standard-http2-tls-rustls.txt` and `native-http2-tls-rustls.txt` are the HTTP/2
+members of the lean and native families; they were added alongside the
+`standard-http1`/`native-http1` snapshots so that the H2 profiles are frozen
+like the H1 ones.  Each H1/H2 pair selects a different transport but exposes
+the same public surface — the transport difference is private — so the two
+snapshots of each pair are byte-identical.  The lean and native families are
+not identical to each other, so the oracle does discriminate profile surfaces.

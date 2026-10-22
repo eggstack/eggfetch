@@ -434,35 +434,84 @@ cargo run -p eggfetch-bench --bin resource_monitor
 
 Long-running profiles should have explicit scripts and produce JSON reports.
 
+## Open items (2026-10-22)
+
+The acceptance criteria listed below are **not met** and remain open. They are
+recorded here so this plan's linked status record and its unticked boxes tell the
+same story. The original boxes stay unticked and point at the open-item IDs
+below. Nothing here was waived.
+
+Basis: `plans/httpx-drop-in-phase-1-status.md` records `Status: partially
+complete` against SHA `c815d59c6a132228fb4d4784b29074bfb71ba752`. Seven of the
+nine items below are the ones that status record itself lists under
+`### Incomplete` and `### Not started`; the remaining two were never evaluated
+by that status record at all.
+
+- **OI-1** — default compatibility clients are bounded to the reference
+  connection and keep-alive limits. (Not evaluated by the phase-1 status
+  record.)
+- **OI-2** — pool timeout behavior is proven under exhausted capacity. (Not
+  evaluated by the phase-1 status record.)
+- **OI-3** — context manager exit has tested socket and stream behavior.
+  (Status record: close/race tests cover concurrent requests, but there are no
+  dedicated socket-level assertions after context exit.)
+- **OI-4** — close/request races do not panic, deadlock, or leak resources.
+  (Status record: the race scenarios are exercised, but there are no RSS/FD-count
+  leak assertions in those tests.)
+- **OI-5** — interpreter shutdown tests pass on Linux, macOS, and Windows.
+  (Status record: subprocess shutdown tests exist and verify macOS only.)
+- **OI-6** — repeated-failure resource tests stabilize within committed
+  thresholds. (Status record: RSS stabilization is measured on Linux only;
+  macOS returns 0 for RSS and therefore has no check.)
+- **OI-7** — scheduled soak profiles produce retained machine-readable evidence.
+  (Status record: `soak_test.py` produces JSON, but it is not integrated into CI
+  and no CI run retains the output.)
+- **OI-8** — no acceptance criterion is satisfied solely by documentation or a
+  unit test that bypasses the real connector. (Status record:
+  `connect_timeout.rs` unit tests use `MockConnector`.)
+- **OI-9** — the phase-1 status file links a green required CI run and exact SHA.
+  (Status record: no CI run is linked.)
+
 ## Acceptance criteria
 
 This phase is complete only when:
 
-- [ ] DNS resolution is bounded by the configured connect deadline.
-- [ ] TCP connection establishment is bounded by the configured connect deadline.
-- [ ] Direct TLS handshake is bounded by the configured connect deadline.
-- [ ] Proxy TCP, CONNECT, and tunneled TLS phases are bounded and correctly classified.
-- [ ] Total timeout is an absolute envelope across redirects and retries.
-- [ ] Timeout exceptions map to the correct compatibility classes and retain request context.
-- [ ] Compatibility defaults match HTTPX 0.28.1's measured timeout policy.
-- [ ] Explicit `timeout=None` disables timeout enforcement as expected.
-- [ ] A core limits model distinguishes logical request limits from physical pool limits.
-- [ ] Python exposes HTTPX-compatible `Limits` construction and defaults.
-- [ ] Default compatibility clients are bounded to the reference connection and keep-alive limits.
-- [ ] Pool timeout behavior is proven under exhausted capacity.
-- [ ] `close()` deterministically releases client and runtime-owned resources.
-- [ ] `aclose()` deterministically releases client-owned resources.
-- [ ] Context manager exit has tested socket and stream behavior.
-- [ ] Shared sync-client use from multiple threads is safe and compatible.
-- [ ] Shared async-client use from many tasks is safe and non-serialized except by configured limits.
-- [ ] Close/request races do not panic, deadlock, or leak resources.
-- [ ] Interpreter shutdown tests pass on Linux, macOS, and Windows.
-- [ ] `trust_env` matches the compatibility profile and `trust_env=False` isolates the process environment.
-- [ ] Repeated-failure resource tests stabilize within committed thresholds.
-- [ ] Scheduled soak profiles produce retained machine-readable evidence.
-- [ ] No acceptance criterion is satisfied solely by documentation or a unit test that bypasses the real connector.
-- [ ] `plans/httpx-drop-in-phase-1-status.md` links a green required CI run and exact SHA.
+- [x] DNS resolution is bounded by the configured connect deadline. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] TCP connection establishment is bounded by the configured connect deadline. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Direct TLS handshake is bounded by the configured connect deadline. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Proxy TCP, CONNECT, and tunneled TLS phases are bounded and correctly classified. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Total timeout is an absolute envelope across redirects and retries. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Timeout exceptions map to the correct compatibility classes and retain request context. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Compatibility defaults match HTTPX 0.28.1's measured timeout policy. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Explicit `timeout=None` disables timeout enforcement as expected. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] A core limits model distinguishes logical request limits from physical pool limits. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Python exposes HTTPX-compatible `Limits` construction and defaults. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [ ] Default compatibility clients are bounded to the reference connection and keep-alive limits. — Deferred (OI-1).
+- [ ] Pool timeout behavior is proven under exhausted capacity. — Deferred (OI-2).
+- [x] `close()` deterministically releases client and runtime-owned resources. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] `aclose()` deterministically releases client-owned resources. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [ ] Context manager exit has tested socket and stream behavior. — Deferred (OI-3).
+- [x] Shared sync-client use from multiple threads is safe and compatible. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [x] Shared async-client use from many tasks is safe and non-serialized except by configured limits. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [ ] Close/request races do not panic, deadlock, or leak resources. — Deferred (OI-4).
+- [ ] Interpreter shutdown tests pass on Linux, macOS, and Windows. — Deferred (OI-5).
+- [x] `trust_env` matches the compatibility profile and `trust_env=False` isolates the process environment. — Met. Basis: `plans/httpx-drop-in-phase-1-status.md` records this criterion as `[x]` with its own evidence.
+- [ ] Repeated-failure resource tests stabilize within committed thresholds. — Deferred (OI-6).
+- [ ] Scheduled soak profiles produce retained machine-readable evidence. — Deferred (OI-7).
+- [ ] No acceptance criterion is satisfied solely by documentation or a unit test that bypasses the real connector. — Deferred (OI-8).
+- [ ] `plans/httpx-drop-in-phase-1-status.md` links a green required CI run and exact SHA. — Deferred (OI-9).
 
 ## Handoff notes
 
 Implementation should prefer architectural correction over adapter-level timeout wrappers. A Python timer around an opaque request does not establish independently correct connect, pool, read, and write semantics. Likewise, a logical semaphore is not an adequate substitute for actual transport pool limits. The status document must explain how each public control maps to the transport behavior it claims to govern.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 24 acceptance criteria above were re-evaluated against the current tree: 15 are
+**met** and 9 are **not met, deferred**. None is superseded or never applicable.
+Evidence is cited inline with each criterion.
+
+The 15 met criteria are the ones `plans/httpx-drop-in-phase-1-status.md` records as
+`[x]` with its own evidence. The 9 open criteria are recorded in the dated
+open-items section above, which also states, for each, why it is still open. The
+phase-1 status record itself is unchanged.

@@ -113,3 +113,12 @@ Do not expand this program into:
 Use the existing repository validation tiers and focused tests. `./scripts/check.sh` is mandatory for every executable commit. Use `./scripts/check.sh extended` at major plan closure points when practical, but the authoritative full exact-SHA qualification occurs in Plan 5.
 
 If a refactor changes compatibility-sensitive code, run the directly affected HTTPX compatibility tests immediately; do not defer discovering semantic drift until final qualification.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 12 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

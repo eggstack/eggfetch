@@ -176,7 +176,10 @@ pub fn accept_encoding_value() -> Option<&'static str> {
             // this sequence.
             #[allow(clippy::vec_init_then_push)]
             {
-                #[allow(unused_mut)]
+                #[allow(
+                    unused_mut,
+                    reason = "only the feature-gated codec pushes mutate this binding, so it is immutable when no codec is compiled in"
+                )]
                 let mut parts: Vec<&str> = Vec::new();
 
                 #[cfg(feature = "compression-gzip")]
@@ -367,7 +370,10 @@ pub fn decompress_stream(
 /// decompression fails. Returns [`Error::DecodedBodyTooLarge`] or
 /// [`Error::DecompressionRatioExceeded`] if the decoded body exceeds
 /// the configured limits.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the buffered decoder keeps the limit validation, the per-coding decode branches and the final size/ratio verdicts in one linear pass"
+)]
 pub fn decompress_buffered(
     data: &[u8],
     content_encoding: &str,
@@ -405,7 +411,10 @@ pub fn decompress_buffered(
     let compressed_len = data.len();
     let ratio_limit = limit.max_decompression_ratio.and_then(|ratio| {
         if ratio.is_finite() && ratio > 0.0 {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "the byte count only feeds a ratio budget, and f64 rounding beyond 2^53 bytes cannot change the limit"
+            )]
             let limit = (compressed_len as f64 * ratio).ceil();
             #[allow(
                 clippy::cast_possible_truncation,
@@ -432,9 +441,15 @@ pub fn decompress_buffered(
     };
     let ratio_is_tighter = ratio_limit.is_some_and(|ratio| Some(ratio) == output_limit);
 
-    #[allow(unused_mut)]
+    #[allow(
+        unused_mut,
+        reason = "the buffer is reassigned only by the feature-gated decode branches, so it stays immutable when no codec is compiled in"
+    )]
     let mut current = bytes::Bytes::copy_from_slice(data);
-    #[allow(clippy::never_loop)]
+    #[allow(
+        clippy::never_loop,
+        reason = "every coding in the list is decoded in order and the body aborts through `?`/`return` instead of an explicit break"
+    )]
     for encoding in encodings.into_iter().rev() {
         match encoding {
             ContentCoding::Gzip | ContentCoding::Deflate => {
@@ -445,7 +460,10 @@ pub fn decompress_buffered(
                         sync_decode_flate2(&current, encoding, output_limit, ratio_is_tighter)?;
                     if let Some(max_ratio) = limit.max_decompression_ratio {
                         if layer_input_len > 0 {
-                            #[allow(clippy::cast_precision_loss)]
+                            #[allow(
+                                clippy::cast_precision_loss,
+                                reason = "the flate2 layer ratio only compares decoded against compressed bytes, where f64 rounding above 2^53 cannot flip the threshold"
+                            )]
                             let layer_ratio = current.len() as f64 / layer_input_len as f64;
                             if layer_ratio > max_ratio {
                                 return Err(Error::DecompressionRatioExceeded);
@@ -465,7 +483,10 @@ pub fn decompress_buffered(
                     current = sync_decode_brotli(&current, output_limit, ratio_is_tighter)?;
                     if let Some(max_ratio) = limit.max_decompression_ratio {
                         if layer_input_len > 0 {
-                            #[allow(clippy::cast_precision_loss)]
+                            #[allow(
+                                clippy::cast_precision_loss,
+                                reason = "the brotli layer ratio only compares decoded against compressed bytes, where f64 rounding above 2^53 cannot flip the threshold"
+                            )]
                             let layer_ratio = current.len() as f64 / layer_input_len as f64;
                             if layer_ratio > max_ratio {
                                 return Err(Error::DecompressionRatioExceeded);
@@ -485,7 +506,10 @@ pub fn decompress_buffered(
                     current = sync_decode_zstd(&current, output_limit, ratio_is_tighter)?;
                     if let Some(max_ratio) = limit.max_decompression_ratio {
                         if layer_input_len > 0 {
-                            #[allow(clippy::cast_precision_loss)]
+                            #[allow(
+                                clippy::cast_precision_loss,
+                                reason = "the zstd layer ratio only compares decoded against compressed bytes, where f64 rounding above 2^53 cannot flip the threshold"
+                            )]
                             let layer_ratio = current.len() as f64 / layer_input_len as f64;
                             if layer_ratio > max_ratio {
                                 return Err(Error::DecompressionRatioExceeded);
@@ -512,7 +536,10 @@ pub fn decompress_buffered(
         .is_some_and(|max| current.len() > max);
     let ratio_violated = limit.max_decompression_ratio.is_some_and(|max_ratio| {
         compressed_len > 0 && {
-            #[allow(clippy::cast_precision_loss)]
+            #[allow(
+                clippy::cast_precision_loss,
+                reason = "the final ratio only compares decoded against wire bytes, where f64 rounding above 2^53 cannot flip the threshold"
+            )]
             let ratio = current.len() as f64 / compressed_len as f64;
             ratio > max_ratio
         }
@@ -702,7 +729,8 @@ fn make_deflate_decoder(stream: BoxBytesStream) -> BoxBytesStream {
 #[allow(
     clippy::unnecessary_wraps,
     clippy::needless_pass_by_value,
-    unused_variables
+    unused_variables,
+    reason = "the coding arms are selected at compile time, so an uncompiled codec returns an unsupported-encoding error and ignores its input; the Result and the by-value stream only look redundant when every codec is enabled"
 )]
 fn make_decoder(stream: BoxBytesStream, encoding: ContentCoding) -> Result<BoxBytesStream> {
     match encoding {
@@ -880,7 +908,10 @@ impl LimitingStream {
         }
     }
 
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "the byte counters are only divided to compare against a ratio threshold, where f64 rounding above 2^53 cannot flip the verdict"
+    )]
     fn check_limit(&self) -> std::result::Result<(), LimitExceededKind> {
         if let Some(max) = self.limit.max_decoded_body_size {
             if self.decoded_bytes > max {
@@ -1283,7 +1314,10 @@ mod tests {
         let payload = vec![b'a'; 5000];
         let inner = gzip_compress(&payload);
         let outer = gzip_compress(&inner);
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "the test derives the per-layer ratios from small in-memory buffers, far below the f64 exact-integer range"
+        )]
         let (total_ratio, inner_step) = {
             (
                 payload.len() as f64 / outer.len() as f64,
@@ -1315,7 +1349,10 @@ mod tests {
         let payload = vec![b'a'; 5000];
         let inner = gzip_compress(&payload);
         let outer = gzip_compress(&inner);
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "the test derives the per-layer ratios from small in-memory buffers, far below the f64 exact-integer range"
+        )]
         let limit_value = (payload.len() as f64 / outer.len() as f64)
             .midpoint(payload.len() as f64 / inner.len() as f64);
         let limit = DecompressionLimit {
@@ -1346,7 +1383,10 @@ mod tests {
             .collect();
         let inner = gzip_compress(&payload);
         let outer = gzip_compress(&inner);
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "the test derives the per-layer ratios from small in-memory buffers, far below the f64 exact-integer range"
+        )]
         let (first_layer, second_layer, total) = (
             inner.len() as f64 / outer.len() as f64,
             payload.len() as f64 / inner.len() as f64,

@@ -240,8 +240,14 @@ fn redact_credentials(message: &str) -> String {
 }
 
 /// Map an eggfetch-core error to the appropriate Python exception.
-#[allow(clippy::needless_pass_by_value)]
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the core error is matched by value so its owned message moves into the Python exception without a clone"
+)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "every core error kind maps onto exactly one Python exception type in a single exhaustive match; splitting it would scatter that mapping"
+)]
 pub fn map_err(err: eggfetch_core::Error) -> PyErr {
     use eggfetch_core::timeout::TimeoutPhase;
 

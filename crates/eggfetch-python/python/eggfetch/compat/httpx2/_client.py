@@ -15,6 +15,8 @@ from contextlib import asynccontextmanager, contextmanager
 from eggfetch.compat.httpx._client import AsyncClient as _BaseAsyncClient
 from eggfetch.compat.httpx._client import Client as _BaseClient
 from eggfetch.compat.httpx._client import _USE_CLIENT_DEFAULT as USE_CLIENT_DEFAULT
+from eggfetch.compat.httpx2._request import _as_httpx2_request
+from eggfetch.compat.httpx2._response import _as_httpx2_response
 
 UseClientDefault = typing.Any
 
@@ -28,6 +30,20 @@ if typing.TYPE_CHECKING:
 
 class Client(_BaseClient):
     """Sync HTTPX2-compatible client (Rust engine, httpx2 surface)."""
+
+    def build_request(self, method, url, **kwargs):
+        """Build a request that carries an httpx2 URL."""
+        return _as_httpx2_request(super().build_request(method, url, **kwargs))
+
+    def _run_request_hooks(self, request):
+        request = _as_httpx2_request(request)
+        return super()._run_request_hooks(request)
+
+    def _send_single_request(self, request, *, stream=False):
+        response = super()._send_single_request(
+            _as_httpx2_request(request), stream=stream
+        )
+        return _as_httpx2_response(response)
 
     def query(
         self,
@@ -153,6 +169,20 @@ class Client(_BaseClient):
 
 class AsyncClient(_BaseAsyncClient):
     """Async HTTPX2-compatible client (Rust engine, httpx2 surface)."""
+
+    def build_request(self, method, url, **kwargs):
+        """Build a request that carries an httpx2 URL."""
+        return _as_httpx2_request(super().build_request(method, url, **kwargs))
+
+    async def _run_request_hooks(self, request):
+        request = _as_httpx2_request(request)
+        return await super()._run_request_hooks(request)
+
+    async def _send_single_request(self, request, *, stream=False):
+        response = await super()._send_single_request(
+            _as_httpx2_request(request), stream=stream
+        )
+        return _as_httpx2_response(response)
 
     async def query(
         self,

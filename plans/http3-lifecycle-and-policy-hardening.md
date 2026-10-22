@@ -198,3 +198,12 @@ Do not renew HTTPX exact-SHA qualification in this plan.
 - [ ] Logical request limits and QUIC stream limits are explicitly separated.
 - [ ] Cancellation/resource stress evidence is green.
 - [ ] Tier 1 is green with all features.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 28 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

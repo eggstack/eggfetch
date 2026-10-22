@@ -19,7 +19,7 @@ id = "H2X-API-002"
 description = "Origin + URL.origin: normalization, default ports, IDNA, IPv6, equality/hash/repr"
 sync = true
 async = true
-tests = ["test_httpx2_api_parity.py"]
+tests = ["test_httpx2_api_parity.py", "test_httpx2_origin_reachability.py"]
 result = "parity"
 phase = "core"
 

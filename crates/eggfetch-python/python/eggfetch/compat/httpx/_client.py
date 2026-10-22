@@ -1244,6 +1244,11 @@ class Client:
                     kwargs["proxy"] = _convert_proxy(self._proxy)
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
+            # The facade is HTTPX-shaped: it must use HTTPX 0.28.1's
+            # `NO_PROXY` rules and normalize `socks5://` to `socks5h://`.
+            # The native `eggfetch` surface keeps native semantics by
+            # default, so the facade opts in explicitly (ADR-0009 rule 5).
+            kwargs["proxy_env"] = "httpx"
             try:
                 self._native_client = eggfetch.Client(**kwargs)
             except eggfetch.InvalidUrl as exc:
@@ -1977,6 +1982,11 @@ class AsyncClient:
                     kwargs["proxy"] = _convert_proxy(self._proxy)
             kwargs["http1"] = self._http1
             kwargs["http2"] = self._http2
+            # The facade is HTTPX-shaped: it must use HTTPX 0.28.1's
+            # `NO_PROXY` rules and normalize `socks5://` to `socks5h://`.
+            # The native `eggfetch` surface keeps native semantics by
+            # default, so the facade opts in explicitly (ADR-0009 rule 5).
+            kwargs["proxy_env"] = "httpx"
             try:
                 self._native_client = eggfetch.AsyncClient(**kwargs)
             except eggfetch.InvalidUrl as exc:

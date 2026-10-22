@@ -161,16 +161,16 @@ Run extended validation if any production core or http-connect implementation ch
 
 ## Acceptance criteria
 
-- [ ] Production CONNECT request/response wire grammar has one implementation owner: eggfetch-http-connect.
-- [ ] Core CONNECT policy remains in eggfetch-core.
-- [ ] Hidden byte-parser limits cannot silently diverge from production defaults.
-- [ ] Differential fixtures cover valid, malformed, truncated, bounded, and read-ahead cases.
-- [ ] Authority formatting remains exclusively delegated to ConnectTarget in production.
-- [ ] ProxyAuth behavior is unchanged for every tested boundary input.
-- [ ] Auth duplication is removed only if the accepted domain is proven identical; otherwise it is explicitly retained and covered.
-- [ ] No new public cross-crate helper/API is introduced.
-- [ ] Error redaction/bounding remains intact.
-- [ ] Rust exact public surface remains unchanged.
+- [x] Production CONNECT request/response wire grammar has one implementation owner: eggfetch-http-connect. — `crates/eggfetch-http-connect/src/{request,response,target,error}.rs` owns it; core only calls `eggfetch_http_connect::encode_connect_request` (`crates/eggfetch-core/src/transport/connect.rs:460`) and `read_connect_response_head` (`:476`), and `grep -rnE '^\s*pub (fn|struct|enum|trait|type)' crates/eggfetch-http-connect/src/` shows no second wire implementation.
+- [x] Core CONNECT policy remains in eggfetch-core. — proxy selection, dialing, TLS, deadlines, accepted-status policy, rejection handling, route identity, metrics and pooling stay in `crates/eggfetch-core/src/transport/connect.rs`, `crates/eggfetch-core/src/transport/proxy.rs` and `crates/eggfetch-core/src/pipeline/proxy_dispatch.rs`.
+- [x] Hidden byte-parser limits cannot silently diverge from production defaults. — the core-local adapter takes its bounds from `eggfetch_http_connect::ConnectResponseLimits::default()` (`crates/eggfetch-core/src/proxy.rs:2114`), whose defaults are defined once at `crates/eggfetch-http-connect/src/response.rs:34`.
+- [x] Differential fixtures cover valid, malformed, truncated, bounded, and read-ahead cases. — `crates/eggfetch-http-connect/tests/wire.rs` covers valid (`request_wire_shape`), malformed (`response_malformed_status_rejected`, `response_malformed_header_name_rejected`), truncated (`response_truncated_rejected`), bounded (`request_head_limit_exact_and_overflow`, `response_header_count_exact_and_overflow`, `response_aggregate_exact_and_overflow`) and read-ahead (`response_readahead_preserved`, `:338`) cases.
+- [x] Authority formatting remains exclusively delegated to ConnectTarget in production. — `ConnectTarget` (`crates/eggfetch-http-connect/src/target.rs:14`) is the only authority formatter, and core builds targets through `ConnectTarget::new` (`crates/eggfetch-core/src/transport/connect.rs:994`).
+- [x] ProxyAuth behavior is unchanged for every tested boundary input. — ProxyAuth deliberately keeps its broader control-character domain (see the execution record below); boundary inputs are covered by `crates/eggfetch-core/src/proxy.rs:1548-1562` and by `request_basic_auth_exact_encoding` / `request_credential_controls_rejected` in `crates/eggfetch-http-connect/tests/wire.rs`.
+- [x] Auth duplication is removed only if the accepted domain is proven identical; otherwise it is explicitly retained and covered. — it is explicitly retained and covered: `request_proxy_only_headers_serialized_once` (`:129`) and `request_duplicate_auth_prevented` (`:145`) in `crates/eggfetch-http-connect/tests/wire.rs`, plus `proxy_auth_shared_subset_matches_connect_wire_helper` (`crates/eggfetch-core/src/proxy.rs:1545`).
+- [x] No new public cross-crate helper/API is introduced. — `eggfetch-http-connect` exposes only `ConnectError`, `ConnectRequest`, `ConnectResponseLimits`, `ConnectResponseHead`, `ConnectTarget`, `basic_auth_value`, `encode_connect_request` and `read_connect_response_head`; the exact-surface oracle is green on all eight profiles.
+- [x] Error redaction/bounding remains intact. — `auth_debug_redacted` (`:362`), `errors_never_include_credentials` (`:379`) and `invalid_input_errors_bounded` (`:397`) in `crates/eggfetch-http-connect/tests/wire.rs`, plus the core-side `proxy_rejection_body_redacts_reflected_credentials` (`crates/eggfetch-core/src/transport/connect.rs:1048`).
+- [x] Rust exact public surface remains unchanged. — `scripts/check_rust_public_api.py` reports `Rust public API oracle passed (8 profiles)` against planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`.
 
 ## Stop conditions
 
@@ -192,3 +192,14 @@ The hidden core parser derives bounds from
 behavior are covered, and shared auth inputs are checked against the wire
 helper. ProxyAuth retains its intentionally broader control-character domain;
 production CONNECT ownership remains in `eggfetch-http-connect`.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+All ten acceptance criteria above were re-verified against the current tree and
+are **met**; none is superseded, deferred, or never applicable. Evidence is
+cited inline with each criterion. The execution record above is unchanged.
+
+The prerequisite citation in this file's header (`Prerequisite:
+plans/core-private-module-decomposition.md`) is accurate: that plan's own ten
+acceptance criteria were independently re-verified as met on 2026-10-22 and
+recorded in its disposition note, so no citation correction was required.

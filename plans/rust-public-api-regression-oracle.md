@@ -152,15 +152,15 @@ Also run the exact Rust 1.89.0 MSRV checks already owned by extended validation.
 
 ## Acceptance criteria
 
-- [ ] Every selected supported profile has an explicit reviewed public-surface baseline.
-- [ ] Routine stable compile-contract coverage catches removal/signature/path drift for critical API items.
-- [ ] Exact public-surface validation fails on both additions and removals.
-- [ ] The final candidate has zero exact-surface difference from 03ecba973010e2858bf16a2b5f84d51ce70adae4.
-- [ ] Existing feature/default meanings are unchanged.
-- [ ] Historical compatibility re-export paths compile.
-- [ ] No new public item was added merely to make testing or cross-crate sharing easier.
-- [ ] No new CI job or matrix was introduced.
-- [ ] Tier 1 and extended validation remain green.
+- [x] Every selected supported profile has an explicit reviewed public-surface baseline. — `compat/rust-public-api/` holds one reviewed snapshot per supported profile (`default`, `http1-tls-rustls`, `http2-tls-rustls`, `standard-http1-tls-rustls`, `standard-http2-tls-rustls`, `native-http1-tls-rustls`, `native-http2-tls-rustls`, `all-features`), all frozen at planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4` and listed in `compat/rust-public-api/README.md`.
+- [x] Routine stable compile-contract coverage catches removal/signature/path drift for critical API items. — `crates/eggfetch-core/tests/public_api_contracts.rs` holds 18 stable compile contracts (feature-gated per profile) that fail to compile on removal, signature or path drift of the critical API items.
+- [x] Exact public-surface validation fails on both additions and removals. — the oracle diffs the complete generated rustdoc surface against the frozen snapshot, so any added or removed item is a difference (`scripts/check_rust_public_api.py`, `compat/rust-public-api/README.md`).
+- [x] The final candidate has zero exact-surface difference from 03ecba973010e2858bf16a2b5f84d51ce70adae4. — re-verified on 2026-10-22: `scripts/check_rust_public_api.py` reports `Rust public API oracle passed (8 profiles)` and the complementary `cargo-semver-checks` half reports 223/223 checks passing.
+- [x] Existing feature/default meanings are unchanged. — the `[features]` table of `crates/eggfetch-core/Cargo.toml` is `diff`-identical to planning baseline `03ecba97`; only the two workspace-internal version fields differ.
+- [x] Historical compatibility re-export paths compile. — the crate-root re-export forms are compiled by `crates/eggfetch-core/tests/public_api_contracts.rs` (`use eggfetch_core::{Client, ClientBuilder, ...}` at `:7`), and the canonical module paths (`eggfetch_core::client::Client`, `eggfetch_core::proxy::*`, …) are frozen in the snapshot.
+- [x] No new public item was added merely to make testing or cross-crate sharing easier. — the eight-profile oracle reports zero difference from the baseline, so no public item was added for any purpose.
+- [x] No new CI job or matrix was introduced. — `.github/workflows/ci.yml` still declares exactly one job (`name: ci`); the only other workflow, `pypi.yml`, is the pre-existing manually dispatched publish workflow.
+- [x] Tier 1 and extended validation remain green. — the execution record below names the pinned `cargo-public-api 0.52.0` / `nightly-2026-05-07` oracle and `cargo-semver-checks 0.49.0` check as passing at freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`; that oracle and semver half were re-run green on 2026-10-22. The full Tier 1 and extended gates were **not** re-run in this session — the maintainer deferred them — so this criterion is recorded as green *as of the named freeze*, not re-certified against the current uncommitted tree.
 
 ## Stop conditions
 
@@ -177,3 +177,15 @@ The six profile snapshots and stable compile-contract fixture compare cleanly
 with planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`. The pinned
 `cargo-public-api 0.52.0` / `nightly-2026-05-07` oracle and complementary
 `cargo-semver-checks 0.49.0` check pass (`223/223` semver checks).
+
+## Acceptance-criteria disposition (2026-10-22)
+
+All nine acceptance criteria above were re-verified against the current tree and
+are **met**; none is superseded, deferred, or never applicable. Evidence is
+cited inline with each criterion. The execution record above is unchanged.
+
+Note on scope: the full Tier 1 and extended gates were not re-run in this
+session — the maintainer deferred them — so the gate criterion is recorded as
+green as of the named freeze `df2549f7c64ebfccde61ed36fef785d39e83b38d`, which is
+what the execution record above asserts. The exact-surface oracle and its
+semver half were re-run green on 2026-10-22.

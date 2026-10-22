@@ -186,3 +186,12 @@ Run the directly affected HTTPX/HTTPX2 compatibility subsets. Final exact-SHA re
 - [ ] H3 suppression/fallback behavior remains green under feature tests.
 - [ ] No public API or dependency change is required.
 - [ ] Tier 1 and focused compatibility tests pass.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 8 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

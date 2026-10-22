@@ -1,3 +1,6 @@
+// This target exercises the redirect-following client builder, which the lean profile compiles out.
+// It therefore requires `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -6,6 +9,7 @@
     clippy::unwrap_used,
     clippy::expect_used
 )]
+#![cfg(feature = "redirects")]
 //! Total-deadline response-body lifecycle regressions.
 //!
 //! Planning baseline `60a6e2b3` was red for these cases: response headers

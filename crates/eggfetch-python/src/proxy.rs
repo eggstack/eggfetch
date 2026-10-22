@@ -2,6 +2,62 @@
 
 use pyo3::prelude::*;
 
+/// Which rule set a client applies when it interprets proxy configuration.
+///
+/// The native `eggfetch` surface uses eggfetch's own rules.  The HTTPX
+/// compatibility facades reproduce HTTPX 0.28.1's rules and therefore opt
+/// into [`ProxyEnvSemantics::Httpx`] explicitly; the native default is
+/// [`ProxyEnvSemantics::Native`] so that native users never inherit
+/// compat-only semantics (ADR-0009 rule 5).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum ProxyEnvSemantics {
+    /// eggfetch's native rules: `NoProxy::parse` for environment `NO_PROXY`,
+    /// and an explicit `socks5://` proxy URL is passed through unchanged.
+    #[default]
+    Native,
+    /// HTTPX 0.28.1's rules: `NoProxy::parse_httpx` for environment
+    /// `NO_PROXY`, and `socks5://` is normalized to `socks5h://` so the
+    /// destination hostname is resolved by the SOCKS proxy.
+    Httpx,
+}
+
+/// Parse the `proxy_env` constructor option.
+///
+/// `None` selects the native semantics.  Only the two documented values are
+/// accepted; an unknown value is an error rather than a silent fallback.
+pub(crate) fn parse_proxy_env_semantics(value: Option<&str>) -> PyResult<ProxyEnvSemantics> {
+    match value {
+        None | Some("native") => Ok(ProxyEnvSemantics::Native),
+        Some("httpx") => Ok(ProxyEnvSemantics::Httpx),
+        Some(other) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+            "proxy_env must be 'native' or 'httpx', got {other:?}"
+        ))),
+    }
+}
+
+/// Parse an environment `NO_PROXY` value with the selected rule set.
+pub(crate) fn parse_no_proxy(
+    value: &str,
+    semantics: ProxyEnvSemantics,
+) -> eggfetch_core::Result<eggfetch_core::NoProxy> {
+    match semantics {
+        ProxyEnvSemantics::Native => eggfetch_core::NoProxy::parse(value),
+        ProxyEnvSemantics::Httpx => eggfetch_core::NoProxy::parse_httpx(value),
+    }
+}
+
+/// Apply the selected semantics to an explicit proxy URL.
+///
+/// Only the HTTPX semantics rewrite `socks5://` to `socks5h://`.  The native
+/// semantics leave the scheme untouched so that `socks5://` keeps its
+/// local-DNS meaning for native callers.
+pub(crate) fn apply_proxy_semantics(url: &str, semantics: ProxyEnvSemantics) -> String {
+    match semantics {
+        ProxyEnvSemantics::Native => url.to_owned(),
+        ProxyEnvSemantics::Httpx => normalize_httpx_proxy_url(url),
+    }
+}
+
 /// How the `proxy` parameter was specified by the caller.
 #[derive(PartialEq, Eq)]
 pub(crate) enum ProxyOverride {
@@ -90,7 +146,7 @@ pub(crate) fn normalize_environment_proxy_url(url: &str) -> String {
 /// httpcore 1.0.9 sends hostname destinations as SOCKS domain names for both
 /// `socks5` and `socks5h`; the native core keeps its lower-level distinction
 /// for callers outside the facade.
-pub(crate) fn normalize_compat_proxy_url(url: &str) -> String {
+pub(crate) fn normalize_httpx_proxy_url(url: &str) -> String {
     let Ok(mut parsed) = url::Url::parse(url) else {
         return url.to_owned();
     };
@@ -110,6 +166,10 @@ pub(crate) fn normalize_compat_proxy_url(url: &str) -> String {
 /// - A string URL → `ProxyOverride::Override(url_string)`
 /// - A Proxy object → extracts URL (with embedded auth) and returns `ProxyOverride::Override(url_string)`
 /// - Anything else → `Err`
+///
+/// The returned URL is unmodified.  Scheme-specific normalization (the
+/// HTTPX `socks5` → `socks5h` rewrite) is applied later by
+/// [`apply_proxy_semantics`], once the client's selected semantics are known.
 pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> {
     match proxy {
         None => Ok(ProxyOverride::Inherit),
@@ -134,7 +194,7 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                         ));
                     }
                 }
-                return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
+                return Ok(ProxyOverride::Override(url));
             }
             // Handle Proxy objects: extract URL and embed auth if present.
             if let Ok(url_obj) = val.getattr("url") {
@@ -167,7 +227,7 @@ pub fn parse_proxy(proxy: Option<&Bound<'_, PyAny>>) -> PyResult<ProxyOverride> 
                             }
                         }
                     }
-                    return Ok(ProxyOverride::Override(normalize_compat_proxy_url(&url)));
+                    return Ok(ProxyOverride::Override(url));
                 }
             }
             Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(

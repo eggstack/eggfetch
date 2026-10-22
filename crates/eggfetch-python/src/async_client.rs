@@ -21,6 +21,7 @@ pub struct PyAsyncClient {
     decompress: Option<bool>,
     verify_disabled: bool,
     redirect_policy: eggfetch_core::redirect::RedirectPolicy,
+    proxy_env_semantics: crate::proxy::ProxyEnvSemantics,
 }
 
 #[pymethods]
@@ -32,9 +33,17 @@ impl PyAsyncClient {
     ///     timeout: Default timeout in seconds, or Timeout object (optional).
     ///     `follow_redirects`: Whether to follow redirects (default False).
     ///     `max_redirects`: Maximum redirects to follow (default 20).
-    #[allow(clippy::too_many_arguments)]
+    ///     `proxy_env`: Rule set used to interpret proxy configuration.
+    ///         `"native"` (default) applies eggfetch's own `NO_PROXY` rules
+    ///         and leaves a `socks5://` proxy scheme unchanged; `"httpx"`
+    ///         applies HTTPX 0.28.1's `NO_PROXY` rules and normalizes
+    ///         `socks5://` to `socks5h://`.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameters are the public `AsyncClient(...)` keyword surface, normalized one-for-one while the GIL is held"
+    )]
     #[new]
-    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http1=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None))]
+    #[pyo3(signature = (*, headers=None, timeout=None, follow_redirects=None, max_redirects=None, cookies=None, auth=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, http1=None, http2=None, http3=None, limits=None, trust_env=None, local_address=None, socket_options=None, uds=None, proxy_env=None))]
     fn new(
         py: Python<'_>,
         headers: Option<&Bound<'_, PyAny>>,
@@ -56,6 +65,7 @@ impl PyAsyncClient {
         local_address: Option<&str>,
         socket_options: Option<&Bound<'_, PyAny>>,
         uds: Option<&str>,
+        proxy_env: Option<&str>,
     ) -> PyResult<Self> {
         let prepared = crate::request_preparation::prepare_client_config(
             py,
@@ -78,10 +88,12 @@ impl PyAsyncClient {
             local_address,
             socket_options,
             uds,
+            proxy_env,
         )?;
         let verify_disabled = prepared.verify_disabled;
         let decompress = prepared.decompress;
         let redirect_policy = prepared.redirect_policy.clone();
+        let proxy_env_semantics = prepared.proxy_env_semantics;
         let client = crate::request_preparation::apply_client_config(prepared)?;
 
         Ok(Self {
@@ -89,13 +101,20 @@ impl PyAsyncClient {
             decompress,
             verify_disabled,
             redirect_policy,
+            proxy_env_semantics,
         })
     }
 
     /// Send an HTTP request asynchronously.
     #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameters are the public request keyword surface, forwarded verbatim by the verb helpers"
+    )]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the request path keeps the client-level guards, the shared preparation, and the awaited dispatch in one flow"
+    )]
     fn request<'py>(
         &self,
         py: Python<'py>,
@@ -155,6 +174,7 @@ impl PyAsyncClient {
             crate::request_preparation::RequestDispatchDefaults {
                 redirect_policy: self.redirect_policy.clone(),
                 decompress: decompress.or(self.decompress),
+                proxy_env_semantics: self.proxy_env_semantics,
             },
         )?;
         let trace_slot = dispatch.trace_error_slot;
@@ -190,7 +210,10 @@ impl PyAsyncClient {
 
     /// Send a GET request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn get<'py>(
         &self,
         py: Python<'py>,
@@ -235,7 +258,10 @@ impl PyAsyncClient {
 
     /// Send a POST request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn post<'py>(
         &self,
         py: Python<'py>,
@@ -284,7 +310,10 @@ impl PyAsyncClient {
 
     /// Send a PUT request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn put<'py>(
         &self,
         py: Python<'py>,
@@ -333,7 +362,10 @@ impl PyAsyncClient {
 
     /// Send a PATCH request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn patch<'py>(
         &self,
         py: Python<'py>,
@@ -382,7 +414,10 @@ impl PyAsyncClient {
 
     /// Send a DELETE request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn delete<'py>(
         &self,
         py: Python<'py>,
@@ -427,7 +462,10 @@ impl PyAsyncClient {
 
     /// Send a HEAD request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn head<'py>(
         &self,
         py: Python<'py>,
@@ -472,7 +510,10 @@ impl PyAsyncClient {
 
     /// Send an OPTIONS request asynchronously.
     #[pyo3(signature = (url, *, headers=None, params=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameter list is the public request keyword surface, forwarded verbatim to `request`"
+    )]
     fn options<'py>(
         &self,
         py: Python<'py>,
@@ -517,8 +558,14 @@ impl PyAsyncClient {
 
     /// Send a streaming HTTP request asynchronously.
     #[pyo3(signature = (method, url, *, headers=None, params=None, content=None, data=None, json=None, files=None, timeout=None, cookies=None, auth=None, follow_redirects=None, max_redirects=None, decompress=None, proxy=None, verify=None, cert=None, retries=None, extensions=None))]
-    #[allow(clippy::too_many_arguments)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the parameters are the public request keyword surface, forwarded verbatim by the streaming helpers"
+    )]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the streaming path keeps the client-level guards, the shared preparation, the awaited dispatch, and the streaming response construction in one flow"
+    )]
     fn stream<'py>(
         &self,
         py: Python<'py>,
@@ -578,6 +625,7 @@ impl PyAsyncClient {
             crate::request_preparation::RequestDispatchDefaults {
                 redirect_policy: self.redirect_policy.clone(),
                 decompress: decompress.or(self.decompress),
+                proxy_env_semantics: self.proxy_env_semantics,
             },
         )?;
         let trace_slot = dispatch.trace_error_slot;

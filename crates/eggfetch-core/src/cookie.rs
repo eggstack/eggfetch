@@ -48,7 +48,10 @@ impl From<cookie::SameSite> for SameSite {
 /// or [`Cookie::name_value_pair`] to access the raw value when actually
 /// serializing a `Cookie` header.
 #[derive(Clone)]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the four flags are the independent RFC 6265 cookie attributes (host-only, secure, http-only, persistent) stored exactly as Set-Cookie declared them"
+)]
 pub struct Cookie {
     /// Cookie name.
     pub(crate) name: String,
@@ -804,8 +807,16 @@ fn parse_set_cookie(header_value: &str, response_url: &Url, response_host: &str)
                 return None;
             }
 
-            // Reject IP addresses with explicit Domain attribute.
-            if is_ip_address(&normalized) {
+            // RFC 6265 §5.3 step 5: an explicit `Domain` that names an IP
+            // literal is accepted only when it names exactly the response
+            // host. `domain_matches` below already restricts IP literals to
+            // exact equality (§5.2.3), so this narrows nothing: a different
+            // IP literal still fails the domain-match check.
+            //
+            // ADR-0009 rule 3: the facade's `http.cookiejar` (the jar HTTPX
+            // 0.28.1 uses) accepts the exact-match cookie, and both jars
+            // observe this header, so they must reach the same verdict.
+            if is_ip_address(&normalized) && !normalized.eq_ignore_ascii_case(response_host) {
                 return None;
             }
 
@@ -867,7 +878,10 @@ fn resolve_expiration(parsed: &cookie::Cookie<'_>) -> (bool, Option<SystemTime>)
         // Positive Max-Age: compute expiry from now, capping at 400 days
         // (RFC 6265bis / browser behavior). A huge Max-Age (e.g. u64 overflow)
         // must not become an immortal 400-year cookie via the overflow fallback.
-        #[allow(clippy::cast_sign_loss)]
+        #[allow(
+            clippy::cast_sign_loss,
+            reason = "the negative and zero Max-Age cases return above, so the remaining duration is known to be non-negative"
+        )]
         let secs = duration_secs as u64;
         let capped = secs.min(MAX_AGE_CAP_SECS);
         let now = SystemTime::now();
@@ -959,10 +973,25 @@ mod tests {
 
     #[test]
     fn ip_address_domain_rejected() {
+        // A `Domain` naming a *different* IP literal is rejected.
+        let url = make_url("http://192.168.1.1/path");
+        let headers = vec!["key=value; Domain=192.168.1.2".to_owned()];
+        let cookies = parse_set_cookie_headers(&url, &headers);
+        assert!(cookies.is_empty());
+    }
+
+    #[test]
+    fn ip_address_domain_exact_match_accepted() {
+        // ADR-0009 rule 3: an explicit `Domain` naming the response host's
+        // own IP literal is accepted, matching the facade's `http.cookiejar`
+        // verdict (HTTPX 0.28.1). It is not host-only, and the IP literal
+        // only ever matches by exact equality (RFC 6265 §5.2.3).
         let url = make_url("http://192.168.1.1/path");
         let headers = vec!["key=value; Domain=192.168.1.1".to_owned()];
         let cookies = parse_set_cookie_headers(&url, &headers);
-        assert!(cookies.is_empty());
+        assert_eq!(cookies.len(), 1);
+        assert_eq!(cookies[0].domain(), "192.168.1.1");
+        assert!(!cookies[0].is_host_only());
     }
 
     #[test]

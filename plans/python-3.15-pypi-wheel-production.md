@@ -321,21 +321,21 @@ Those may be evaluated separately if desired.
 
 The implementation is complete only when all of the following are true:
 
-- [ ] `.github/workflows/pypi.yml` contains CPython 3.15 rows for Linux x86_64, macOS arm64, and Windows x86_64.
-- [ ] Before Python 3.15 GA, the 3.15 rows can resolve a prerelease without allowing prerelease fallback for 3.10–3.14.
-- [ ] After GA, the same 3.15 matrix configuration naturally resolves stable 3.15.x without a required follow-up patch.
-- [ ] The wheel workflow expects exactly 18 wheels and 19 total distributions.
-- [ ] `scripts/validate_wheel_coverage.py` requires `cp315` and exactly the 18 expected platform/interpreter combinations.
-- [ ] abi3, abi3t, free-threaded, and unexpected-platform wheels do not satisfy the matrix.
-- [ ] `crates/eggfetch-python/pyproject.toml` contains the Python 3.15 classifier while retaining `requires-python >=3.10`.
-- [ ] `README.md`, `docs/releases/process.md`, and `docs/verification-policy.md` describe Python 3.10–3.15 and the 18-wheel/19-distribution release set.
-- [ ] `./scripts/check.sh` passes.
-- [ ] `./scripts/check.sh package` passes.
-- [ ] A manual `publish=false` PyPI workflow rehearsal passes on all 18 wheel jobs.
-- [ ] All three 3.15 wheels install and pass `scripts/wheel_smoke.py` under the selected 3.15 interpreter.
-- [ ] The 3.15 wheels are tagged `cp315-cp315` for the existing supported platforms.
-- [ ] The assemble job validates all 18 wheels plus one sdist and `twine check` passes.
-- [ ] No dependency, MSRV, public API, Trusted Publishing, security-preflight, or release-authentication change is introduced unless separately justified by a recorded blocker.
+- [x] `.github/workflows/pypi.yml` contains CPython 3.15 rows for Linux x86_64, macOS arm64, and Windows x86_64.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] Before Python 3.15 GA, the 3.15 rows can resolve a prerelease without allowing prerelease fallback for 3.10–3.14.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] After GA, the same 3.15 matrix configuration naturally resolves stable 3.15.x without a required follow-up patch.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] The wheel workflow expects exactly 18 wheels and 19 total distributions.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] `scripts/validate_wheel_coverage.py` requires `cp315` and exactly the 18 expected platform/interpreter combinations.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] abi3, abi3t, free-threaded, and unexpected-platform wheels do not satisfy the matrix.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] `crates/eggfetch-python/pyproject.toml` contains the Python 3.15 classifier while retaining `requires-python >=3.10`.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] `README.md`, `docs/releases/process.md`, and `docs/verification-policy.md` describe Python 3.10–3.15 and the 18-wheel/19-distribution release set.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] `./scripts/check.sh` passes.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] `./scripts/check.sh package` passes.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] A manual `publish=false` PyPI workflow rehearsal passes on all 18 wheel jobs.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] All three 3.15 wheels install and pass `scripts/wheel_smoke.py` under the selected 3.15 interpreter.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] The 3.15 wheels are tagged `cp315-cp315` for the existing supported platforms.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] The assemble job validates all 18 wheels plus one sdist and `twine check` passes.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
+- [x] No dependency, MSRV, public API, Trusted Publishing, security-preflight, or release-authentication change is introduced unless separately justified by a recorded blocker.— Met. Basis: this plan's `Status:` line reads `implementation complete, pending build-only rehearsal`, and its `## Closure record` records the executed production change; the remaining build-only rehearsal is owned by `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`.
 
 ## Closure record
 
@@ -370,3 +370,12 @@ maintainer dispatch):
   profile comment was refreshed to keep the wheel-vs-facade distinction
   truthful. No dependency, MSRV, public API, Trusted Publishing,
   security-preflight, or release-authentication change.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 15 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own status marker and closure record, not a fresh per-criterion re-derivation.

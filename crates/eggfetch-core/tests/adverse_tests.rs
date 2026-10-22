@@ -1,3 +1,6 @@
+// This target exercises the redirect-method rewrite table and the retry policy builder, which the lean profile compiles out.
+// It therefore requires `redirects` and `logical-retry` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -21,6 +24,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(all(feature = "redirects", feature = "logical-retry"))]
 //! Adverse-condition and edge-case tests for the eggfetch HTTP client.
 
 mod test_server;

@@ -1,3 +1,6 @@
+// This target exercises the caller-supplied resolved-destination request option and the redirect-following client builder, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -21,6 +24,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(all(feature = "advanced-routing", feature = "redirects"))]
 //! Resolved-target route cache and connection reuse regressions.
 //!
 //! Same logical origin + same ordered physical snapshot + same SNI must reuse

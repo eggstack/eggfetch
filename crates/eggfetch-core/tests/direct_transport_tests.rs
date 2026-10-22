@@ -1,3 +1,6 @@
+// This target exercises the direct connector's socket-option/local-address/UDS routing and the redirect policy, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and `redirects` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -21,6 +24,7 @@
     clippy::new_without_default,
     clippy::map_unwrap_or
 )]
+#![cfg(all(feature = "advanced-routing", feature = "redirects"))]
 //! Phase 4: Advanced direct transport integration tests.
 //!
 //! Track 5.1 — Pool isolation

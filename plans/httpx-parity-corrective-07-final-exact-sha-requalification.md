@@ -487,3 +487,12 @@ Corrective 07 and the HTTPX remaining-parity line are closed only when:
 Only after every item above passes should the repository again state that the documented HTTPX 0.28.1 surface is **Stage C qualified**.
 
 At that point this remaining-parity line should be considered complete. Future HTTPX work should be triggered by a new pinned HTTPX version, a newly discovered concrete compatibility defect, or an intentionally expanded compatibility contract — not by further speculative parity expansion.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 41 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

@@ -22,6 +22,11 @@ crate-specific skills defer to it for validation.
   `maturin develop -m crates/eggfetch-python/Cargo.toml`.
 - Tier 1 Node JS surface (`node test.js`) is an explicit SKIP when `node` or
   `crates/eggfetch-node/eggfetch.node` is absent, not a failure.
+- Tier 1 runs two fast self-tests: the lint-suppression guard's own
+  `--self-test` (asserts the guard *rejects* what it must reject) and the H3
+  qualification runner's unit self-test. The H3 one is a **runner self-test
+  only** — it makes no H3 conformance claim, needs no network, QUIC peer,
+  `http3` feature, or artifact, and does not change H3's experimental status.
 - `qualification/` fixtures and H3 (experimental) are manual, never Tier 1 gates.
 - `scripts/performance_benchmark.py` is non-CI timing evidence only.
 - Tier 2 requires the exact Rust 1.89.0 toolchain
@@ -29,6 +34,18 @@ crate-specific skills defer to it for validation.
   The extended Rust public-surface oracle requires `cargo-public-api 0.52.0`,
   `cargo-semver-checks 0.49.0`, and pinned nightly `nightly-2026-05-07`
   (see `compat/rust-public-api/README.md`).
+- Tier 2's **downstream** portfolio is release-blocking and **fails closed**:
+  without `target/downstream-qualification/artifact-manifest.json` the step
+  fails instead of skipping, so `./scripts/check.sh extended` cannot complete
+  on a checkout that lacks the artifact. Nothing in the repository produces
+  that manifest and no CI job does; the operator supplies it (see
+  `compat/downstream/README.md`, "Update Process"). The portfolio needs
+  network access (it downloads the pinned packages from PyPI).
+- Tier 2's feature matrix and MSRV gate run their profile-isolated rows
+  (`--no-default-features` and its feature combinations) with a bare
+  `RUSTFLAGS=`, because CI's global `-D warnings` turns profile-specific
+  dead code into errors. The all-features rows, the workspace check and
+  clippy keep `-D warnings`.
 
 ## Exact-SHA qualification rule (most important)
 
@@ -58,6 +75,9 @@ python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-pytho
 EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
+bash scripts/check_lint_suppressions.sh --self-test
+bash scripts/check_lint_suppressions.sh
+python scripts/test_h3_qualification.py
 python scripts/check_doc_examples.py
 python scripts/check_doc_links.py
 ```

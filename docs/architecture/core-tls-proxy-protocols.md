@@ -498,6 +498,31 @@ Both the standard hyper-rustls client and the direct / UDS clients are configure
 
 Corrective 06 extends this to the SNI override and SOCKS routes: `ClientInner::sni_client()` and `ClientInner::socks_client()` now read `self.config.http_version_policy` and call `builder.http2_only(true)` when `Http2Only` is active. The SNI client further restricts the connector's TLS ALPN list to `h2` (via `configure_tls_alpn()` in `ClientInner::sni_client()`) so no silent H1 fallback is possible. The SOCKS client restricts the rustls ALPN list to `h2` for HTTPS transports. `SocksStream::connected()` now inspects ALPN on the inner TLS stream and calls `negotiated_h2()` when `h2` is negotiated, mirroring the direct-stream behavior. The SNI client cache key remains the hostname string alone; `HttpVersionPolicy` is currently client-level immutable, so a single cache key per hostname is still sound.
 
+### Cached direct route client construction
+
+The resolved-target route cache and the SNI route cache build their Hyper
+clients through one crate-private builder, `client::routes::build_direct_client()`.
+The builder materializes the TLS configuration (`TlsConfig` →
+`build_rustls_config()` → `configure_tls_alpn()`), the connect timeout, the
+direct-connector configuration (local address / socket options), the
+transport metrics, the `HyperClientPolicy` (idle timeout and per-host idle
+cap from the live `Pool`), and the lifecycle policy. Those are identical for
+both routes.
+
+The one difference — what the route binds — is expressed by the
+`DirectRouteBinding` discriminator, not by two bodies:
+
+| Binding | Connector | Use |
+|---|---|---|
+| `DirectRouteBinding::Resolved { target, sni_hostname }` | binds the caller-supplied address snapshot, and applies the SNI override when the route carries one | resolved-target route cache |
+| `DirectRouteBinding::Sni { sni_hostname }` | leaves DNS/TCP to the URL host and overrides only the TLS identity | SNI route cache |
+
+Neither binding changes the TLS materialization, the certificate
+verification, the connect timeout, the metrics, or the Hyper policy, so
+both routes keep the `Http2Only` ALPN restriction and the `http2_only(true)`
+enforcement described above. The binding semantics of the resolved target
+and of the SNI client are unchanged by the consolidation.
+
 ### Direct connector ALPN signaling
 
 `DirectConnector` and `UdsConnector` wrap their own TLS handshake (via `tokio_rustls::TlsConnector`) and signal the negotiated ALPN protocol back to hyper-util so the legacy client knows whether the connection is H2:
@@ -507,7 +532,7 @@ impl Connection for DirectStream {
     fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
         let mut connected = Connected::new();
         if let Self::Tls(tls) = self {
-            if let Some(b"h2") = tls.get_ref().1.alpn_protocol() {
+            if super::negotiated_http2(tls.get_ref().1.alpn_protocol()) {
                 connected = connected.negotiated_h2();
             }
         }
@@ -517,6 +542,23 @@ impl Connection for DirectStream {
 ```
 
 Without this signal, an H2-only legacy client would not see the ALPN result and could incorrectly attempt H1 framing on a connection that just negotiated h2.
+
+The negotiated-protocol test itself lives once, in `transport::negotiated_http2()`
+(`transport::ALPN_HTTP2` holds the identifier). The helper takes the
+already-negotiated protocol and returns a plain answer; it deliberately does
+*not* absorb the transport-specific structure at the call sites, so each
+transport keeps inspecting its own stream variant and keeps its own
+`tls-rustls` `cfg` shape:
+
+| Transport | Call site | Difference the call site keeps |
+|---|---|---|
+| CONNECT tunnel | `transport::connect` | inspects the inner TLS connection unconditionally and reports the negotiated protocol in both branches |
+| UDS | `transport::uds` | inspects only its `Self::Tls` variant, under `cfg(feature = "tls-rustls")` |
+| Direct | `transport::direct_connector` | inspects only its `Self::Tls` variant, under `cfg(feature = "tls-rustls")` |
+| SOCKS | `transport::socks` | inspects only its `Self::Tls` variant, unconditionally |
+
+Which transports report a negotiated HTTP/2 connection is therefore
+unchanged by the consolidation.
 
 ### Forbidden Header Stripping
 
@@ -656,6 +698,32 @@ Alt-Svc discovery: H2/H1 unless a fresh `h3` alternative is cached and not
 suppressed; no fresh entry means never invent an H3 endpoint.
 `Auto { allow_http3: false }` (default) never attempts H3. H3 never bypasses
 proxy rules: proxy/UDS/custom-dialer/SNI routes are selected first in `pipeline::route::select_route()`.
+
+### Error Classification
+
+A strict HTTP/3 policy on a build without the `http3` feature is an
+operator-visible build-configuration problem, not a transport failure. The
+engine reports it as `Error::Unsupported` with a message that names the
+missing capability (`HTTP/3 is not supported by this build: the http3 feature
+was not compiled in`) instead of the generic missing-client wording
+(`HTTP client not available for this protocol`), which is reserved for a
+request that had no usable client for another reason.
+
+The classification is produced by typed evidence: the requested
+`HttpVersionPolicy` variant and the compiled HTTP/3 capability
+(`http_version::Http3Capability`), both resolved without inspecting a
+rendered message. `http_version::missing_client_error()` is the single
+classification point and is used by both dispatch paths — the high-level
+request path (`pipeline::hyper_dispatch::send_hyper_request`) and the native
+frame path (`pipeline::send_native_http_body`) — so the two never disagree.
+
+The failure is raised at the point where the standard route finds no usable
+client, which is before any connection attempt. The native-caller downgrade
+contract is unchanged: `Http2Only` and `Http3Only` without the matching
+feature still negotiate down to HTTP/1.1 for native Rust callers, and `Auto`
+always negotiates down rather than failing. Adapters that expose a
+user-facing protocol control (the CLI and the FFI) reject the request
+instead, before any connection is attempted.
 
 ### Alt-Svc Discovery (`transport/alt_svc.rs`)
 

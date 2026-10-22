@@ -151,7 +151,11 @@ impl PyResponse {
     /// the buffered response itself when the underlying client is closed.
     /// Pass `None` for both when the caller is not backed by a persistent
     /// runtime (e.g. internals that do not need to drive IO).
-    #[allow(clippy::unnecessary_wraps, clippy::needless_pass_by_value)]
+    #[allow(
+        clippy::unnecessary_wraps,
+        clippy::needless_pass_by_value,
+        reason = "the buffered body is moved into the Python response instead of being copied, and the constructor can still fail when the network-stream metadata cannot be built on the current runtime"
+    )]
     pub(crate) fn from_core_response_with_body(
         response: &mut eggfetch_core::Response,
         content: Bytes,
@@ -660,7 +664,10 @@ impl PyResponse {
         let dict = PyDict::new(py);
         dict.set_item("http_version", self.http_version.clone())?;
         dict.set_item("reason_phrase", self.reason_phrase.clone())?;
-        #[allow(clippy::used_underscore_binding)]
+        #[allow(
+            clippy::used_underscore_binding,
+            reason = "the field is underscore-prefixed so it cannot collide with the Python `network_stream` attribute; reading it here is the intended check"
+        )]
         match self._network_stream.as_ref() {
             Some(stream) if stream.is_upgraded() => {
                 stream.insert_into_dict(py, &dict)?;

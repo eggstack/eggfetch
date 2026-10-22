@@ -839,36 +839,18 @@ impl RequestBuilder {
             return Err(e);
         }
         if let Some(target) = &self.transport_hints.resolved_target {
-            let expected_port = self.url.port_or_known_default().ok_or_else(|| {
-                crate::Error::InvalidResolvedTarget(
-                    "resolved destinations require an HTTP or HTTPS URL".into(),
-                )
-            })?;
-            if target
-                .addresses()
-                .iter()
-                .any(|address| address.port() != expected_port)
-            {
-                return Err(crate::Error::InvalidResolvedTarget(format!(
-                    "all resolved destinations must use the URL's effective port {expected_port}"
-                )));
-            }
+            crate::http_origin::validate_url_effective_port(
+                crate::http_origin::EffectivePortSubject::ResolvedDestination,
+                &self.url,
+                target.addresses(),
+            )?;
         }
         if let Some(target) = &self.proxied_target {
-            let expected_port = self.url.port_or_known_default().ok_or_else(|| {
-                crate::Error::InvalidResolvedTarget(
-                    "proxied destinations require an HTTP or HTTPS URL".into(),
-                )
-            })?;
-            if target
-                .addresses()
-                .iter()
-                .any(|address| address.port() != expected_port)
-            {
-                return Err(crate::Error::InvalidResolvedTarget(format!(
-                    "all proxied destinations must use the URL's effective port {expected_port}"
-                )));
-            }
+            crate::http_origin::validate_url_effective_port(
+                crate::http_origin::EffectivePortSubject::ProxiedDestination,
+                &self.url,
+                target.addresses(),
+            )?;
         }
         let request_target = self
             .transport_hints
@@ -1025,6 +1007,7 @@ mod tests {
         assert!(request.failure_context.is_none());
     }
 
+    #[cfg(feature = "advanced-routing")]
     #[test]
     fn request_builder_validates_resolved_target_port() {
         let client = crate::client::Client::new();

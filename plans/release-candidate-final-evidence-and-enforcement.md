@@ -581,3 +581,12 @@ This pass is complete only when the repository has both:
 2. a successful, retained, SHA-bound, non-publishing release dry run whose artifacts and validation results satisfy every criterion above.
 
 Implementation alone is not closure. The retained workflow evidence and branch-protection proof are required outputs.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 39 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

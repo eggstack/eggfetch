@@ -181,3 +181,12 @@ Do not renew exact-SHA HTTPX qualification here.
 - [ ] native limit terminology reflects actual semantics.
 - [ ] HTTPX facade names/contract remain intact.
 - [ ] Tier 1 and focused compatibility tests pass.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 28 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

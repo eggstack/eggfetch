@@ -267,7 +267,10 @@ impl RequestBody {
     /// piped through to the transport incrementally. Bytes and empty
     /// bodies are wrapped as `Full` and `Empty` respectively. No eager
     /// buffering is performed.
-    #[allow(clippy::type_complexity)]
+    #[allow(
+        clippy::type_complexity,
+        reason = "the Hyper body type is fixed by the `http-body-util` API and cannot be named more simply without changing the transport contract"
+    )]
     pub(crate) fn into_http_body(
         self,
     ) -> http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>
@@ -877,7 +880,10 @@ impl ResponseBody {
 
     /// Create a streaming response body with an attached pool permit.
     /// The permit is released when the body is dropped.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the lease-carrying constructor is only called by the pool-lease test; production bodies attach their lease through `attach_lease`"
+    )]
     pub(crate) fn streaming_with_lease(stream: BoxBytesStream, lease: PoolGuardArc) -> Self {
         Self::Streaming {
             stream,

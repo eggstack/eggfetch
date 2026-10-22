@@ -11,7 +11,7 @@ use crate::conversion::{
 };
 use crate::errors::{map_err, InvalidUrl};
 use crate::extensions::{extract_native_extensions, ExtractedExtensions};
-use crate::proxy::{self, ProxyOverride};
+use crate::proxy::{self, ProxyEnvSemantics, ProxyOverride};
 use crate::retry;
 
 /// Owned client arguments shared by the sync and async adapters.
@@ -38,10 +38,15 @@ pub(crate) struct PreparedClientConfig {
     pub uds: Option<String>,
     pub decompress: Option<bool>,
     pub verify_disabled: bool,
+    /// Rule set applied when interpreting proxy configuration.
+    pub proxy_env_semantics: ProxyEnvSemantics,
 }
 
 /// Normalize constructor arguments while the GIL is held.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parameters mirror the Python `Client(...)` keyword arguments, which are normalized one-for-one while the GIL is held"
+)]
 #[allow(
     clippy::too_many_lines,
     reason = "the GIL-held constructor boundary keeps all shared policy in one place"
@@ -67,7 +72,9 @@ pub(crate) fn prepare_client_config(
     local_address: Option<&str>,
     socket_options: Option<&Bound<'_, PyAny>>,
     uds: Option<&str>,
+    proxy_env: Option<&str>,
 ) -> PyResult<PreparedClientConfig> {
+    let proxy_env_semantics = proxy::parse_proxy_env_semantics(proxy_env)?;
     let tls_config = crate::tls::build_tls_config(verify, cert, trust_env)?;
     if http3 == Some(true) && (http1 == Some(true) || http2 == Some(true)) {
         return Err(pyo3::exceptions::PyValueError::new_err(
@@ -165,14 +172,14 @@ pub(crate) fn prepare_client_config(
             .map_err(map_err)?;
             if let Some(no_proxy) = proxy::env_no_proxy(py)? {
                 let rules =
-                    eggfetch_core::NoProxy::parse_httpx(&no_proxy).map_err(
-                        |error| match error {
+                    proxy::parse_no_proxy(&no_proxy, proxy_env_semantics).map_err(|error| {
+                        match error {
                             eggfetch_core::Error::InvalidProxyUrl(message) => {
                                 InvalidUrl::new_err(message)
                             }
                             other => map_err(other),
-                        },
-                    )?;
+                        }
+                    })?;
                 env = env.no_proxy(rules);
             }
             environment_proxies.push(env);
@@ -213,6 +220,7 @@ pub(crate) fn prepare_client_config(
         uds: uds.map(str::to_owned),
         decompress,
         verify_disabled,
+        proxy_env_semantics,
     })
 }
 
@@ -235,6 +243,7 @@ pub(crate) fn apply_client_config(config: PreparedClientConfig) -> PyResult<eggf
         local_address,
         socket_options,
         uds,
+        proxy_env_semantics,
         ..
     } = config;
 
@@ -255,8 +264,8 @@ pub(crate) fn apply_client_config(config: PreparedClientConfig) -> PyResult<eggf
         AuthOverride::Override(auth) => builder = builder.auth(auth),
     }
     if let ProxyOverride::Override(url) = proxy {
-        let mut value = eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(&url))
-            .map_err(map_err)?;
+        let url = proxy::apply_proxy_semantics(&url, proxy_env_semantics);
+        let mut value = eggfetch_core::Proxy::all_compat(&url).map_err(map_err)?;
         if let Some(headers) = proxy_headers {
             value = value.proxy_headers(headers);
         }
@@ -304,6 +313,8 @@ pub(crate) struct PreparedRequest {
 pub(crate) struct RequestDispatchDefaults {
     pub redirect_policy: eggfetch_core::redirect::RedirectPolicy,
     pub decompress: Option<bool>,
+    /// Rule set applied when interpreting an explicit proxy URL.
+    pub proxy_env_semantics: ProxyEnvSemantics,
 }
 
 /// A core request builder plus callback state that must be checked by the
@@ -341,6 +352,7 @@ pub(crate) fn prepare_core_dispatch(
     let RequestDispatchDefaults {
         redirect_policy,
         decompress,
+        proxy_env_semantics,
     } = defaults;
 
     let mut builder = client.request(method, url.as_str()).map_err(map_err)?;
@@ -365,9 +377,8 @@ pub(crate) fn prepare_core_dispatch(
         ProxyOverride::Inherit => {}
         ProxyOverride::Disable => builder = builder.without_proxy(),
         ProxyOverride::Override(url) => {
-            let mut proxy =
-                eggfetch_core::Proxy::all_compat(&proxy::normalize_compat_proxy_url(&url))
-                    .map_err(map_err)?;
+            let url = proxy::apply_proxy_semantics(&url, proxy_env_semantics);
+            let mut proxy = eggfetch_core::Proxy::all_compat(&url).map_err(map_err)?;
             if let Some(headers) = proxy_headers {
                 proxy = proxy.proxy_headers(headers);
             }

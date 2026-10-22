@@ -121,7 +121,7 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
                 return ptr::null_mut();
             };
 
-            let client_clone = (*client).0.clone();
+            let client_clone = (*client).client.clone();
             let request_box = Box::from_raw(request);
             let Some(rb) = request_box.0 else {
                 if !err_out.is_null() {
@@ -136,6 +136,14 @@ pub unsafe extern "C" fn eggfetch_client_send_streaming(
             let (tx, rx) = mpsc::channel(16);
             let state = Arc::new(StreamState::new(rx));
             let mut cancel_watch = state.subscribe();
+
+            // Fail closed first: a strict HTTP-version policy this build
+            // cannot honor is rejected with a named cause before any
+            // connection is attempted, instead of silently negotiating a
+            // different protocol.
+            if crate::handle::reject_missing_capability(client, err_out) {
+                return ptr::null_mut();
+            }
 
             let result = blocking_send(async move {
                 let mut resp = Box::pin(rb.send()).await?;

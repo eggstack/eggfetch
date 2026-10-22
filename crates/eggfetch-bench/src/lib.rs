@@ -3,7 +3,10 @@
 //! This crate provides a lightweight local HTTP server for end-to-end benchmarks
 //! and shared setup helpers. It is not published.
 
-#![allow(missing_docs)]
+#![allow(
+    missing_docs,
+    reason = "this crate is an unpublished benchmark harness whose items are internal fixtures that do not need public doc pages"
+)]
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -53,7 +56,10 @@ impl BenchServer {
     /// # Panics
     ///
     /// Panics if binding to `127.0.0.1:0` fails.
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "the config is moved into the server thread, so taking it by value makes the ownership transfer explicit instead of forcing a clone at the call site"
+    )]
     pub fn start(config: BenchServerConfig) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let port = listener.local_addr().unwrap().port();
@@ -121,7 +127,10 @@ impl BenchServer {
     /// listener thread exits when the process ends. Connections are
     /// handled on one thread each, which is acceptable for bounded
     /// benchmark loads but must not be copied into production code.
-    #[allow(clippy::unused_self)]
+    #[allow(
+        clippy::unused_self,
+        reason = "the method is a harness-only lifecycle stub that mirrors the real client's shutdown call so benchmark code can drive both uniformly"
+    )]
     pub fn shutdown(&self) {}
 }
 

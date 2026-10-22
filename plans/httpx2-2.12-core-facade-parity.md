@@ -195,3 +195,12 @@ During implementation run focused HTTPX2 probes plus existing HTTPX 0.28.1 regre
 - [ ] HTTPX 0.28.1 focused/full regressions remain green;
 - [ ] Tier 1 passes;
 - [ ] qualification remains pending until the program closure freeze.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 34 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

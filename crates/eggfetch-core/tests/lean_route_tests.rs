@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-
+#![cfg(feature = "high-level-url")]
 //! Lean standard-route profile coverage.
 //!
 //! Exercises the supported lean standard-route recipe

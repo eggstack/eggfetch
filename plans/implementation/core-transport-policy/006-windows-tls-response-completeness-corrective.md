@@ -549,3 +549,12 @@ The most valuable first implementation artifact is the standalone EggFetch
 reproducer with graceful/abrupt TLS shutdown modes and the raw-rustls/minimal-
 Hyper split. Once that verdict exists, the actual production fix should be
 small and obvious.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 17 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

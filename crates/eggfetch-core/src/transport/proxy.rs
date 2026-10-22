@@ -587,8 +587,7 @@ async fn send_http_proxy_request(
     // override like `/path` would emit an invalid request line on this leg.
     if let Some(ref target) = transport_hints.target {
         crate::pipeline::validate_target(target)?;
-        let uri = std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?;
+        let uri = crate::transport_hints::target_extension_str(target)?;
         if !(uri.starts_with("http://") || uri.starts_with("https://")) {
             return Err(Error::RequestBuild(
                 "target extension must be absolute-form (http:// or https://) for forward-proxy requests".into(),
@@ -625,8 +624,7 @@ async fn send_http_proxy_request(
     // Write the proxy request with absolute-form URI.
     // Apply target override if present (already validated above).
     let absolute_uri = if let Some(ref target) = transport_hints.target {
-        std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+        crate::transport_hints::target_extension_str(target)?
     } else {
         dest_url.as_str()
     };
@@ -712,11 +710,7 @@ async fn send_http_proxy_request_hyper(
     let absolute_uri = transport_hints
         .target
         .as_deref()
-        .map(|target| {
-            std::str::from_utf8(target)
-                .map(str::to_owned)
-                .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))
-        })
+        .map(|target| crate::transport_hints::target_extension_str(target).map(str::to_owned))
         .transpose()?
         .unwrap_or_else(|| dest_url.as_str().to_owned());
     let uri = absolute_uri
@@ -1136,8 +1130,7 @@ async fn send_socks_request(
         .ok_or_else(|| Error::ProxyConnect("persistent SOCKS client was not initialized".into()))?;
     let uri: http::Uri = if let Some(ref target) = transport_hints.target {
         crate::pipeline::validate_target(target)?;
-        std::str::from_utf8(target)
-            .map_err(|_| Error::InvalidUrl("target extension is not valid UTF-8".into()))?
+        crate::transport_hints::target_extension_str(target)?
             .parse()
             .map_err(|e| Error::InvalidUrl(format!("failed to convert target to URI: {e}")))?
     } else {

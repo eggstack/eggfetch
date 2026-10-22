@@ -226,3 +226,12 @@ Corrective 01 is complete only when:
 ## Out of scope
 
 Do not implement OpenSSL-backed networking, private-key extraction from arbitrary contexts, OpenSSL cipher-suite emulation, arbitrary callbacks/certificate verification hooks, or a second proxy implementation.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 15 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

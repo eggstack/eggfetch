@@ -423,7 +423,10 @@ impl BackoffPolicy {
     /// delay is drawn uniformly from `[0, capped)`, where `capped` is
     /// `initial_delay * factor^(attempt - 2)` clamped to `max_delay`.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "the attempt counter is only used as an f64 exponent, so rounding beyond 2^53 attempts cannot change the delay"
+    )]
     pub fn delay(&self, attempt: usize) -> Option<Duration> {
         if attempt <= 1 {
             return None;
@@ -727,7 +730,10 @@ pub fn should_retry(
 ///
 /// Returns `None` if the system RNG fails so callers can degrade
 /// gracefully (e.g. to a deterministic delay) instead of panicking.
-#[allow(clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "the 53 high bits of the PRNG state are exactly representable in f64, so the conversion is lossless"
+)]
 fn get_random_f64() -> Option<f64> {
     // Only successful seeds are cached: a transient `getrandom` failure is
     // retried on the next call instead of pinning the process to

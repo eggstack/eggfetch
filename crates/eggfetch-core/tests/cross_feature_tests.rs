@@ -26,8 +26,8 @@
 //! Tests combining proxy, multipart, compression, cookies, and redirect
 //! subsystems.
 
-#![cfg(feature = "proxy")]
 #![allow(clippy::module_name_repetitions)]
+#![cfg(feature = "proxy")]
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};

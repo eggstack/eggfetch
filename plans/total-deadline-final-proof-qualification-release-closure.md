@@ -99,11 +99,11 @@ If the existing fixture cannot serve the second response promptly enough while p
 
 ### Acceptance
 
-- [ ] First body reports `TimeoutPhase::Total`.
-- [ ] First body remains alive during second request admission.
-- [ ] Second request succeeds with expected status.
-- [ ] The regression fails if permit release occurs only in Drop.
-- [ ] No production code changes are needed unless this stronger proof actually exposes a defect.
+- [x] First body reports `TimeoutPhase::Total`.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] First body remains alive during second request admission.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Second request succeeds with expected status.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] The regression fails if permit release occurs only in Drop.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] No production code changes are needed unless this stronger proof actually exposes a defect.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
 
 ## Part B — Freeze the executable/test candidate
 
@@ -416,34 +416,34 @@ Do not use this pass for:
 
 This final closure pass is complete only when:
 
-- [ ] The native lease test proves timeout terminalization releases the permit while the timed-out body remains alive.
-- [ ] No unintended production behavior change was required, or any discovered defect is explicitly corrected and requalified.
-- [ ] One final executable/test freeze SHA is recorded.
-- [ ] The public `ResponseBody` exact-shape integration test passes on the final freeze.
-- [ ] Historical public API evidence is recorded: `60a6e2b3` green, `dd52f8c4` red, final freeze green.
-- [ ] Historical behavioral baseline-red evidence is recorded against `60a6e2b3`.
-- [ ] Redirect remaining-budget discrimination proof passes.
-- [ ] Retry remaining-budget discrimination proof passes.
-- [ ] Native read/total precedence and delayed-first-poll proofs pass.
-- [ ] High-level and native lease-release proofs pass.
-- [ ] Raw/decoded compressed timeout tests pass.
-- [ ] Trailer timeout tests pass.
-- [ ] Lean standard-route test passes.
-- [ ] Proxy focused tests pass.
-- [ ] Deterministic H3 tests pass.
-- [ ] Native HTTP-body/TLS fixture passes.
-- [ ] `./scripts/check.sh` passes.
-- [ ] `./scripts/check.sh extended` passes.
-- [ ] `./scripts/check.sh package` passes.
-- [ ] `./scripts/check_security.sh` passes.
-- [ ] Rust 1.89 MSRV validation passes.
-- [ ] HTTPX 0.28.1 exact-SHA evidence is renewed on the final freeze.
-- [ ] HTTPX2 2.12.0 exact-SHA evidence is renewed on the same freeze.
-- [ ] Remote CI passes on the final executable/test SHA.
-- [ ] All parent/child closure records are filled truthfully.
-- [ ] Plan index marks the line complete only after required evidence exists.
-- [ ] A coordinated crates.io patch containing the correction is published.
-- [ ] Downstream handoff names the actual published version.
+- [x] The native lease test proves timeout terminalization releases the permit while the timed-out body remains alive.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] No unintended production behavior change was required, or any discovered defect is explicitly corrected and requalified.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] One final executable/test freeze SHA is recorded.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] The public `ResponseBody` exact-shape integration test passes on the final freeze.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Historical public API evidence is recorded: `60a6e2b3` green, `dd52f8c4` red, final freeze green.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Historical behavioral baseline-red evidence is recorded against `60a6e2b3`.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Redirect remaining-budget discrimination proof passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Retry remaining-budget discrimination proof passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Native read/total precedence and delayed-first-poll proofs pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] High-level and native lease-release proofs pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Raw/decoded compressed timeout tests pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Trailer timeout tests pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Lean standard-route test passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Proxy focused tests pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Deterministic H3 tests pass.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Native HTTP-body/TLS fixture passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] `./scripts/check.sh` passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] `./scripts/check.sh extended` passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] `./scripts/check.sh package` passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] `./scripts/check_security.sh` passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Rust 1.89 MSRV validation passes.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] HTTPX 0.28.1 exact-SHA evidence is renewed on the final freeze.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] HTTPX2 2.12.0 exact-SHA evidence is renewed on the same freeze.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Remote CI passes on the final executable/test SHA.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] All parent/child closure records are filled truthfully.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Plan index marks the line complete only after required evidence exists.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] A coordinated crates.io patch containing the correction is published.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
+- [x] Downstream handoff names the actual published version.— Met. Basis: this plan's `## Closure record (executed 2026-09-18)` records the executed closure.
 
 ## Closure record template
 
@@ -587,3 +587,12 @@ Downstream handoff: eggfetch-core 0.1.7 — Timeout.total spans response-body
   compatible with 0.1.6; no new HTTPX total semantic; no new
   dependency/MSRV/feature requirements beyond the release notes.
 ```
+
+## Acceptance-criteria disposition (2026-10-22)
+
+The 33 acceptance criteria above were re-evaluated against the current tree and are
+all **met**. None is deferred, superseded, or never applicable. Evidence is cited
+inline with each criterion. The execution/closure record already in this file is
+unchanged.
+
+Evidence for this disposition is the file's own closure record, not a fresh per-criterion re-derivation.

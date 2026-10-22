@@ -39,6 +39,49 @@ runner were available, so those acceptance items remain explicit blockers;
 they are not waived by the local pass. See
 `http3-production-qualification-evidence.md` and the JSON evidence ledger.
 
+## Open items (2026-10-22)
+
+The acceptance criteria listed below are **not met** and remain open. They are
+recorded here so this file's closure record and its unticked boxes tell the
+same story. The original boxes stay unticked and point at the open-item IDs
+below. Nothing here was waived, and this file's closure status and closure
+audit are unchanged.
+
+Reason (from this file's own closure status below): the deterministic local
+Quinn/h3 corpus passed on frozen executable SHA
+`639bf186a71c054e11278d1b160ffe7a6f172c02`, but no independent server
+adapters, public-origin checks, independent drain/reset server, or
+namespace/netem runner were available during the qualification window, so the
+items are explicitly named blockers for any future promotion attempt.
+
+- **OI-1** — the deterministic-corpus group: an implementation-independent
+  required-semantics corpus, a mandatory green local Quinn/h3, unsupported
+  capabilities reported separately from pass/fail, and no conversion of an
+  external-server absence into a passing test.
+- **OI-2** — the two-implementation group: at least two reproducible
+  non-Quinn implementations, captured implementation/version identity, a
+  corpus pass on at least two independent implementations, and failures that
+  retain diagnosable logs/qlog/close information.
+- **OI-3** — the public-origin group: at least three recorded successful
+  current public-origin H3 checks, explicit classification of public failures
+  that cannot alter deterministic results, and no volatile public endpoint as
+  a Tier-1 dependency.
+- **OI-4** — the impairment group: an explicit pass/fail/unsupported
+  impairment matrix, bounded and safely falling-back UDP-blackhole Auto
+  behavior, no duplication of one-shot/non-idempotent/non-replayable
+  requests, demonstrated recovery after suppression, and no resource leak
+  after bounded cleanup.
+- **OI-5** — the independent drain/reset group: an independent
+  drain/reconnect demonstration, reset/cancel behavior tested independently of
+  normal EOF, and no reliance on string-matching an implementation-specific
+  error where typed state is available.
+- **OI-6** — the graduation-gate group: two independent non-Quinn H3 servers
+  passing the required corpus, one independent GOAWAY/drain/reconnect source,
+  a public-origin ledger with three successful current H3 deployments, a
+  bounded and replay-safe impairment matrix, explicit IPv4/IPv6 limitations,
+  reproducible machine/audit-readable evidence, and a focused regression test
+  for any product defect found before close.
+
 ## 1. Define the qualification corpus once
 
 Create one implementation-neutral client corpus that can target local Quinn/h3 fixtures and externally supplied independent H3 servers without duplicating assertions per server.
@@ -66,10 +109,10 @@ Required cases where the server implementation supports the necessary control:
 Keep capability-specific cases explicit. A server that cannot induce GOAWAY, for example, may report that case unsupported, but that unsupported case cannot satisfy the graduation requirement for GOAWAY evidence.
 
 Acceptance:
-- [ ] one corpus defines required semantics independent of server implementation;
-- [ ] local Quinn/h3 remains mandatory and green;
-- [ ] unsupported capabilities are reported separately from pass/fail;
-- [ ] no external-server absence is converted into a passing test.
+- [ ] one corpus defines required semantics independent of server implementation; — Deferred (OI-1).
+- [ ] local Quinn/h3 remains mandatory and green; — Deferred (OI-1).
+- [ ] unsupported capabilities are reported separately from pass/fail; — Deferred (OI-1).
+- [ ] no external-server absence is converted into a passing test. — Deferred (OI-1).
 
 ## 2. Reproducible independent-server adapters
 
@@ -87,10 +130,10 @@ Use pinned container image digests, source revisions, or locally built version i
 The harness should accept server endpoints/configuration through environment or a qualification manifest and emit machine-readable results containing implementation, version, cases attempted, pass/fail/unsupported and timestamps.
 
 Acceptance:
-- [ ] at least two non-Quinn implementations can be launched/referenced reproducibly;
-- [ ] exact implementation/version identity is captured;
-- [ ] required corpus passes on at least two independent implementations before graduation;
-- [ ] failures retain enough logs/qlog/close information for diagnosis.
+- [ ] at least two non-Quinn implementations can be launched/referenced reproducibly; — Deferred (OI-2).
+- [ ] exact implementation/version identity is captured; — Deferred (OI-2).
+- [ ] required corpus passes on at least two independent implementations before graduation; — Deferred (OI-2).
+- [ ] failures retain enough logs/qlog/close information for diagnosis. — Deferred (OI-2).
 
 ## 3. Public-origin spot-check ledger
 
@@ -110,9 +153,9 @@ For each origin record:
 Use at least three unrelated operators/CDNs when practical so evidence is not one deployment family.
 
 Acceptance:
-- [ ] at least three successful current public-origin H3 checks are recorded for graduation;
-- [ ] public failures do not alter deterministic test results and are classified explicitly;
-- [ ] no volatile public endpoint becomes a Tier-1 dependency.
+- [ ] at least three successful current public-origin H3 checks are recorded for graduation; — Deferred (OI-3).
+- [ ] public failures do not alter deterministic test results and are classified explicitly; — Deferred (OI-3).
+- [ ] no volatile public endpoint becomes a Tier-1 dependency. — Deferred (OI-3).
 
 ## 4. Network impairment harness
 
@@ -149,11 +192,11 @@ For each scenario verify as applicable:
 - cache state does not remain permanently poisoned.
 
 Acceptance:
-- [ ] required impairment matrix has explicit pass/fail/unsupported results;
-- [ ] UDP-blackhole Auto behavior is bounded and falls back safely;
-- [ ] one-shot/non-idempotent non-replayable requests are never duplicated;
-- [ ] recovery after suppression is demonstrated;
-- [ ] no resource leak is observed after bounded cleanup.
+- [ ] required impairment matrix has explicit pass/fail/unsupported results; — Deferred (OI-4).
+- [ ] UDP-blackhole Auto behavior is bounded and falls back safely; — Deferred (OI-4).
+- [ ] one-shot/non-idempotent non-replayable requests are never duplicated; — Deferred (OI-4).
+- [ ] recovery after suppression is demonstrated; — Deferred (OI-4).
+- [ ] no resource leak is observed after bounded cleanup. — Deferred (OI-4).
 
 ## 5. Independent drain/reset qualification
 
@@ -168,9 +211,9 @@ Required evidence:
 - application/transport close information is preserved where upstream exposes it.
 
 Acceptance:
-- [ ] at least one independent implementation demonstrates drain/reconnect semantics;
-- [ ] reset/cancel behavior is tested independently from normal EOF;
-- [ ] no reliance on string-matching an implementation-specific error is introduced when typed state is available.
+- [ ] at least one independent implementation demonstrates drain/reconnect semantics; — Deferred (OI-5).
+- [ ] reset/cancel behavior is tested independently from normal EOF; — Deferred (OI-5).
+- [ ] no reliance on string-matching an implementation-specific error is introduced when typed state is available. — Deferred (OI-5).
 
 ## 6. Evidence artifact
 
@@ -208,10 +251,10 @@ Run at minimum after executable changes:
 
 ## Exit criteria
 
-- [ ] at least two independent non-Quinn H3 servers pass the required corpus;
-- [ ] at least one independent server supplies GOAWAY/drain/reconnect evidence;
-- [ ] public-origin ledger contains at least three successful current H3 deployments;
-- [ ] impairment matrix demonstrates bounded and replay-safe behavior;
-- [ ] IPv4/IPv6 limitations are explicit;
-- [ ] evidence is reproducible and machine/audit readable;
-- [ ] any product defect found is fixed before this plan closes, with a focused regression test.
+- [ ] at least two independent non-Quinn H3 servers pass the required corpus; — Deferred (OI-6).
+- [ ] at least one independent server supplies GOAWAY/drain/reconnect evidence; — Deferred (OI-6).
+- [ ] public-origin ledger contains at least three successful current H3 deployments; — Deferred (OI-6).
+- [ ] impairment matrix demonstrates bounded and replay-safe behavior; — Deferred (OI-6).
+- [ ] IPv4/IPv6 limitations are explicit; — Deferred (OI-6).
+- [ ] evidence is reproducible and machine/audit readable; — Deferred (OI-6).
+- [ ] any product defect found is fixed before this plan closes, with a focused regression test. — Deferred (OI-6).

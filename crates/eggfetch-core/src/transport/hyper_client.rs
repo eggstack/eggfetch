@@ -159,30 +159,24 @@ impl HyperClientPolicy {
         !enabler.enable_http1() && enabler.enable_http2()
     }
 
-    /// Policy for the persistent per-client singletons (standard, direct,
-    /// UDS, custom dialer): shared idle timeout plus the configured per-host
-    /// idle cap.
-    pub(crate) fn persistent(
-        retry_canceled_requests: bool,
-        idle_timeout: Option<Duration>,
-        max_idle_per_host: Option<usize>,
-        enabler: HttpVersionPolicyEnabler,
-    ) -> Self {
-        Self {
-            retry_canceled_requests,
-            idle_timeout,
-            max_idle_per_host,
-            http2_only: Self::http2_only(enabler),
-        }
-    }
-
-    /// Policy for bounded route caches (resolved target, SNI, custom-SNI,
-    /// SOCKS, CONNECT): shared idle timeout plus the effective per-host idle
-    /// cap resolved from `Pool`.
+    /// The one shared H1/H2 policy for every persistent and cached Hyper
+    /// client.
     ///
-    /// The policy is applied uniformly so no route silently omits configured
-    /// policy merely because it owns a custom connector.
-    pub(crate) fn cached_route(
+    /// The persistent per-client singletons (standard, direct, UDS, custom
+    /// dialer) and the bounded route caches (resolved target, SNI,
+    /// custom-SNI, SOCKS, CONNECT) carry the same rule: the resolved idle
+    /// timeout, the effective per-host idle cap, and the HTTP/2-only
+    /// selection derived from the version policy. The policy is applied
+    /// uniformly so no route silently omits configured policy merely because
+    /// it owns a custom connector.
+    ///
+    /// The only difference between the two families is *when* the caller
+    /// resolves the idle values, and that difference belongs to the call
+    /// site: the singletons resolve them from the builder's pool
+    /// configuration at build time, the route caches resolve them from the
+    /// live [`Pool`](crate::pool::Pool) at use time. Both resolve the same
+    /// values, so one constructor serves both.
+    pub(crate) fn new(
         retry_canceled_requests: bool,
         idle_timeout: Option<Duration>,
         max_idle_per_host: Option<usize>,
@@ -397,11 +391,11 @@ mod tests {
             HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
         let h1_only = HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Http1Only);
         #[cfg(feature = "transport-http2")]
-        assert!(HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
+        assert!(HyperClientPolicy::new(true, None, None, h2_only).http2_only);
         #[cfg(not(feature = "transport-http2"))]
-        assert!(!HyperClientPolicy::cached_route(true, None, None, h2_only).http2_only);
-        assert!(!HyperClientPolicy::cached_route(true, None, None, auto).http2_only);
-        assert!(!HyperClientPolicy::cached_route(true, None, None, h1_only).http2_only);
+        assert!(!HyperClientPolicy::new(true, None, None, h2_only).http2_only);
+        assert!(!HyperClientPolicy::new(true, None, None, auto).http2_only);
+        assert!(!HyperClientPolicy::new(true, None, None, h1_only).http2_only);
     }
 
     #[cfg(feature = "proxy")]
@@ -415,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_route_carries_resolved_idle_policy() {
+    fn shared_policy_carries_resolved_idle_policy() {
         use std::time::Duration;
 
         let enabler =
@@ -424,12 +418,8 @@ mod tests {
         // share must carry the same resolved timeout and effective per-host
         // cap as the persistent singletons: no route silently omits policy
         // merely because it owns a custom connector.
-        let policy = HyperClientPolicy::cached_route(
-            true,
-            Some(Duration::from_millis(100)),
-            Some(3),
-            enabler,
-        );
+        let policy =
+            HyperClientPolicy::new(true, Some(Duration::from_millis(100)), Some(3), enabler);
         assert_eq!(policy.idle_timeout, Some(Duration::from_millis(100)));
         assert_eq!(policy.max_idle_per_host, Some(3));
     }
@@ -444,18 +434,5 @@ mod tests {
         assert_eq!(policy.idle_timeout, Some(Duration::from_millis(100)));
         assert_eq!(policy.max_idle_per_host, Some(3));
         assert!(!policy.http2_only);
-    }
-
-    #[test]
-    fn persistent_and_cached_routes_agree_on_resolved_values() {
-        use std::time::Duration;
-
-        let enabler =
-            HttpVersionPolicyEnabler::from_policy(HttpVersionPolicy::Auto { allow_http3: false });
-        let timeout = Some(Duration::from_secs(5));
-        let persistent = HyperClientPolicy::persistent(true, timeout, Some(20), enabler);
-        let cached = HyperClientPolicy::cached_route(true, timeout, Some(20), enabler);
-        assert_eq!(persistent.idle_timeout, cached.idle_timeout);
-        assert_eq!(persistent.max_idle_per_host, cached.max_idle_per_host);
     }
 }

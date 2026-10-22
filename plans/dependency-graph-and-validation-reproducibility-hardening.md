@@ -181,3 +181,12 @@ Also validate the CI requirements file in a fresh Python 3.12 venv and run packa
 - [ ] maturin validation/release pins cannot silently diverge without a reviewed diff or explicit rationale.
 - [ ] one-workflow/one-job/no-matrix policy remains intact.
 - [ ] Tier 1, security preflight, and package validation (when affected) pass.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 11 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

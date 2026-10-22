@@ -27,8 +27,8 @@
 //! HTTP forward proxying, CONNECT tunneling, auth, security, and
 //! streaming through proxies.
 
-#![cfg(feature = "proxy")]
 #![allow(clippy::module_name_repetitions)]
+#![cfg(feature = "proxy")]
 
 mod tls_fixtures;
 

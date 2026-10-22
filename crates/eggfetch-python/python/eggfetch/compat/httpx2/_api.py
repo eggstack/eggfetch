@@ -11,7 +11,7 @@ import typing
 from contextlib import contextmanager
 
 from eggfetch.compat.httpx2._client import AsyncClient, Client
-from eggfetch.compat.httpx._response import Response
+from eggfetch.compat.httpx2._response import Response
 from eggfetch.compat.httpx2._config import (
     DEFAULT_KEEPALIVE_PING_INTERVAL_SECONDS,
     DEFAULT_KEEPALIVE_PING_TIMEOUT_SECONDS,

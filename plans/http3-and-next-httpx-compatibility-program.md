@@ -88,3 +88,12 @@ Plans 1–6 may change executable/test/validation files and must finish before t
 ## Exit condition
 
 This program closes only after the final exact-SHA requalification/closure plan and documentation truth pass are complete. A retained HTTP/3 experimental designation is an acceptable successful outcome if the graduation evidence exposes upstream or interoperability blockers; hiding those blockers to claim stability is not.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 10 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+

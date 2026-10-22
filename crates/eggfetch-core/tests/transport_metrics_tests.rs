@@ -1,3 +1,6 @@
+// This target exercises the local-address and Unix-domain-socket routing options, which the lean profile compiles out.
+// It therefore requires `advanced-routing` and compiles to an empty
+// test binary under a profile that omits them.
 #![allow(
     missing_docs,
     dead_code,
@@ -5,6 +8,7 @@
     clippy::unwrap_used,
     clippy::expect_used
 )]
+#![cfg(all(feature = "advanced-routing", feature = "high-level-url"))]
 //! Transport observability exact-count tests.
 //!
 //! `TransportMetrics` counts connector events and protocol connections

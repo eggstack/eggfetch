@@ -1144,14 +1144,15 @@ impl ClientBuilder {
             transport_metrics.clone(),
         ));
         // Shared builder policy for the persistent per-client Hyper
-        // singletons below (standard, direct, UDS, custom dialer). Cached and
-        // isolated route clients resolve their own narrower policy at use.
+        // singletons below (standard, direct, UDS, custom dialer). The cached
+        // and isolated route clients resolve the same policy at use time from
+        // the live pool, so the two families never diverge.
         #[cfg(any(
             feature = "transport-http1",
             feature = "transport-http2",
             feature = "advanced-routing"
         ))]
-        let persistent_policy = HyperClientPolicy::persistent(
+        let persistent_policy = HyperClientPolicy::new(
             self.retry_canceled_requests,
             pool_config.idle_timeout,
             pool_config.effective_max_idle_per_host(),
@@ -2093,6 +2094,7 @@ mod tests {
 
     #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
     #[cfg(feature = "high-level-url")]
+    #[cfg(feature = "advanced-routing")]
     #[test]
     fn resolved_route_cache_is_bounded() {
         use crate::transport::hyper_client::{

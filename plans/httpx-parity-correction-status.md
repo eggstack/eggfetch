@@ -2548,3 +2548,219 @@ metadata, native cancellation, planning-hygiene, and CI evidence.**
 The final status updates are documentation-only. No executable files changed
 between the implementation SHA and the CI-tested tree; the successful retry
 therefore validates the same executable implementation.
+
+## 2026-10-22 — Executable freeze invalidated by the four conditionally closed milestones
+
+Four milestones were implemented and are conditionally closed on 2026-10-22:
+TLS/protocol M005, python-httpx-compat M004 and M005, and core transport M008.
+
+**The live Stage C binding is invalidated by this change.** All four change
+executable inputs — Rust sources, Python package sources, tests, compatibility
+fixtures, validation scripts, or API snapshots — so under
+`.skills/verification-qualification.md` the previous binding
+(`42a9c96db5b25354843bd83bd458c71757e95651`, and the `015a56d7…` candidate
+before it) no longer describes the tree. Nothing is committed yet, so no new
+SHA can be claimed here. The rebinding — commit, freeze, run Tier 1 / Tier 2 /
+Tier 3 on the frozen SHA, and rebind `compat/httpx/0.28.1/profile.toml` and
+`compat/httpx2/2.12.0/profile.toml` — is pending maintainer action 2 in
+`plans/registry.md`. Until it is done, no publication may cite the previous
+Stage C binding.
+
+### httpx2 parity coverage — the corrected statement
+
+The httpx2 parity coverage claimed by earlier sections of this ledger was
+incomplete, and the correction is recorded here rather than left implicit.
+
+Before python-httpx-compat M004, `eggfetch.compat.httpx2`'s
+`Request` and `Response` were `import *` re-export shims of the 0.28.1
+facade's modules, so `httpx2.Request is httpx.Request` held and
+`httpx2.Request(...).url` was a base `httpx._urls.URL` with **no** `origin`
+attribute. The httpx2 `URL.origin` delta was therefore unreachable from every
+object a user actually holds: a constructed request, a constructed response, a
+response returned by the sync or async client, and the final URL after a
+redirect. The earlier coverage statement is corrected by this record: httpx2's
+`Origin`/`URL.origin` support existed only for **directly constructed**
+`httpx2.URL` instances.
+
+After M004, the httpx2 `Request` and `Response` are real subclasses of the
+0.28.1 facade's classes and every httpx2 URL a user can observe is an httpx2
+`URL`. The observable coverage is now:
+
+| observable | before | after |
+|---|---|---|
+| `httpx2.URL(...).origin` | present | present (unchanged) |
+| `httpx2.Request(...).url.origin` | `AttributeError` | present |
+| `httpx2.Response(...).url.origin` | `AttributeError` | present |
+| sync client response `.url.origin` | `AttributeError` | present |
+| async client response `.url.origin` | `AttributeError` | present |
+| redirect response `.url.origin` (final URL) | `AttributeError` | present |
+| redirect history entries' `.url.origin` | `AttributeError` | present |
+
+The 0.28.1 facade is unchanged by this: `httpx.URL` still has no `origin`
+attribute and `httpx` still exports no `Origin`. Importing
+`eggfetch.compat.httpx2` leaves the 0.28.1 facade unmodified, and the httpx2
+facade never imports the real PyPI `httpx`.
+
+Two intentional public-surface deltas follow and are registered in
+`compat/httpx2/2.12.0/allowed-differences.toml` as `H2X-NEW-016` (`Request`
+base class) and `H2X-NEW-017` (`Response` base class): `httpx2.Request is
+httpx.Request` is now `False`, and `httpx2.Response is httpx.Response` is now
+`False`. `isinstance` / `issubclass` relationships are preserved. Both HTTPX
+API manifest comparisons are green with zero unexplained differences.
+
+Evidence: `crates/eggfetch-python/tests/compat/test_httpx2_origin_reachability.py`
+(18 tests), `crates/eggfetch-python/tests/compat/test_httpx2_api_parity.py`
+(9), `crates/eggfetch-python/tests/compat/test_httpx2_behavior.py` (5),
+`crates/eggfetch-python/tests/compat/test_imports.py` (3), and the 0.28.1
+conformance oracle against the real upstream package (105 passed) plus the
+0.28.1 facade suite (212 passed).
+
+### Other executable changes in this freeze
+
+- **Cookie policy (python-httpx-compat M005).** The engine's cookie jar no
+  longer rejects a `Set-Cookie` whose explicit `Domain` names an IP address
+  when that `Domain` is exactly the response host; it now matches the
+  facade's `http.cookiejar` verdict. RFC 6265 §5.2.3 IP-literal exact
+  equality is unchanged, so cross-host protection is not weakened. One
+  difference remains and is recorded in `docs/residual-differences.md`: an
+  explicit IPv6-literal `Domain` is stored by both jars but returned only by
+  the engine.
+- **Redirect policy (python-httpx-compat M005).** The engine's redirect
+  policy and the facade's HTTPX 0.28.1 policy are now measured and pinned by
+  `crates/eggfetch-python/tests/compat/test_redirect_policy_parity.py`
+  (69 tests). The facade keeps HTTPX behavior; the engine keeps its stricter
+  origin-scoped rules. The recorded differences are in
+  `docs/residual-differences.md`. A factual correction to ADR-0009's Context
+  and rule 4 was made in the same pass.
+- **Native environment isolation (python-httpx-compat M005).** The native
+  Python client no longer inherits the compat `NO_PROXY` parser or the
+  `socks5://` → `socks5h://` rewrite. A keyword-only `proxy_env` option
+  selects the rule set; the default is the native rule set and the
+  compatibility facades opt into the HTTPX rules explicitly. The native
+  surface's `NO_PROXY` and SOCKS behavior therefore change for native users;
+  `proxy_env="httpx"` restores the previous behavior, and the release note is
+  in `docs/migration/from-httpx.md`.
+- **Protocol capability (TLS M005).** The CLI's `--http2` no longer silently
+  downgrades, the CLI's `--http3` no longer misreports a missing capability as
+  a missing client, and the FFI's strict policy fails closed.
+- **Profile matrix (core M008).** The contract matrix and the Rust
+  public-surface oracle now cover eight profiles; the lean profile's
+  behavioral suites run in Tier 1.
+
+### Evidence collected at this stage
+
+Targeted only, by instruction; the full tier gates were deliberately deferred.
+
+- `cargo fmt --all -- --check` — clean.
+- `cargo clippy -p eggfetch-core -p eggfetch-cli -p eggfetch-ffi -p eggfetch-python --all-targets --all-features -- -D warnings` — exit 0.
+- `cargo test -p eggfetch-core --all-features --test cookie_policy_parity_tests --test http_version_capability_tests -- --test-threads=1` — 3 + 2 passed.
+- `python scripts/check_rust_public_api.py --skip-semver` — "Rust public API oracle passed (8 profiles)".
+- The new compat conformance suites — 121 passed.
+- The compat regression sweep — 196 passed.
+- `scripts/check_native_python_api.py --self-test`, `scripts/check_python_typing_surface.py --self-test`, `scripts/check_doc_links.py` — all passed.
+
+This is implementation evidence against the working tree, **not** Tier 1
+evidence. Tier 1 evidence requires the frozen-SHA run, which has not been
+performed.
+
+## 2026-10-22 — Executable freeze invalidated again by the four subsequent conditionally closed milestones
+
+Four further milestones were implemented and are conditionally closed on
+2026-10-22: core transport M009 (lean path single-sourcing), core transport
+M010 (core duplicate-helper consolidation), release-verification M006
+(verification guard hardening), and release-verification M007 (planning and
+documentation truthfulness hygiene).
+
+**The live Stage C binding remains invalidated.** These four change executable
+inputs too — Rust sources across `crates/eggfetch-core/src/`, test targets,
+`crates/eggfetch-core/Cargo.toml`, `crates/eggfetch-python/src/**` and the other
+adapters, `scripts/check.sh`, `scripts/check_lint_suppressions.sh`, `fuzz/**`,
+`compat/**`, and `plans/**` — so the binding recorded in the preceding section
+still does not describe the tree. Nothing is committed, so no new SHA can be
+claimed here. The rebinding — commit, freeze, run Tier 1 / Tier 2 / Tier 3 on
+the frozen SHA, then rebind `compat/httpx/0.28.1/profile.toml` and
+`compat/httpx2/2.12.0/profile.toml` — remains outstanding, and it is now the
+single shared condition on all eight conditionally closed milestones of this
+pass.
+
+### What changed, and what it means for the binding
+
+- **Core M009 — lean path single-sourcing.** The lean and redirect paths now
+  share one ungated first-hop preparation builder,
+  `crates/eggfetch-core/src/pipeline/hop.rs`. The whole `eggfetch-core` test
+  suite now compiles under the feature-isolated profiles, and Tier 1 gained a
+  `tier1_profile_whole_suite_compile` step covering `standard-http1`,
+  `standard-http2`, `native-http1` and `native-http2`. The plan's "exactly one
+  exhaustive `Request::into_parts()` destructuring" criterion was amended to
+  name the **first-hop** path; the transport-preparation and subsequent-hop
+  sites remain exhaustive by the plan's own requirement.
+- **Core M010 — core duplicate-helper consolidation.** Seven duplication
+  clusters consolidated with **no runtime change and no public-API change**: the
+  Rust public-API oracle is byte-identical to the frozen `compat/rust-public-api/*.txt`
+  snapshots in all eight supported profiles. Cluster D adopts the stricter
+  origin-normalization rule, which changes nothing observable — proven by a
+  URL-shape verdict table and a pool-key stability test over every accepted
+  shape. The IPv6 pool-key divergence the cluster exposes (the high-level path
+  keys `http://[::1]:8080` as `[::1]`, the native path as `::1`) is **recorded
+  as a residual**, not fixed, because closing it would change pool keying.
+- **Release-verification M006 — verification guard hardening.** The lint
+  suppression guard now anchors on the attribute's lint list and rejects
+  blanket `allow`/`expect`/`deny` in any form, scans `fuzz/`, and self-tests in
+  Tier 1. Measured: **zero** existing suppressions are newly matched. Tier 2's
+  downstream behavioral-fixture gate now **fails closed** instead of silently
+  skipping a release-blocking gate — with the consequence that
+  `./scripts/check.sh extended` cannot complete on a checkout without
+  `target/downstream-qualification/artifact-manifest.json`, which has no
+  in-repository producer and is an operator obligation. Tier 2's
+  profile-isolated rows now use the same bare `RUSTFLAGS=` treatment as Tier 1.
+  Tier 1 gained the H3 **runner** self-test, which makes no network connection
+  and implies no H3 conformance claim.
+- **Release-verification M007 — planning and documentation truthfulness
+  hygiene.** All 2,267 unticked acceptance-criterion boxes under `plans/` are
+  now classified (760 met, 250 superseded, 1,257 deferred, 0 never applicable),
+  with no plan file retaining unticked boxes under a completion record without
+  an explicit dated open-items section. `fuzz/Cargo.lock` was refreshed
+  minimally (66 dependencies untouched) and two pre-existing fuzz-target API
+  drifts were fixed so the tree builds. The historical SHA log was removed from
+  the two compat profiles' **comments** only — their machine-readable content
+  is byte-identical before and after. The two httpx replacement packages now
+  ship one canonical source (`compat/httpx-replacement-source/httpx/`), both
+  set `__eggfetch_shim__ = True`, and both wheels were rebuilt and verified by
+  artifact content. Every `allow`/`expect` attribute in the adapter crates and
+  in the unowned `crates/eggfetch-core/src/` files now carries a `reason =`
+  justification.
+
+### Ledger note on the profile SHA log
+
+The one SHA the removed profile comments named that the HTTPX ledger did not
+hold, `639bf186a71c054e11278d1b160ffe7a6f172c02`, is an **HTTP/3** qualification
+binding, not an HTTPX one. It is recorded in
+`plans/http3-public-origin-spot-check-ledger.json`,
+`plans/http3-production-qualification-evidence.md` and
+`plans/http3-post-freeze-diagnostics-requalification-corrective-closure.md`,
+and its provenance is now stated in `docs/architecture/overview.md`. It does not
+belong in the HTTPX binding history.
+
+### Evidence collected at this stage
+
+Targeted only, by instruction; the full tier gates were deliberately deferred.
+
+- The Rust public-API oracle — all eight profiles byte-identical to the frozen
+  snapshots.
+- `cargo test -p eggfetch-core --all-features --lib` — 849 passed, 0 failed;
+  the same under the lean profile — 393 passed, 0 failed.
+- The eight cluster-B/C/E/F/G regression suites — 145 passed, 0 failed.
+- `cargo test -p eggfetch-core --all-features --test consolidation_evidence_tests`
+  — 10 passed, 0 failed.
+- The lean/redirect outgoing-request equivalence targets — 2 passed each.
+- `RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features <profile>,tls-rustls --all-targets`
+  — exit 0 for `standard-http1`, `standard-http2`, `native-http1` and
+  `native-http2`.
+- `bash scripts/check_lint_suppressions.sh --self-test` — 33 cases, pass; the
+  guard itself — clean over `crates/` and `fuzz/`.
+- `cargo clippy -p eggfetch-core --all-targets --all-features -- -D warnings` —
+  clean.
+
+This is implementation evidence against the working tree, **not** Tier 1
+evidence. Tier 1 evidence requires the frozen-SHA run, which has not been
+performed.

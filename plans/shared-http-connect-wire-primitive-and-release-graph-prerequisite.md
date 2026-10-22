@@ -862,3 +862,12 @@ Stop and revise the design instead of forcing the extraction if any of these occ
 - the extraction requires redesigning route caching, Hyper pooling, H2/H3, SOCKS, or forward-proxy body handling.
 
 In those cases, retaining a small duplicated CONNECT implementation is preferable to creating a structurally incorrect shared abstraction.
+
+## Acceptance-criteria disposition (2026-10-22)
+
+This file records **no completed execution**. Its 27 unticked acceptance criteria
+describe work that was never carried through to completion, so they remain open
+exactly as written and are left unticked. The file is a frozen historical record: it
+is retained for context only and is not a current gate.
+
+
