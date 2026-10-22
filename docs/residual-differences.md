@@ -2,11 +2,15 @@
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
 executable SHA
-`42a9c96db5b25354843bd83bd458c71757e95651` (2026-10-05,
-requalification after the TLS/protocol M004 milestone added a Rust-only additive
-fixed-target datagram route beneath experimental H3; no adapter, manifest,
-typing, or facade surface changed).
-The prior `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding (the coordinated
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c` (2026-10-22, requalification
+after the eight-milestone implementation freeze — core-transport M008, M009 and
+M010, TLS/protocol M005, python-httpx-compat M004 and M005, and
+release-verification M006 and M007 — together with a patch-level dependency
+update that cleared 11 live RustSec advisories; no Rust source changed in that
+update and the Rust public-API oracle is byte-identical to the frozen snapshots
+in all eight profiles).
+The prior `42a9c96db5b25354843bd83bd458c71757e95651` binding is historical.
+The `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding (the coordinated
 0.2.2 candidate) is historical.
 The M007 binding `3fc58fbd99ecb496749b833ee7b27436fe3b412d`,
 `bb6e07320f61736702e37f335fd1d48c7c3dfbaf`,

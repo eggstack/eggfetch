@@ -1,6 +1,6 @@
 # Python Bindings and HTTPX Compatibility Roadmap
 
-Status: active — M004 and M005 registered and dependency-ready
+Status: active — M004 and M005 closed
 
 Long-term references:
 
@@ -137,7 +137,7 @@ drift; exact-SHA requalification green. Met.
 
 ### Milestone 4 — httpx2 URL origin reachability
 
-Class: capability. Status: conditionally closed.
+Class: capability. Status: closed.
 
 Implementation:
 `plans/implementation/python-httpx-compat/004-httpx2-origin-reachability.md`.
@@ -175,7 +175,7 @@ Deferred: HTTPX 1.0 support, which remains gated on the upstream trigger.
 
 ### Milestone 5 — Compat policy authority reconciliation
 
-Class: invariant. Status: ready.
+Class: invariant. Status: closed.
 
 Implementation:
 `plans/implementation/python-httpx-compat/005-compat-policy-authority-reconciliation.md`.
@@ -249,18 +249,23 @@ semantics reaching the native Python surface. M004 is independent of M005;
 both require renewed exact-SHA Stage C binding because they change
 executable Python inputs.
 
-M004 and M005 were both implemented and are **conditionally closed** on
-2026-10-22. M004 makes the httpx2 `URL.origin` delta reachable from every
-observable httpx2 URL — request, response, sync client, async client, and
-redirect — by turning the httpx2 `Request`/`Response` into real subclasses of
-the 0.28.1 facade's, while leaving the 0.28.1 facade byte-for-byte
-unchanged. M005 aligns the engine's cookie jar with the facade's
-HTTPX-defined verdict, measures and records the redirect-policy divergence
-between the engine and the facade, and stops compat-only `NO_PROXY` and
-`socks5h` semantics from reaching the native Python surface via an explicit
-`proxy_env` option whose default is the native rule set. Both carry the same
-outstanding condition: the Stage C rebinding and the frozen-SHA Tier 1/2/3
-gates.
+M004 and M005 were both implemented and are **closed** on 2026-10-22. M004
+makes the httpx2 `URL.origin` delta reachable from every observable httpx2
+URL — request, response, sync client, async client, and redirect — by turning
+the httpx2 `Request`/`Response` into real subclasses of the 0.28.1 facade's,
+while leaving the 0.28.1 facade byte-for-byte unchanged. M005 aligns the
+engine's cookie jar with the facade's HTTPX-defined verdict, measures and
+records the redirect-policy divergence between the engine and the facade, and
+stops compat-only `NO_PROXY` and `socks5h` semantics from reaching the native
+Python surface via an explicit `proxy_env` option whose default is the native
+rule set. Both were first recorded as conditionally closed because each
+changes executable Python inputs, which invalidated the live Stage C binding
+and left the frozen-SHA Tier 1/2/3 gates outstanding. That condition was met
+on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where the Stage C
+binding was renewed for both profiles and the tier gates ran green; both
+milestones moved from `conditionally closed` to `closed` there. The
+native-surface `NO_PROXY`/SOCKS release note remains an open item outside
+that closure, and HTTPX 1.0 stays gated on the upstream trigger.
 
 ## 12. Milestone status
 
@@ -269,5 +274,5 @@ gates.
 | M001 httpx 0.28.1 Stage C | closed | legacy parity plans §7 | legacy + live ledger | — |
 | M002 httpx2 2.12.0 facade | closed | legacy httpx2 plans §7 | legacy + live ledger | — |
 | M003 native/typing/SSL | closed | legacy plans §7 | legacy closures | — |
-| M004 httpx2 URL origin reachability | conditionally closed | `plans/implementation/python-httpx-compat/004-httpx2-origin-reachability.md` | `plans/closure/python-httpx-compat/004-httpx2-origin-reachability.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates |
-| M005 compat policy authority reconciliation | conditionally closed | `plans/implementation/python-httpx-compat/005-compat-policy-authority-reconciliation.md` | `plans/closure/python-httpx-compat/005-compat-policy-authority-reconciliation.md` | ADR-0009 accepted; Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates; native-surface `NO_PROXY`/SOCKS release note |
+| M004 httpx2 URL origin reachability | closed | `plans/implementation/python-httpx-compat/004-httpx2-origin-reachability.md` | `plans/closure/python-httpx-compat/004-httpx2-origin-reachability.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there |
+| M005 compat policy authority reconciliation | closed | `plans/implementation/python-httpx-compat/005-compat-policy-authority-reconciliation.md` | `plans/closure/python-httpx-compat/005-compat-policy-authority-reconciliation.md` | ADR-0009 accepted; closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there; native-surface `NO_PROXY`/SOCKS release note |

@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M006 and M007 conditionally closed
+Status: active — M006 and M007 closed
 
 Long-term references:
 
@@ -55,7 +55,7 @@ explicit approval + regression history), publish automation.
 
 ## 4. Current state
 
-Tier 1/2/3 + security preflight are defined on the live freeze; six-profile
+Tier 1/2/3 + security preflight are defined on the live freeze; eight-profile
 oracle vs the oracle baseline and both API oracles have zero unexplained
 delta. M001A closed on candidate `41757569123c0b8038550b956d8b244ab55094a6`.
 M002 run `36223505399` then proved all 18 Python 3.10–3.15 wheels plus one
@@ -211,7 +211,7 @@ was routed to M003; no high-severity finding remains open.
 
 ### Milestone 6 — Verification guard hardening
 
-Class: invariant. Status: ready.
+Class: invariant. Status: closed.
 
 Implementation:
 `plans/implementation/release-verification/006-verification-guard-hardening.md`.
@@ -254,7 +254,7 @@ remain separately gated; adding any CI job or matrix.
 
 ### Milestone 7 — Planning and documentation truthfulness hygiene
 
-Class: polish. Status: ready.
+Class: polish. Status: closed.
 
 Implementation:
 `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md`.
@@ -335,19 +335,36 @@ a Tier 2 feature matrix that failed under the flag CI sets, an H3 tooling
 self-test that no tier ran, and planning records whose acceptance criteria
 were never evaluated.
 
-**Standing Stage C intake (added 2026-10-22).** Four milestones were
-implemented and conditionally closed outside this subsystem on 2026-10-22:
-TLS/protocol M005, python-httpx-compat M004 and M005, and core transport
-M008. Each changes executable inputs, so each invalidates the live Stage C
-binding, and none is committed yet. The rebinding work — commit the tree,
+**Standing Stage C intake (added 2026-10-22).** Eight milestones were
+implemented across four subsystems and committed as one executable freeze
+(`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`): core transport M008, M009 and
+M010; python-httpx-compat M004 and M005; TLS/protocol M005; and
+release-verification M006 and M007. Each changes executable inputs, so each
+invalidated the live Stage C binding. The rebinding work — commit the tree,
 freeze the SHA, run the full Tier 1 / Tier 2 / Tier 3 qualification on it,
 and rebind both HTTPX profiles in `compat/httpx/0.28.1/profile.toml` and
-`compat/httpx2/2.12.0/profile.toml` plus the ledger's Stage C SHA — is
-release-verification intake work and is tracked as pending maintainer action 2
+`compat/httpx2/2.12.0/profile.toml` plus the ledger's Stage C SHA — was
+release-verification intake work and was tracked as pending maintainer action 2
 in `plans/registry.md`. It is deliberately **not** folded into M006 or M007:
 M006 hardens the gates and M007 is polish, while the rebinding is a
 qualification run against a specific frozen commit and must not be coupled to
 either.
+
+That intake has now completed. The bound executable SHA is
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries the eight-milestone
+implementation freeze plus a follow-up commit that bumped four dependencies
+with live RustSec advisories by one patch release each, clearing 11 advisories
+and changing no Rust source. The Stage C binding was renewed there and the
+frozen-SHA tier gates ran green: Tier 1 with 1767 Rust workspace tests, 581
+Python behavior tests, and 134 HTTPX compatibility smoke tests passed; Tier 2
+across every phase, with the pinned HTTPX compatibility suite at 2073
+passed / 0 failed, both API manifests clean, and the Rust public API oracle
+green in eight profiles; Tier 3 crate packaging, wheel build, and wheel smoke
+green; and the live security preflight green. The release-blocking downstream
+behavioral gate executed rather than skipping and passed 4/4 required
+packages. All eight milestones therefore move from `conditionally closed` to
+`closed` on that SHA. The rebinding establishes a compatibility binding only:
+it authorizes no release, and H3 remains experimental.
 
 ## 12. Milestone status
 
@@ -360,5 +377,5 @@ either.
 | M004 0.2.1 tagged release finalization | closed | `plans/archive/implementation/release-verification/004-0-2-1-tagged-release-finalization.md` | `plans/closure/release-verification/004-0-2-1-tagged-release-finalization.md` | — |
 | M003 intake | proposed | — | — | — |
 | M005 0.2.2 M007 publication | closed | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | `plans/closure/release-verification/005-0-2-2-m007-publication.md` | — |
-| M006 verification guard hardening | conditionally closed | `plans/implementation/release-verification/006-verification-guard-hardening.md` | `plans/closure/release-verification/006-verification-guard-hardening.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M007 may proceed. |
-| M007 planning/documentation truthfulness hygiene | conditionally closed | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. |
+| M006 verification guard hardening | closed | `plans/implementation/release-verification/006-verification-guard-hardening.md` | `plans/closure/release-verification/006-verification-guard-hardening.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
+| M007 planning/documentation truthfulness hygiene | closed | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |

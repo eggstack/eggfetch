@@ -1,6 +1,6 @@
 # Core Transport Milestone 010 — Core Duplicate-Helper Consolidation
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -14,22 +14,54 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
-M010 is implemented, and the milestone's own targeted gates are green, but it
-cannot be marked `closed` under `plans/closure/README.md`. The milestone
-changes Rust sources under `crates/eggfetch-core/src/` and adds a new test
-target; all of those are executable inputs under the exact-SHA rule in
-`.skills/verification-qualification.md`. That invalidates the live Stage C
-binding, and neither the Stage C rebinding nor a full Tier 1 / Tier 2 /
-Tier 3 run on the frozen SHA was performed — the maintainer deliberately
-deferred the full tier gates. The milestone is therefore **conditionally
-closed**, with the condition, the risk, and the exact future evidence stated
-in §10.
+M010 is implemented, the milestone's own targeted gates are green, and the
+milestone **is closed**. The milestone changes Rust sources under
+`crates/eggfetch-core/src/` and adds a new test target; all of those are
+executable inputs under the exact-SHA rule in
+`.skills/verification-qualification.md`, so the live Stage C binding was
+invalidated by it at the time of implementation. The binding has since been
+re-established and the frozen-SHA tier gates were run at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
+
+- **Tier 1** (`./scripts/check.sh`) is green — 1767 Rust workspace tests
+  passed (0 failed, 0 ignored), which includes the full `--all-features`
+  `eggfetch-core` suite; 581 Python behaviour tests passed; 134 HTTPX
+  compatibility smoke tests passed; the native Python API manifest (66
+  exports), the Python typing surface and typing fixture, the
+  lint-suppression guard self-test and policy scan, the H3
+  qualification-runner self-test (runner logic only), the adapter feature
+  ownership check and the release version/ref validation all pass; the stable
+  public contract fixtures pass; and the feature-isolated profile
+  whole-suite compile passes for all four standard/native profiles.
+- **Tier 2** (`./scripts/check.sh extended`) is green across every phase —
+  the pinned HTTPX compatibility suite reports 2073 passed / 0 failed, the API
+  manifest comparison is clean for both facades (74 symbols for httpx 0.28.1,
+  76 symbols for httpx2 2.12.0; 0 unexplained, 0 stale), the Rust public-API
+  oracle passes in eight profiles and `cargo-semver-checks` 0.49.0 reports
+  "no semver update required" against the planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`, and the feature matrix, MSRV
+  matrix on the exact Rust 1.89.0 toolchain, documentation, FFI, resource,
+  lifecycle, soak, downstream behavioral-fixture, lossless-merge and Criterion
+  phases all pass. The only skip is the policy-defined optional one: the Node
+  JS surface, whose native `eggfetch.node` artifact is absent.
+- **Tier 3** (`./scripts/check.sh package`) is green, and the live security
+  preflight (`./scripts/check_security.sh`) reports
+  `advisories ok, bans ok, licenses ok, sources ok`.
+
+The two items that the previous closure pass left outstanding are therefore
+recorded as resolved in §10. The rebinding establishes a compatibility
+binding only: it authorizes no publication, and HTTP/3 remains experimental.
 
 What the milestone actually delivered:
 
@@ -50,19 +82,17 @@ What the milestone actually delivered:
   carries ten tests, one or two per cluster plus a source-level public-surface
   assertion.
 
-Two things are **not** claimed. First, Tier 1, Tier 2, Tier 3, the full
-workspace test suite and the Python HTTPX compat suites were **not run**;
-§4 records what was measured instead. Second, the plan's own premises are
-wrong in eight documented ways — its cluster list, its error kinds, its
-cluster-C precedence description, its cluster-G file attribution and its
-cluster-D IPv6 claim are each contradicted by the tree (§3, "The plan's
-premises, corrected"). This record answers the acceptance criteria against
-the measured tree, not against the plan's wording.
+One thing is **not** claimed: the plan's own premises are wrong in eight
+documented ways — its cluster list, its error kinds, its cluster-C precedence
+description, its cluster-G file attribution and its cluster-D IPv6 claim are
+each contradicted by the tree (§3, "The plan's premises, corrected"). This
+record answers the acceptance criteria against the measured tree, not against
+the plan's wording.
 
-One further finding is structural rather than technical: the plan's §13
-criterion "the full workspace test suite is green" and its §15 evidence list
-cannot be satisfied inside a milestone that is, by the maintainer's decision,
-not committed. They are the release-verification subsystem's work.
+The plan's §13 criterion "the full workspace test suite is green" and its §15
+evidence list were the release-verification subsystem's work rather than the
+milestone's own; they were delivered afterwards, by the frozen-SHA
+qualification on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` (§10).
 
 ## 2. Requirement-to-evidence matrix
 
@@ -75,18 +105,18 @@ The requirements are the acceptance criteria of §13 of the implementation plan.
 | The custom-dialing ladder preserves its precedence and its five incompatibilities (§13) | `pipeline/custom_dialing.rs`; three call sites at `pipeline/prepare.rs:451`, `pipeline/mod.rs:279`, `pipeline/mod.rs:540`; `cluster_c_custom_dialing_ladder_has_one_home`; §3 "Cluster C" | Met | Before and after are identical, including the two pre-ladder messages that precede the ladder and the absence of a built-in-proxy arm on the native path |
 | The two origin normalizations agree on every URL shape in the test table, and the chosen authoritative rule is recorded (§13) | `pool.rs::origin_verdict_agreement_table`; §3 "Cluster D" | Met | The stricter `HttpOrigin` rule is adopted; the caller trace and the twelve-shape verdict table are in §3 |
 | Pool keying is unchanged for every supported URL shape (§13) | `pool.rs::pool_key_is_stable_for_every_supported_shape` | Met | Compares the new key against a verbatim copy of the pre-consolidation permissive rule for every accepted shape — all identical. Independently confirmed at compiler level: the baseline's "associated items `from_url` and `origin_string` are never used" warning for `HttpOrigin::from_url` disappears on the current tree, because `OriginKey::from_url` now reduces through it (§4) |
-| No public API changed in any profile (§13) | The Rust public-API oracle over all eight supported profiles, diffed against the frozen `compat/rust-public-api/*.txt` snapshots with `cargo-public-api 0.52.0` and the pinned `nightly-2026-05-07`: all eight IDENTICAL | Met, as reported by the implementer | Not re-run in this closure pass; see §10, the oracle finding. Corroborated at source level: `git diff -U0 -- crates/eggfetch-core/src/ \| grep -E "^[+-]pub "` produces no output, and `crates/eggfetch-core/tests/consolidation_evidence_tests.rs::public_surface_is_unchanged` asserts the same property |
+| No public API changed in any profile (§13) | The Rust public-API oracle on the bound SHA `26fa6192…`: passed in all eight supported profiles, diffed against the frozen `compat/rust-public-api/*.txt` snapshots with `cargo-public-api 0.52.0` and the pinned `nightly-2026-05-07`, with `cargo-semver-checks` 0.49.0 reporting "no semver update required" against the planning baseline `03ecba97…` | Met | The oracle was re-run on the bound SHA, reproducing the implementer's eight IDENTICAL results; see §10, the oracle finding. Corroborated at source level: `git diff -U0 -- crates/eggfetch-core/src/ \| grep -E "^[+-]pub "` produces no output, and `crates/eggfetch-core/tests/consolidation_evidence_tests.rs::public_surface_is_unchanged` asserts the same property |
 | Every error kind is unchanged, and the shared error messages are byte-identical to the current text (§13) | §3 "Cluster B" and "Cluster C"; the eight baseline UTF-8 literals are byte-identical to `TARGET_NOT_UTF8_MESSAGE`; the five ladder messages are byte-identical to the baseline literals | Met | `Error::InvalidResolvedTarget` for the five destination subjects and `Error::InvalidProxyUrl` for the proxy peer, both as at the baseline |
-| The full workspace test suite is green (§13) | Not run | **Not met** | Deliberately deferred; see §10, the deferred-tier-gates finding |
-| Tier 1 and Tier 2 are green on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred; see §10, the deferred-tier-gates finding |
-| Both HTTPX profiles are rebound to that exact SHA (§13) | Not performed | **Not met** | The live binding is invalidated by this milestone; see §7 and §10, the Stage C rebinding finding |
+| The full workspace test suite is green (§13) | 1767 Rust workspace tests passed, 0 failed, 0 ignored, on `26fa6192…` (Tier 1) | Met | See §10, the tier-gate finding |
+| Tier 1 and Tier 2 are green on the frozen executable SHA (§13) | `./scripts/check.sh` and `./scripts/check.sh extended` on `26fa6192…` — green | Met | Tier 3 (`./scripts/check.sh package`) and the live security preflight are green on the same SHA; see §10, the tier-gate finding |
+| Both HTTPX profiles are rebound to that exact SHA (§13) | Both HTTPX profiles and the ledger's Stage C SHA rebound to `26fa6192…`, and the compat qualification was re-run against it | Met | The binding that this milestone invalidated was re-established at the bound SHA; see §7 and §10, the Stage C rebinding finding |
 | Closure evidence: the before/after per-cluster copy count table (§15) | §3 | Met | — |
 | Closure evidence: the cluster D caller trace and the chosen authoritative rule (§15) | §3, "Cluster D" | Met | — |
 | Closure evidence: the origin-verdict agreement table (§15) | §3, "Cluster D" | Met | Twelve shapes |
 | Closure evidence: the pool-key stability evidence (§15) | §3, "Cluster D" | Met | — |
 | Closure evidence: the per-cluster equivalence test output (§15) | §4 | Met | Ten tests in the new target, plus the crate's unit tests |
 | Closure evidence: the public API delta for every profile (§15) | §4, §7 | Met | No delta in any of the eight profiles |
-| Closure evidence: known limitations, including the remaining M009 and python-httpx-compat M005 work (§15) | §10, §11 | Met | M009 is conditionally closed, not open; the redirect method-rewrite table's location remains tracked by python-httpx-compat M005 and is unaffected by this milestone |
+| Closure evidence: known limitations, including the remaining M009 and python-httpx-compat M005 work (§15) | §10, §11 | Met | M009 is closed, not open; the redirect method-rewrite table's location remains tracked by python-httpx-compat M005 and is unaffected by this milestone |
 
 ## 3. Production implementation evidence
 
@@ -465,28 +495,32 @@ the pinned `nightly-2026-05-07`, produced **eight IDENTICAL** results:
 and `all-features`. No public item was added, removed or changed in any
 profile.
 
-The oracle was **not re-run in this closure pass** — it is an eight-profile
-nightly build and the result is reported here as the implementer's. The
-tooling it needs is present in this environment (rows 16–17), so it is
-reproducible. Note that the oracle compares against the *planning* baseline
-`03ecba97…`, not the session's baseline `873ea28…`; because all eight
-snapshots match byte-for-byte, the cumulative public surface of the whole
-session is unchanged, which is a strictly stronger statement than "this
-milestone's change only".
+The oracle was subsequently run on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c` as part of Tier 2 and passed in all
+eight supported profiles, reproducing the implementer's result; the
+`cargo-semver-checks` 0.49.0 run reports "no semver update required" against
+the *planning* baseline `03ecba97…`, not the session's baseline `873ea28…`.
+Because all eight snapshots match byte-for-byte, the cumulative public surface
+of the whole session is unchanged, which is a strictly stronger statement than
+"this milestone's change only". See §10.
 
-**Not run, with reason:**
+Out of scope at the time of the milestone's own verification, and since run on
+the bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
 
-- `./scripts/check.sh` (Tier 1), `./scripts/check.sh extended` (Tier 2),
-  `./scripts/check.sh package` (Tier 3) — deliberately deferred by the
-  maintainer. The targeted equivalents in the table above are the substitute
-  evidence.
+- `./scripts/check.sh` (Tier 1), `./scripts/check.sh extended` (Tier 2) and
+  `./scripts/check.sh package` (Tier 3) — the targeted equivalents in the
+  table above were the substitute evidence at the time; the full gates are
+  green on the bound SHA (§10).
 - The full workspace test suite (`cargo test --workspace --exclude
-  eggfetch-python --all-features`) — same reason.
+  eggfetch-python --all-features`) — green on the bound SHA: 1767 passed,
+  0 failed, 0 ignored.
 - The Python HTTPX compat pytest suites (`crates/eggfetch-python/tests/compat/`)
-  — same reason; they are also network dependent.
-- The Rust public-API oracle — not re-run in this pass (see above).
-- The MSRV gate — requires the exact Rust 1.89.0 toolchain and is a Tier 2
-  requirement.
+  — green on the bound SHA: 2073 passed, 0 failed.
+- The Rust public-API oracle — green on the bound SHA: passed in eight
+  profiles, with `cargo-semver-checks` 0.49.0 reporting "no semver update
+  required" against the planning baseline `03ecba97…` (see above).
+- The MSRV gate — green on the bound SHA, on the exact Rust 1.89.0
+  toolchain (five checks).
 
 Every cargo invocation used the shell assignment prefix (`RUSTFLAGS= cargo …`).
 The `env` binary on this machine is a shim that ignores its arguments; an
@@ -601,18 +635,21 @@ current tree (rows 2–5). The Tier 1 gate that enforces this is
 `tier1_profile_whole_suite_compile` in `scripts/check.sh:160`; it is a
 compile, not a run.
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone. The live binding is
+**Exact-SHA binding.** This milestone changed Rust sources under
+`crates/eggfetch-core/src/` and added a new test target — all executable
+inputs under `.skills/verification-qualification.md` — and therefore
+invalidated the then-live Stage C binding
 `42a9c96db5b25354843bd83bd458c71757e95651`
 (`compat/httpx/0.28.1/profile.toml:15` and `compat/httpx2/2.12.0/profile.toml:13`,
 and the ledger's Stage C entry in `plans/httpx-parity-correction-status.md`),
-which is an ancestor of the baseline `873ea285…` but does not cover the
-working tree. This milestone changes Rust sources under
-`crates/eggfetch-core/src/` and adds a new test target — all executable
-inputs under `.skills/verification-qualification.md`. Until the Stage C
-binding is re-established at a frozen SHA that includes these changes, no
-publication may cite the previous binding. No SHA is claimed here because the
-milestone is not committed.
+which is an ancestor of the baseline `873ea285…` but did not cover the
+milestone's changes. The binding has since been re-established at the frozen
+SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this
+milestone's implementation in the freeze commit
+`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Both HTTPX profiles and the
+ledger's Stage C SHA point at that SHA, and the frozen-SHA qualification is
+green (§10). The rebinding establishes a compatibility binding only: it
+authorizes no publication, and HTTP/3 remains experimental.
 
 **Feature-profile effects: none.** Every consolidation compiles in every
 profile; the four feature-isolated profiles and the default and all-features
@@ -678,9 +715,9 @@ credential is required.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding (`42a9c96d…`) is invalidated by this milestone's Rust-source and test-target changes, and the Stage C rebinding was deliberately not performed | No publication may cite the previous Stage C binding; `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` still point at the superseded SHA | Rebind both HTTPX profiles and the ledger's Stage C SHA in `plans/httpx-parity-correction-status.md` to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2 and Tier 3 were not run on the frozen SHA (deliberately deferred), and neither was the full workspace test suite or the Python HTTPX compat suites | The milestone's own gates are green, but the repository-wide gates are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended` and `./scripts/check.sh package` on the frozen SHA, plus `cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1` and the compat pytest suites, before release |
-| Medium | The Rust public-API oracle result is the implementer's report and was not re-run in this closure pass; the source-level corroboration (no `pub` delta in the diff, `public_surface_is_unchanged`) is weaker than the oracle | The plan's §13 "no public API changed in any profile" rests on an un-reproduced measurement | Re-run `scripts/check_rust_public_api.py` with `cargo-public-api 0.52.0` and `nightly-2026-05-07` (both installed here) on the frozen SHA; expect eight IDENTICAL results |
+| Resolved | The live Stage C binding (`42a9c96d…`) was invalidated by this milestone's Rust-source and test-target changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA at the time of implementation, and neither had the full workspace test suite or the Python HTTPX compat suites | The repository-wide gates were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight; the full workspace suite reported 1767 passed, 0 failed, 0 ignored, and the pinned compat suites reported 2073 passed, 0 failed |
+| Resolved | The Rust public-API oracle result was the implementer's report and was not re-run during the milestone's own closure pass; the source-level corroboration (no `pub` delta in the diff, `public_surface_is_unchanged`) is weaker than the oracle | The plan's §13 "no public API changed in any profile" rested on an un-reproduced measurement | **Resolved 2026-10-22.** The oracle ran on the bound SHA and passed in all eight profiles, with `cargo-semver-checks` 0.49.0 reporting "no semver update required" against the planning baseline `03ecba97…` — the eight IDENTICAL results reproduced |
 | Medium | The plan's own §1 table and §3 evidence are wrong in the eight ways listed in §3, and its §13 acceptance criteria are worded against those wrong premises | The plan cannot serve as the acceptance reference for this milestone; a future reader who checks the plan against the tree will find nine mismatches | The plan's §1, §3 and §13 should be corrected, or this closure record cited as the authority. The plan and this record should then agree |
 | Medium | The IPv6 pool-key divergence between the high-level and native origin paths remains open by design | The per-origin concurrency limit is not shared between the two entry paths for an IPv6-literal endpoint. Nothing else changes: scheme, port and lowercase-host normalization are identical | Closing it changes pool keying, which this milestone forbids. It needs its own milestone under the same subsystem. Recorded in `docs/residual-differences.md` |
 | Medium | `EffectivePortSubject::requires_http_url()` has a third arm (`ResolvedProxyPeer` → "resolved proxy peers require the proxy URL's effective port") that is **unreachable**: the proxy-peer path resolves its port from the proxy URL, which reports its own diagnostic ("proxy scheme … has no known default port") first | The arm exists only to keep the enum exhaustive; the message is never emitted. A reader could mistake it for a live diagnostic | Acceptable as implemented; the doc comment at `http_origin.rs:271-279` states that the arm is kept for exhaustiveness and why it is unreachable |
@@ -689,66 +726,68 @@ credential is required.
 | Low | The main agent's post-verification extension of the whole-suite compile gate to all four feature-isolated profiles (six file-level `high-level-url` test gates, three per-test gates in `http_version_capability_tests`, two inline gates in `src/auth.rs`, and the `scripts/check.sh` gate rename to `tier1_profile_whole_suite_compile`) postdates this milestone's own verification and is **already recorded** as a resolved finding in the M009 closure record | If it is recorded again as M010 work, the registry and the ledger will double-count a single change | Record it once, against M009 or the release-verification subsystem, not against M010. It changed only test-target gating and the Tier 1 gate's command list — no runtime behavior, no public surface |
 | Low | The plan's §10 "Required tests" asks for per-cluster equivalence coverage of the four ALPN transports and the three effective-port subject variants; the delivered coverage is the shared-helper unit tests plus the `consolidation_evidence_tests` target, not one test per transport per subject | The four ALPN call sites are structurally identical after consolidation and each keeps its own `cfg`/variant structure; the coverage is by construction rather than by four separate transport fixtures | Acceptable as implemented. If the stricter reading is wanted, four transport-level ALPN tests would have to be added under a later milestone |
 
-**The condition, the risk, and the exact future evidence.** This milestone is
-conditionally closed on two named items:
+**The condition, the risk, and the exact future evidence.** The two named
+conditions of the previous closure pass are now met:
 
-- **Condition 1 — Stage C rebinding.** Both HTTPX profiles and the ledger's
-  Stage C SHA must be rebound to a frozen commit that includes this
-  milestone's changes, and the compat qualification re-run against it.
-- **Condition 2 — the frozen-SHA tier gate run.** `./scripts/check.sh`,
-  `./scripts/check.sh extended` and `./scripts/check.sh package` must be green
-  on that same frozen SHA, together with the full workspace test suite and
-  the Python HTTPX compat suites.
+- **Condition 1 — Stage C rebinding.** Met. Both HTTPX profiles and the
+  ledger's Stage C SHA were rebound to the frozen SHA
+  `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this milestone's
+  implementation in the freeze commit
+  `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`, and the compat qualification
+  was re-run against it.
+- **Condition 2 — the frozen-SHA tier gate run.** Met. `./scripts/check.sh`,
+  `./scripts/check.sh extended` and `./scripts/check.sh package` are green on
+  that same SHA, together with the full workspace test suite (1767 passed, 0
+  failed, 0 ignored), the pinned Python HTTPX compat suites (2073 passed, 0
+  failed) and the eight-profile public-API oracle.
 
-**Risk until then.** The seven consolidations are proven equivalent on the
-paths the milestone's own tests cover, and the public surface is reported
-unchanged in all eight profiles, but *no repository-wide gate has been run
-against this tree*. A consolidation that changes an error kind or a message in
-a path not covered by the crate's own suites would not have been caught by
-the measurements in §4. The specific residual risk that a Tier 1/2/3 run
-would retire is a profile-specific compile failure or a behavioral-suite
-regression outside `crates/eggfetch-core`'s lib and the eight focused
-targets; the public-API risk is retired by re-running the oracle.
-
-**Exact future evidence that would close it.** On the frozen SHA: a green
-`./scripts/check.sh`, `./scripts/check.sh extended` and
-`./scripts/check.sh package`; a green `cargo test --workspace --exclude
-eggfetch-python --all-features -- --test-threads=1`; a green
+**Exact evidence now on record.** Against the frozen SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`: a green `./scripts/check.sh`,
+`./scripts/check.sh extended` and `./scripts/check.sh package`; a green
+`cargo test --workspace --exclude eggfetch-python --all-features -- --test-threads=1`;
+a green
 `EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers`
-against the rebound profiles; and an eight-profile public-API oracle run
-reporting eight IDENTICAL results. Those artifacts, recorded against the
-frozen SHA, convert this record from *conditionally closed* to *closed*.
+against the rebound profiles; an eight-profile public-API oracle run
+reporting eight IDENTICAL results and "no semver update required"; and a live
+security preflight reporting
+`advisories ok, bans ok, licenses ok, sources ok`.
+
+**What the rebinding does not claim.** It establishes a compatibility binding
+only. It authorizes no publication, HTTP/3 remains experimental, and the
+findings that are still open in §10 — the plan's eight wrong premises and the
+IPv6 pool-key divergence — are unchanged by it and remain pending maintainer
+decisions.
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/core-transport-policy-roadmap.md` milestone 10 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
 The milestone's own scope — the seven consolidations, cluster D's decision
 and its caller trace, the origin-verdict table, the pool-key stability proof,
 the cluster-C precedence proof, the per-cluster evidence tests and the
-documentation updates — is complete and measured. What remains is the
-cross-cutting release evidence (Tier 1 / Tier 2 / Tier 3 on the frozen SHA and
-the Stage C rebinding), which belongs to the release-verification subsystem,
-plus the findings in §10 that are scoped to this milestone: the plan's eight
-wrong premises, the un-reproduced oracle run, and the IPv6 pool-key
-divergence.
+documentation updates — is complete and measured, and the cross-cutting
+release evidence (Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
+rebinding) was delivered on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The findings in §10 that are
+scoped to this milestone remain open and await maintainer decisions: the
+plan's eight wrong premises and the IPv6 pool-key divergence.
 
-M009 (lean path single-sourcing) is conditionally closed, not open. The
-redirect method-rewrite table's location remains tracked by
-python-httpx-compat M005 and is untouched by this milestone.
+M009 (lean path single-sourcing) is closed, not open. The redirect
+method-rewrite table's location remains tracked by python-httpx-compat M005
+and is untouched by this milestone.
 
 ## 12. Registry updates
 
 `plans/registry.md`:
 
-- The core-transport-policy row records milestone 10 as conditionally closed,
-  with the Stage C rebinding and the frozen-SHA tier gate run named as the
-  outstanding condition.
+- The core-transport-policy row records milestone 10 as closed.
 - The implementation-plan table for M010 points at this closure record.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for every milestone closed in this pass, not for M010 alone.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass: it was
+  delivered on the bound SHA `26fa6192…`, together with the Tier 1 / Tier 2 /
+  Tier 3 run.
 - The main agent's feature-isolated-profile whole-suite compile extension is
   recorded **once**, against M009 or the release-verification subsystem, and
   not again against M010 (§10).

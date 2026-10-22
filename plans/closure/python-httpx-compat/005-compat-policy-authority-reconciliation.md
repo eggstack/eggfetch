@@ -1,6 +1,6 @@
 # Python / HTTPX Compat Milestone 005 — Compat Policy Authority Reconciliation
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -18,9 +18,14 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
@@ -48,14 +53,21 @@ semantics no longer reach the native Python client. A new keyword-only
 `proxy_env` option selects the rule set; the default is the native rule set,
 and the compatibility facades opt into the HTTPX rules explicitly.
 
-The milestone cannot be marked `closed` under `plans/closure/README.md`: it
-changes Rust sources, Python package sources, tests, and compatibility
-fixtures, all of which are executable inputs under the exact-SHA rule in
-`.skills/verification-qualification.md`. That invalidates the live Stage C
-binding, and the Stage C rebinding plus a full Tier 1 / Tier 2 / Tier 3 run on
-the frozen SHA were deliberately not performed at this stage. The milestone is
-therefore **conditionally closed**, with the condition, risk, and the exact
-future evidence in §10 and §11.
+The milestone is **closed**. It changes Rust sources, Python package sources,
+tests, and compatibility fixtures, all of which are executable inputs under the
+exact-SHA rule in `.skills/verification-qualification.md`; that change
+invalidated the previous live Stage C binding, and the binding has since been
+re-established at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c` — the implementation freeze
+`d6c41adf4cf8f62ef990cccedf2f86512858fa0b` plus the lockfile-only dependency
+patch. The frozen-SHA tier gates were run at that SHA: Tier 1 is green, Tier 2
+is green across every phase (2073 pinned HTTPX compatibility tests passed,
+0 failed; the Rust public-API oracle passes in 8 profiles), and Tier 3 is
+green. The live security preflight reports `advisories ok, bans ok, licenses
+ok, sources ok`. §10 records the evidence. The milestone's own scoped
+findings — the native `NO_PROXY` / SOCKS behavior change, the IPv6-literal
+`Domain` residual, and the stored-domain spelling difference — are unaffected
+by the binding and remain open by design.
 
 One factual correction to the milestone's own briefing is recorded here rather
 than hidden. The plan and ADR prose assumed the engine strips `Authorization`
@@ -87,8 +99,8 @@ the same pass.
 | The separation is load-bearing, not incidental | Negative control: removing `kwargs["proxy_env"] = "httpx"]` fails exactly 3 tests | Met | — |
 | The native API surface stays in sync (§6.4) | `scripts/check_native_python_api.py --self-test` → "Native API manifest passed (66 exports)"; `scripts/check_python_typing_surface.py --self-test` → passed | Met | `proxy_env` added to the `Client` / `AsyncClient` signatures, the `_native.pyi` stub, and the manifest |
 | HTTPX 0.28.1 conformance is preserved exactly | `test_facade_matches_httpx_0281_reference` asserts the facade's verdict equals real `httpx` 0.28.1's for all 19 rows | Met | httpx2 2.12.0 was untouched by this milestone |
-| Tier 1, Tier 2, and Tier 3 pass on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred; see §10 |
-| Both HTTPX profiles are rebound to that exact SHA (§13) | Not performed | **Not met** | See §7 and §10 |
+| Tier 1, Tier 2, and Tier 3 pass on the frozen executable SHA (§13) | `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | All three green; §10 |
+| Both HTTPX profiles are rebound to that exact SHA (§13) | `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | §7 and §10 |
 
 ## 3. Production implementation evidence
 
@@ -314,10 +326,20 @@ cargo fmt --all -- --check
 | `check_doc_links.py` | "All internal links OK." across 59 markdown files |
 | negative control (opt-in removed) | 3 expected failures — confirms the environment-isolation fixture is load-bearing |
 
-Not run, with reason: `./scripts/check.sh` (Tier 1), `./scripts/check.sh
-extended` (Tier 2), and `./scripts/check.sh package` (Tier 3) — deliberately
-deferred at this stage per the maintainer's instruction to keep verification
-scoped.
+The repository-wide gates were subsequently run at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`: `./scripts/check.sh` (Tier 1),
+`./scripts/check.sh extended` (Tier 2), and `./scripts/check.sh package`
+(Tier 3) are all green, together with the live security preflight
+(`./scripts/check_security.sh` → `advisories ok, bans ok, licenses ok, sources
+ok`). Two host accommodations are recorded rather than hidden: the first
+Tier 2 attempt failed with a linker SIGBUS (`ld terminated with signal 7`)
+while compiling a test binary, which was host memory pressure from a
+concurrent build on the same 16-CPU / 15-GiB host and not a code defect — the
+same step re-verified clean immediately afterwards, the full gate then passed
+end to end, and the rerun used `CARGO_BUILD_JOBS=6`; and the downstream
+behavioral-fixture gate, which fails closed by design, executed rather than
+skipping because the operator's artifact manifest was produced for this
+qualification. §10 records the qualification evidence.
 
 ### 4.1 Workspace clippy and format
 
@@ -396,18 +418,21 @@ new core cookie fixture (`std::slice::from_ref`).
   rule 3 and in `docs/residual-differences.md`.
 - The **FFI and Node** surfaces are unaffected.
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone: Rust sources, Python package sources, tests, and compatibility
-fixtures are executable inputs under `.skills/verification-qualification.md`.
-No SHA is claimed here because the milestone is not committed. Publication
-must not cite the previous binding until the Stage C binding is
-re-established at a frozen SHA that includes this milestone, and until the
-ledger's Stage C SHA and both HTTPX profiles are rebound to that same commit.
+**Exact-SHA binding.** This milestone's changes — Rust sources, Python package
+sources, tests, and compatibility fixtures — are executable inputs under
+`.skills/verification-qualification.md`, so they invalidated the previous live
+Stage C binding. The binding has since been re-established: the ledger's
+Stage C SHA and both HTTPX profiles are rebound to
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this milestone's
+implementation (`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`) and the
+lockfile-only dependency patch on top of it. No Rust source differs between
+the two commits.
 
 The measurement in this record was taken against the **working tree**, not a
 frozen SHA. Per `.skills/verification-qualification.md`, it counts as
 implementation evidence, not as Tier 1 evidence; Tier 1 evidence requires the
-frozen-SHA run.
+frozen-SHA run, and that run has since been performed at the bound SHA
+(§10).
 
 ## 8. Security review
 
@@ -465,30 +490,35 @@ variable is introduced.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding is invalidated by this milestone's Rust, Python, test, and fixture changes, and the Stage C rebinding was deliberately not performed at this stage | No publication may cite the previous Stage C binding | Rebind both HTTPX profiles and the ledger's Stage C SHA to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2, and Tier 3 were not run on the frozen SHA (deliberately deferred) | The milestone's own conformance suites are green; the repository-wide gates are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on the frozen SHA before release |
+| Resolved | The live Stage C binding was invalidated by this milestone's Rust, Python, test, and fixture changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA | The repository-wide gates were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight |
 | Medium | The native Python surface's `NO_PROXY` and SOCKS behavior changes for native users; `proxy_env="httpx"]` restores the previous behavior | Existing native users relying on `NO_PROXY=localhost` also covering loopback IPs, or on remote SOCKS DNS, see a behavior change | Release note. The wording is in `docs/migration/from-httpx.md`; the option itself is documented in `docs/architecture/python-bindings.md` |
 | Medium | An explicit IPv6-literal `Domain` (`Domain=[::1]`) is stored by both jars but returned only by the engine | The facade does not send that cookie. The difference is a `http.cookiejar` host-mangling artifact, not a safety gap | Recorded in `docs/residual-differences.md`. Matching the facade would mean reproducing a standard-library artifact in the native engine; recommended action is to keep the difference |
 | Low | The canonical `http:80` → `https:443` same-host upgrade could not be observed end to end: the process runs as uid 1000 and cannot bind ports 80/443 | The facade's and upstream's side is proven at the policy layer; the engine's side is proven as the origin rule via a real http→https hop on non-canonical ports | Stated explicitly in the fixture docstring and test name. No action unless a privileged environment becomes available |
 | Low | The two jars spell the stored domain differently (`.example.test` vs `example.test`) | A caller comparing a stored domain string across the two surfaces sees different spellings for the same cookie | Recorded in `docs/residual-differences.md`. The accept/reject verdict and the contributed `Cookie` header are identical |
-| Low | Filesystem at 98% with ~22 GB free | Future full-workspace builds may run out of space | Reclaim space before Tier 2 / Tier 3 |
+| Low | The host filesystem had roughly 122 GB free during the frozen-SHA qualification | No space pressure was observed for the Tier 1 / Tier 2 / Tier 3 runs | None. Monitor before future full-workspace builds |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/python-httpx-compat-roadmap.md` milestone 5 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
-The milestone's own scope is complete. What remains is cross-cutting release
-evidence — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
-rebinding — which belongs to the release-verification subsystem.
+The milestone's own scope is complete, and the cross-cutting release evidence
+it was waiting on — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
+rebinding — was delivered on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The milestone's own scoped
+findings — the native `NO_PROXY` / SOCKS behavior change, the IPv6-literal
+`Domain` residual, and the stored-domain spelling difference — remain open
+and are owned by the python-httpx-compat subsystem; they need a maintainer
+decision, not more release evidence.
 
 ## 12. Registry updates
 
 `plans/registry.md`:
 
-- The python-httpx-compat row records milestone 5 as conditionally closed,
-  with the Stage C rebinding named as the outstanding condition.
+- The python-httpx-compat row records milestone 5 as closed.
 - The implementation-plan table for M005 points at this closure record.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for all four milestones closed in this pass.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass; the rebinding
+  was delivered on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`.

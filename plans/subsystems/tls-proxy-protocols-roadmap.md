@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: active — M005 registered and dependency-ready. H3 graduation remains separately gated
+Status: active — M005 closed. H3 graduation remains separately gated
 
 Long-term references:
 
@@ -181,7 +181,7 @@ Deferred: per-request route override, MASQUE/CONNECT-UDP, QUIC migration,
 
 ### Milestone 5 — Uncompiled-protocol fail-closed at adapter boundaries
 
-Class: capability. Status: conditionally closed.
+Class: capability. Status: closed.
 
 Implementation:
 `plans/implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md`.
@@ -247,7 +247,7 @@ label rule; any promotion attempt is a new gated milestone, not a corrective.
 
 ## 11. Completion definition
 
-M001–M003 evidence is accepted. While M004 is open, the subsystem is active.
+M001–M003 evidence is accepted. The subsystem is active.
 M004 is closed on an unconditional exact-SHA Stage C binding because it changed
 executable/public Rust inputs; its two outstanding Tier 2 gates were then run green
 on `ubuntu-latest` / Python 3.12.14 (run `37511735210`). The subsystem holds at
@@ -260,14 +260,20 @@ build cannot honor, and the CLI reporting a missing Hyper client where the
 real cause is a missing HTTP/3 capability. M005 changes no engine
 negotiation logic and does not affect H3's experimental status.
 
-M005 was implemented and is **conditionally closed** on 2026-10-22: the CLI
+M005 was implemented and is **closed** on 2026-10-22: the CLI
 `--http2` silent downgrade and the CLI `--http3` misleading error are closed,
 and the FFI's unguarded strict policy now fails closed. The engine's
 documented native-caller downgrade is unchanged; only the `Http3Only` error
 text and classification changed, with no new error variant and no new public
-surface. Its outstanding condition is the Stage C rebinding and the frozen-SHA
-Tier 1/2/3 gates, because the milestone changes Rust sources, tests, and crate
-manifests.
+surface. It was first recorded as conditionally closed because the milestone
+changes Rust sources, tests, and crate manifests — all executable inputs —
+which invalidated the live Stage C binding and left the frozen-SHA Tier
+1/2/3 gates outstanding. That condition was met on bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where the Stage C binding was
+renewed and the tier gates ran green; M005 moved from `conditionally closed`
+to `closed` there. The closure authorizes neither H3 graduation nor
+publication, and the maintainer decision on a strict-HTTP/3 FFI policy value
+remains open.
 
 ## 12. Milestone status
 
@@ -277,4 +283,4 @@ manifests.
 | M002 route pinning/egress | closed | legacy program §7 | legacy closure | — |
 | M003 H3 retained-experimental | closed | legacy program §7 | legacy + evidence ledger | Graduation evidence (gated future) |
 | M004 caller-owned H3 datagram routing | closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/2/3 green including full compat suite (1934 passed) + API manifests on `ubuntu-latest`/3.12.14, run `37511735210`; H3 stays experimental |
-| M005 uncompiled-protocol fail-closed | conditionally closed | `implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | `closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | ADR-0008 accepted; Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates; maintainer decision on a strict-HTTP/3 FFI policy value |
+| M005 uncompiled-protocol fail-closed | closed | `implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | `closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | ADR-0008 accepted; closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there; maintainer decision on a strict-HTTP/3 FFI policy value |

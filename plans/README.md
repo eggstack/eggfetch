@@ -1,14 +1,19 @@
 # eggfetch Planning System
 
 > **Current execution gate:** eight milestones were implemented and are
-> **conditionally closed** on 2026-10-22 — TLS M005,
+> **closed** on 2026-10-22 — TLS M005,
 > python-httpx-compat M004/M005, core M008/M009/M010, and
-> release-verification M006/M007 — and nothing is committed yet. Each changes
-> executable inputs, so each invalidates the live Stage C binding; the
-> rebinding plus a frozen-SHA Tier 1/2/3 run is the single outstanding
-> condition on all eight and is pending maintainer action below. **No
-> registered milestone remains open** — the four previously queued milestones
-> have all been executed, and the next unit of work needs its own plan.
+> release-verification M006/M007. They were executed as one coordinated
+> program and committed as the executable freeze
+> `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Each changes executable inputs,
+> so each invalidated the live Stage C binding; the rebinding and the
+> frozen-SHA Tier 1/2/3 run have since been completed on
+> `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where Tier 1, Tier 2, Tier 3
+> and the live security preflight are green, so the binding now names that
+> SHA. **No registered milestone remains open** — the four previously queued
+> milestones have all been executed, and the next unit of work needs its own
+> plan. The publication decisions remain with the maintainer: the rebinding is
+> a compatibility binding and authorizes no release.
 > ADR-0008 and ADR-0009 were accepted on 2026-10-22.
 > Core-transport M007, release-verification M005, and TLS/protocol M004 remain
 > closed and published; coordinated **0.2.2** remains the current public
@@ -26,31 +31,26 @@
 These stay visible until they are done. The same list, with owners, is in
 `plans/registry.md`.
 
-1. **Review and commit the eight implemented milestones** — TLS M005,
-   python-httpx-compat M004/M005, core M008/M009/M010, and
-   release-verification M006/M007. Nothing is committed; the maintainer owns
-   the commit. Their closure records are under `plans/closure/`.
-2. **Establish the Stage C binding for the new executable freeze** — commit
-   the tree, freeze the SHA, run Tier 1 / Tier 2 / Tier 3 on it, and rebind
-   both HTTPX profiles. This is the one outstanding condition on all eight
-   conditionally closed milestones.
-3. **Decide whether the FFI publishes a strict HTTP/3 policy value** — the
+1. **Decide whether the FFI publishes a strict HTTP/3 policy value** — the
    published values are `0`=`Http1Only`, `1`=`Http2Only`, `2`/`3`=`Auto`, so
    no strict HTTP/3 value exists to reject. The guard path is written and
    unit-tested; only the ABI value and `docs/ffi/README.md` are missing.
-4. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
+2. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
    roadmap or is admitted under an existing one. The CLI's 581-line `run()`
    decomposition is deferred until this is decided.
-5. **Decide the `tracing` feature's fate** — enabled in an adapter, given a
+3. **Decide the `tracing` feature's fate** — enabled in an adapter, given a
    test, or explicitly retired.
-6. **Decide whether to authorise an HTTP/2 server fixture dev-dependency in
+4. **Decide whether to authorise an HTTP/2 server fixture dev-dependency in
    `eggfetch-cli`** — so the CLI's `--http2` negotiation-success path can be
    asserted end to end. The rejection path is fully covered today.
-7. **Supply the downstream behavioral-fixture artifact** — Tier 2's downstream
-   gate now fails closed by design. `target/downstream-qualification/artifact-manifest.json`
-   has no in-repository producer, so `./scripts/check.sh extended` cannot
-   complete without it. This is an operator obligation, not a code change.
-8. **Decide the fate of four stale lint suppressions and two dead items** —
+5. **Supply the downstream behavioral-fixture artifact for each future
+   qualification** — Tier 2's downstream gate fails closed by design.
+   `target/downstream-qualification/artifact-manifest.json` has no
+   in-repository producer, so `./scripts/check.sh extended` cannot complete
+   without it. This is an operator obligation, not a code change. It was
+   supplied for the 2026-10-22 qualification and the portfolio passed 4/4
+   required packages; the next qualification needs it again.
+6. **Decide the fate of four stale lint suppressions and two dead items** —
    `crates/eggfetch-cli/src/main.rs:24` (`clippy::cast_precision_loss`, the
    cast is gone), `crates/eggfetch-core/src/compression.rs:1332` (same),
    `crates/eggfetch-core/src/transport/http3.rs:1035`

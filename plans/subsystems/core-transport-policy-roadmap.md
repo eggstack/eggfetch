@@ -1,6 +1,6 @@
 # Core Transport and Request Policy Roadmap
 
-Status: active — M008, M009 and M010 conditionally closed
+Status: active — M008, M009 and M010 closed
 
 Long-term references:
 
@@ -293,7 +293,7 @@ and renewed exact-SHA binding.
 
 ### Milestone 8 — Profile matrix completion
 
-Class: invariant. Status: conditionally closed.
+Class: invariant. Status: closed.
 
 Implementation:
 `plans/implementation/core-transport-policy/008-profile-matrix-completion.md`.
@@ -327,11 +327,12 @@ behavioral suites green under the lean profile; Tier 1 and Tier 2 green with
 renewed exact-SHA binding.
 
 Deferred: whole-suite lean-profile coverage (M009); the lint-guard and
-downstream-gate defects (release-verification M006).
+downstream-gate defects (release-verification M006). Both deferred items were
+subsequently delivered by M009 and release-verification M006 respectively.
 
 ### Milestone 9 — Lean path single-sourcing and full-suite profile coverage
 
-Class: infrastructure. Status: ready.
+Class: infrastructure. Status: closed.
 
 Implementation:
 `plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md`.
@@ -362,11 +363,12 @@ hops from both paths; whole suite compiles under `standard-http1,tls-rustls`;
 lean footprint unchanged; Tier 1 and Tier 2 green with renewed exact-SHA
 binding.
 
-Deferred: the remaining internal duplication clusters (M010).
+Deferred: the remaining internal duplication clusters (M010), which M010
+delivered.
 
 ### Milestone 10 — Core duplicate-helper consolidation
 
-Class: infrastructure + polish. Status: ready.
+Class: infrastructure + polish. Status: closed.
 
 Implementation:
 `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md`.
@@ -431,14 +433,25 @@ carrying an unexercised duplicate of the redirect preparation, and seven
 further internal duplication clusters. M008 and M009 are sequenced, and M010
 follows M009. None of the three changes runtime behavior.
 
-M008 was implemented and is **conditionally closed** on 2026-10-22: the
-contract matrix now covers eight profiles, the lean profile's behavioral
+M008 was implemented and is **closed** on 2026-10-22: the contract matrix
+now covers eight profiles, the lean profile's behavioral
 suites run in Tier 1, and the Rust public-surface oracle freezes eight
 profiles with two new tool-generated snapshots that were measured to be
-byte-identical to their H1 counterparts. Its outstanding condition is the
-Stage C rebinding and the frozen-SHA Tier 1/2/3 gates, because the milestone
-changes validation scripts and API snapshots — both executable inputs. M009 is
-unblocked and may proceed.
+byte-identical to their H1 counterparts. It was first recorded as
+conditionally closed because the milestone changes validation scripts and API
+snapshots — both executable inputs — which invalidated the live Stage C
+binding and left the frozen-SHA Tier 1/2/3 gates outstanding. That condition
+was met on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where the
+Stage C binding was renewed and the tier gates ran green; M008 moved from
+`conditionally closed` to `closed` there.
+
+M009 and M010 were implemented on the same executable freeze and are closed on
+that same bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, with the Stage
+C binding renewed there and the frozen-SHA Tier 1/2/3 gates green. M009 makes
+the whole core test suite compile under the lean profile behind one shared
+first-hop preparation builder; M010 consolidates the seven duplication
+clusters with no runtime and no public-API change, and the Rust public-surface
+oracle is byte-identical to the frozen snapshots in all eight profiles.
 
 ## 12. Milestone status
 
@@ -453,6 +466,6 @@ unblocked and may proceed.
 | M006C1 Windows qualification/downstream closure | closed | `plans/implementation/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | `plans/closure/core-transport-policy/006c1-windows-qualification-and-downstream-closure.md` | — |
 | M006C2 post-closure reconciliation/workflow retirement | closed | `plans/implementation/core-transport-policy/006c2-post-closure-reconciliation-and-workflow-retirement.md` | `plans/closure/core-transport-policy/006c2-post-closure-reconciliation.md` | — |
 | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md` | Publication deferred to release-verification M003 intake (exact-pin downstream adoption blocked until then) |
-| M008 profile matrix completion | conditionally closed | `plans/implementation/core-transport-policy/008-profile-matrix-completion.md` | `plans/closure/core-transport-policy/008-profile-matrix-completion.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M009 may proceed. |
-| M009 lean path single-sourcing | conditionally closed | `plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md` | `plans/closure/core-transport-policy/009-lean-path-single-sourcing.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. M010 may proceed. |
-| M010 core duplicate-helper consolidation | conditionally closed | `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md` | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` | Stage C rebinding plus the frozen-SHA Tier 1/2/3 gates. |
+| M008 profile matrix completion | closed | `plans/implementation/core-transport-policy/008-profile-matrix-completion.md` | `plans/closure/core-transport-policy/008-profile-matrix-completion.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
+| M009 lean path single-sourcing | closed | `plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md` | `plans/closure/core-transport-policy/009-lean-path-single-sourcing.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
+| M010 core duplicate-helper consolidation | closed | `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md` | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |

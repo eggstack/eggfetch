@@ -1,6 +1,6 @@
 # Core Transport Milestone 009 — Lean Path Single-Sourcing and Full-Suite Profile Coverage
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -14,21 +14,54 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
-M009 is implemented, and the milestone's own targeted gates are green, but it
-cannot be marked `closed` under `plans/closure/README.md`. The milestone changes
-Rust sources, test targets, a crate manifest and a validation script; all of
-those are executable inputs under the exact-SHA rule in
-`.skills/verification-qualification.md`. That invalidates the live Stage C
-binding, and neither the Stage C rebinding nor a full Tier 1 / Tier 2 / Tier 3
-run on the frozen SHA was performed — the maintainer deliberately deferred the
-full tier gates. The milestone is therefore **conditionally closed**, with the
-condition, the risk, and the exact future evidence stated in §10.
+M009 is implemented, the milestone's own targeted gates are green, and the
+milestone **is closed**. The milestone changes Rust sources, test targets, a
+crate manifest and a validation script; all of those are executable inputs
+under the exact-SHA rule in `.skills/verification-qualification.md`, so the
+live Stage C binding was invalidated by it at the time of implementation. The
+binding has since been re-established and the frozen-SHA tier gates were run
+at the bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
+
+- **Tier 1** (`./scripts/check.sh`) is green — 1767 Rust workspace tests
+  passed (0 failed, 0 ignored), which includes the full `--all-features`
+  `eggfetch-core` suite; 581 Python behaviour tests passed; 134 HTTPX
+  compatibility smoke tests passed; the native Python API manifest (66
+  exports), the Python typing surface and typing fixture, the
+  lint-suppression guard self-test and policy scan, the H3
+  qualification-runner self-test (runner logic only), the adapter feature
+  ownership check and the release version/ref validation all pass; the stable
+  public contract fixtures pass; and the feature-isolated profile
+  whole-suite compile passes for all four standard/native profiles — the gate
+  this milestone added.
+- **Tier 2** (`./scripts/check.sh extended`) is green across every phase —
+  the pinned HTTPX compatibility suite reports 2073 passed / 0 failed, the API
+  manifest comparison is clean for both facades (74 symbols for httpx 0.28.1,
+  76 symbols for httpx2 2.12.0; 0 unexplained, 0 stale), the Rust public-API
+  oracle passes in eight profiles and `cargo-semver-checks` 0.49.0 reports
+  "no semver update required" against the planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`, and the feature matrix, MSRV
+  matrix on the exact Rust 1.89.0 toolchain, documentation, FFI, resource,
+  lifecycle, soak, downstream behavioral-fixture, lossless-merge and Criterion
+  phases all pass. The only skip is the policy-defined optional one: the Node
+  JS surface, whose native `eggfetch.node` artifact is absent.
+- **Tier 3** (`./scripts/check.sh package`) is green, and the live security
+  preflight (`./scripts/check_security.sh`) reports
+  `advisories ok, bans ok, licenses ok, sources ok`.
+
+The two items that the previous closure pass left outstanding are therefore
+recorded as resolved in §10. The rebinding establishes a compatibility
+binding only: it authorizes no publication, and HTTP/3 remains experimental.
 
 What the milestone actually delivered:
 
@@ -65,12 +98,12 @@ The requirements are the acceptance criteria of §13 of the implementation plan.
 | The lean path and the redirect path produce identical prepared hops for the same request (§13) | `cargo test -p eggfetch-core --test lean_path_equivalence --no-default-features --features standard-http1,tls-rustls` → 2 passed; `cargo test -p eggfetch-core --test redirect_path_equivalence --all-features` → 2 passed; `cargo test -p eggfetch-core --lib --all-features -- --test-threads=1 pipeline::` → 21 passed | Met | Also covered in-crate by `pipeline::hop::test_support` |
 | The lean profile's behavior is unchanged: 3xx not followed, one attempt, Bearer-only auth, body cap and total timeout enforced (§13) | `lean_policy_tests` (lean profile) → 6 passed, 0 failed; `lean_route_tests` (lean profile) → 10 passed, 0 failed; `lean_path_equivalence` → 2 passed | Met | `lean_policy_tests` covers the 503 single-attempt, 302 passthrough, Bearer-header-and-redaction and typed refused / timeout / body-cap cases; the equivalence target asserts 3xx is returned without following |
 | The whole test suite compiles under `standard-http1,tls-rustls` (§13) | `RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features standard-http1,tls-rustls --all-targets` → exit 0, 0 `missing documentation for the crate` warnings | Met | Measured on the tree fingerprint in §4 |
-| All thirteen previously failing targets compile under the lean profile and still pass under the default profile (§13) | Compile half: Met (exit 0 above). Pass half: **not run** — the thirteen targets were not executed under the default profile in this pass | **Partially met** | The plan's §11 lists the default-profile run; it was not performed here |
+| All thirteen previously failing targets compile under the lean profile and still pass under the default profile (§13) | Compile half: Met (exit 0 above). Pass half: Met — the full `--all-features` `eggfetch-core` suite ran on the bound SHA as part of Tier 1 (1767 workspace tests passed, 0 failed, 0 ignored) | Met | The plan's §11 default-profile run was delivered by the frozen-SHA qualification; see §10 |
 | The Tier 1 gate compiles the whole suite under the lean profile (§13, §6.5) | `scripts/check.sh`, function `tier1_profile_whole_suite_compile`, called from `run_tier1` immediately after `tier1_rust_api_contracts` | Met | The gate **compiles** the suite; it does not run it. The main agent later extended the same gate to the sibling feature-isolated profiles — see §10, the native-profile finding |
 | The lean profile's binary footprint does not increase (§13, §15) | `qualification/embedded/eggfetch-min` rebuilt from the same source at the baseline and on the current tree with the lean feature set `native-http1,high-level-url,tls-rustls`: unstripped 8 555 488 B → 8 550 648 B, stripped 3 576 216 B → 3 572 480 B | Met for the binary | The total lean binary **shrank** by 4 840 B unstripped and 3 736 B stripped. `eggfetch_core`'s own `.text` grew from 232.7 KiB to 242.3 KiB (+9.6 KiB). The growth is **not attributable to M009 alone** — the tree carries other milestones' changes; see §3 and §10, the footprint finding |
-| No public API changed in any profile (§13) | The Rust public-API oracle was **not** run at the frozen SHA | **Not met** | `pipeline/hop.rs` is a private module, so no public surface is expected to change, but the oracle is the authority |
-| Tier 1 and Tier 2 are green on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred; see §10, the deferred-tier-gates finding |
-| Both HTTPX profiles are rebound to that exact SHA (§13) | Not performed | **Not met** | The live binding is invalidated by this milestone; see §7 and §10, the Stage C rebinding finding |
+| No public API changed in any profile (§13) | The Rust public-API oracle on the bound SHA `26fa6192…`: passed in eight profiles, with `cargo-semver-checks` 0.49.0 reporting "no semver update required" against the planning baseline `03ecba97…` | Met | `pipeline/hop.rs` is a private module, so no public surface is expected to change, and the oracle — the authority — confirms it |
+| Tier 1 and Tier 2 are green on the frozen executable SHA (§13) | `./scripts/check.sh` and `./scripts/check.sh extended` on `26fa6192…` — green | Met | Tier 3 (`./scripts/check.sh package`) and the live security preflight are green on the same SHA; see §10, the tier-gate finding |
+| Both HTTPX profiles are rebound to that exact SHA (§13) | Both HTTPX profiles and the ledger's Stage C SHA rebound to `26fa6192…`, and the compat qualification was re-run against it | Met | The binding that this milestone invalidated was re-established at the bound SHA; see §7 and §10, the Stage C rebinding finding |
 
 ## 3. Production implementation evidence
 
@@ -401,22 +434,26 @@ isolate M009's own contribution; the plan's recorded reference figures
 on `rustc 1.98.1` and are not directly comparable with these absolute
 numbers, which are on `rustc 1.99.1`.
 
-Not run, with reason:
+Out of scope at the time of the milestone's own verification, and since run on
+the bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
 
-- `./scripts/check.sh` (Tier 1), `./scripts/check.sh extended` (Tier 2),
-  `./scripts/check.sh package` (Tier 3) — deliberately deferred by the
-  maintainer. The targeted equivalents in the table above are the substitute
-  evidence.
+- `./scripts/check.sh` (Tier 1), `./scripts/check.sh extended` (Tier 2) and
+  `./scripts/check.sh package` (Tier 3) — the targeted equivalents in the
+  table above were the substitute evidence at the time; the full gates are
+  green on the bound SHA (§10).
 - The full workspace test suite (`cargo test --workspace --exclude
-  eggfetch-python --all-features`) — same reason.
-- The Python HTTPX compat pytest suites — same reason; they are also network
-  dependent.
-- The Rust public-API oracle (`scripts/check_rust_public_api.py`) — requires
-  `cargo-public-api 0.52.0`, `cargo-semver-checks 0.49.0` and the pinned
-  `nightly-2026-05-07`, and must be run at the frozen SHA.
-- The MSRV gate — requires the exact Rust 1.89.0 toolchain and is a Tier 2
-  requirement.
-- The default-profile execution of the thirteen newly gated targets.
+  eggfetch-python --all-features`) — green on the bound SHA: 1767 passed,
+  0 failed, 0 ignored.
+- The Python HTTPX compat pytest suites — green on the bound SHA: 2073
+  passed, 0 failed.
+- The Rust public-API oracle (`scripts/check_rust_public_api.py`) — green on
+  the bound SHA: passed in eight profiles, with `cargo-semver-checks` 0.49.0
+  reporting "no semver update required" against the planning baseline
+  `03ecba97…`.
+- The MSRV gate — green on the bound SHA, on the exact Rust 1.89.0
+  toolchain (five checks).
+- The default-profile execution of the thirteen newly gated targets —
+  covered by the `--all-features` core suite on the bound SHA.
 
 Every cargo invocation used the shell assignment prefix (`RUSTFLAGS= cargo …`).
 The `env` binary on this machine is a shim that ignores its arguments, so
@@ -444,7 +481,8 @@ recorded in the M008 closure record and was avoided here.
   constructed.
 - **No public API surface was added.** `pipeline/hop.rs` is a private module;
   `HopBuildParams`, `build_hop_request` and `test_support` are crate-private.
-  The oracle that would confirm this was not run (§2).
+  The oracle that confirms this ran on the bound SHA and reported no delta in
+  any of the eight profiles (§2).
 - **No cargo feature was added, removed or renamed.** The `[[example]]` entry
   adds a `required-features` declaration for the existing `redirects` and
   `basic-auth` features.
@@ -491,18 +529,22 @@ Supported core profiles and their gates after this milestone:
 | native-http2 + tls-rustls | Tier 1 | yes | — | `native-http2-tls-rustls.txt` |
 | all features | Tier 1 | yes | — | `all-features.txt` |
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone. The live binding is `42a9c96db5b25354843bd83bd458c71757e95651`
+**Exact-SHA binding.** This milestone changed Rust sources, test targets,
+`crates/eggfetch-core/Cargo.toml` and `scripts/check.sh` — all executable
+inputs under `.skills/verification-qualification.md` — and therefore
+invalidated the then-live Stage C binding
+`42a9c96db5b25354843bd83bd458c71757e95651`
 (`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`,
 and the ledger's Stage C entry in
 `plans/httpx-parity-correction-status.md`), which is an ancestor of the
-baseline `873ea285…` but does not cover the working tree. This milestone
-changes Rust sources, test targets, `crates/eggfetch-core/Cargo.toml` and
-`scripts/check.sh` — all executable inputs under
-`.skills/verification-qualification.md`. Until the Stage C binding is
-re-established at a frozen SHA that includes these changes, no publication may
-cite the previous binding. No SHA is claimed here because the milestone is not
-committed.
+baseline `873ea285…` but did not cover the milestone's changes. The binding
+has since been re-established at the frozen SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this milestone's
+implementation in the freeze commit
+`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Both HTTPX profiles and the
+ledger's Stage C SHA point at that SHA, and the frozen-SHA qualification is
+green (§10). The rebinding establishes a compatibility binding only: it
+authorizes no publication, and HTTP/3 remains experimental.
 
 **Lean-profile containment.** The lean profile
 (`standard-http1,tls-rustls`) is a Bearer-only, single-attempt, 3xx-returned-
@@ -511,12 +553,13 @@ new shared builder references no `redirects`-gated item, and `hop.rs` compiles
 under the lean profile — which is exactly what the new Tier 1 gate now checks
 on every run.
 
-**Documentation consistency.** One stale statement about this milestone
-survives outside its documentation set:
-`docs/architecture/build-ci.md`'s Tier 1 table still says the lean gate "is not
-widened to `--all-targets`, because the remaining core test targets do not
-compile under the lean profile (core-transport-policy M009)", and the table has
-no row for the new `tier1_lean_profile_compile` step. See §10, the `docs/architecture/build-ci.md` finding.
+**Documentation consistency.** The stale statement this milestone surfaced
+outside its documentation set was corrected in the same coordinated pass:
+`docs/architecture/build-ci.md`'s Tier 1 table now carries the
+"Rust feature-isolated profile whole-suite compile" row, and the parenthetical
+that said the lean gate "is not widened to `--all-targets`, because the
+remaining core test targets do not compile under the lean profile
+(core-transport-policy M009)" is gone. See §10.
 
 ## 8. Security review
 
@@ -552,31 +595,31 @@ credential is required.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding (`42a9c96d…`) is invalidated by this milestone's Rust-source, test-target, manifest and validation-script changes, and the Stage C rebinding was deliberately not performed | No publication may cite the previous Stage C binding; `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` still point at the superseded SHA | Rebind both HTTPX profiles and the ledger's Stage C SHA in `plans/httpx-parity-correction-status.md` to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2 and Tier 3 were not run on the frozen SHA (deliberately deferred), and neither was the Rust public-API oracle or the full workspace suite | The milestone's own gates are green, but the repository-wide gates and the public-surface oracle are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended` and `./scripts/check.sh package` on the frozen SHA, plus `scripts/check_rust_public_api.py`, before release |
+| Resolved | The live Stage C binding (`42a9c96d…`) was invalidated by this milestone's Rust-source, test-target, manifest and validation-script changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA at the time of implementation, and neither had the Rust public-API oracle or the full workspace suite | The repository-wide gates and the public-surface oracle were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight; the public-API oracle passed in eight profiles and the full workspace suite reported 1767 passed, 0 failed, 0 ignored |
 | Medium | The plan's §13 criterion "exactly one exhaustive `Request::into_parts()` destructuring exists in the engine's preparation path" is not met as literally worded. Three exhaustive destructurings remain in `crates/eggfetch-core/src`: `pipeline/hop.rs:82`, `pipeline/prepare.rs:304` and `pipeline/redirect.rs:106`. The baseline had four. Because all three list every field with no rest pattern, a newly added `RequestParts` field would fail to compile at each of the three sites, not at exactly one. The implementer reported a temporary experiment that produced exactly one compile error; that experiment does not reproduce against the tree as it stands and was reverted, so no reproducible artifact exists | The criterion's stated purpose — "a new request field must produce exactly one compile error when it is not threaded through, not one per copy" — is not achieved at the level of the whole engine. The *first-hop* duplication the milestone targeted is gone, and the two remaining sites are the two the plan's §6.2 requires to remain, so the plan's §13 and §6.2 are mutually inconsistent as written | Either amend §13 to read "exactly one exhaustive destructuring in the **first-hop preparation** path, with `prepare_single_request` and `advance_redirect_hop` remaining as the two transport- and subsequent-hop sites", or reduce `prepare.rs:304` to a non-exhaustive access. The plan and the closure record should then agree |
-| Medium | The working tree is under concurrent modification by another agent throughout this closure pass. Snapshot A (17:14:04Z) is green on every M009 check; snapshot B (17:19:36Z) fails to compile on two `E0308` errors in `pipeline/prepare.rs` caused by a concurrent change to `validate_url_effective_port`'s signature in `http_origin.rs`. Eight core source files changed after 17:14 | No measurement of M009's own change set can be isolated from the concurrent edits, and the tree's compile state alternates between green and red during a verification pass | Re-run the §4 command set on the frozen commit after the concurrent work lands, and record the result against that SHA |
-| Medium | The thirteen newly gated targets were compiled under the lean profile but were not executed under the default profile in this pass | The plan's §13 requires both halves ("compile under the lean profile **and** still pass under the default profile"). The compile half is measured; the pass half is not | Run `cargo test -p eggfetch-core --all-features --test <each of the thirteen> -- --test-threads=1`, or the full `--all-features` core suite, on the frozen SHA |
+| Resolved | The working tree was under concurrent modification by another agent throughout the milestone's implementation pass. Snapshot A (17:14:04Z) is green on every M009 check; snapshot B (17:19:36Z) fails to compile on two `E0308` errors in `pipeline/prepare.rs` caused by a concurrent change to `validate_url_effective_port`'s signature in `http_origin.rs`. Eight core source files changed after 17:14 | The §4 measurements were pinned to tree fingerprints rather than to a commit, so M009's own change set could not be isolated from the concurrent edits at the time | **Closed by the freeze.** The eight milestones were committed together as `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`, and the frozen-SHA qualification (Tier 1 / Tier 2 / Tier 3) ran green on `26fa6192…`, re-running the workspace suite and the feature-isolated profile compiles against one immutable tree. The footprint measurement below remains open as a separate finding |
+| Resolved | The thirteen newly gated targets were compiled under the lean profile but were not executed under the default profile during the milestone's own pass | The plan's §13 requires both halves ("compile under the lean profile **and** still pass under the default profile"). The compile half was measured; the pass half was outstanding | **Resolved 2026-10-22.** The full `--all-features` core suite ran on the bound SHA `26fa6192…` as part of Tier 1 — 1767 workspace tests passed, 0 failed, 0 ignored — which executes the thirteen targets under the default profile |
 | Medium | The lean profile's binary footprint was measured before and after, but not **isolated to M009**: the total lean binary did not increase (unstripped −4 840 B, stripped −3 736 B) while `eggfetch_core`'s own `.text` grew by 9.6 KiB, over a tree that carries other milestones' changes as well | The plan's §13 criterion "the lean profile's binary footprint does not increase" is met for the binary as measured. Whether any part of the 9.6 KiB `.text` growth is M009's own is not established | Re-run the `eggfetch-min` footprint pair on a tree carrying only M009, or on the frozen commit, and compare `eggfetch_core` `.text` |
 | **Resolved after the closure pass (main agent)** | The **native** profile (`native-http1,tls-rustls`) could not compile the whole test suite: 93 errors on the snapshot-C tree, down from 174 at the baseline. `native-http1` carries `advanced-routing` but not `high-level-url`, so the high-level `Client::get` / `Client::post` API does not exist in that profile while the test targets that use it were not gated against it | The same class of gap M009 closed for the lean profile was open for the native profile, and because the native profile was not a Tier 1 `--all-targets` gate the gap was invisible to the gates. **Resolved**: six further test targets that are wholly high-level-dependent (`timeout_tests`, `trailer_tests`, `pool_tests`, `resource_stabilization`, `lean_policy_tests`, `lean_route_tests`) received a file-level `#![cfg(feature = "high-level-url")]` gate, the three high-level tests in `http_version_capability_tests` received a per-test gate (its native-frame test is deliberately left ungated so native coverage is not lost), and two inline unit tests in `crates/eggfetch-core/src/auth.rs` received the same gate. `RUSTFLAGS= cargo check -p eggfetch-core --no-default-features --features native-http1,tls-rustls --all-targets` now exits 0, as does the `native-http2` equivalent. The Tier 1 gate was renamed `tier1_profile_whole_suite_compile` and extended to all four feature-isolated profiles (`standard-http1`, `standard-http2`, `native-http1`, `native-http2`), all four of which now exit 0. **This is an extension beyond M009's stated §6.5 scope, which names the lean profile only**; it is recorded here because it closes the finding the record itself raised | None outstanding. The extension changes only test-target gating and the Tier 1 gate's command list; it changes no runtime behavior and no public surface |
 | **Resolved after the closure pass (main agent)** | `crates/eggfetch-core/tests/hop_equivalence_support.rs` kept its `#![cfg(feature = "high-level-url")]` above its `#![allow(dead_code)]` — the only file in the test tree with that order | Benign today: the `cfg` is satisfied in every profile that compiles the module, so the allow is never stripped. It would have become a "missing documentation for the crate" source if the `cfg` were ever made false | **Done**: the allow block now sits above the `cfg`, matching the other test files. The file's file-level gate was also widened to name the feature it needs alongside the features it already named |
-| Low | `docs/architecture/build-ci.md`'s Tier 1 table still says the lean gate "is not widened to `--all-targets`, because the remaining core test targets do not compile under the lean profile (core-transport-policy M009)", and has no row for the new `tier1_lean_profile_compile` step | The build/CI reference is now false about a gate M009 introduced | Update the Tier 1 table in `docs/architecture/build-ci.md` to add the `tier1_lean_profile_compile` row and remove the M009 parenthetical. This file is outside `plans/closure/` and is therefore not edited by this record |
+| Resolved | `docs/architecture/build-ci.md`'s Tier 1 table said the lean gate "is not widened to `--all-targets`, because the remaining core test targets do not compile under the lean profile (core-transport-policy M009)", and had no row for the whole-suite compile step | The build/CI reference was false about a gate M009 introduced | **Resolved 2026-10-22.** The Tier 1 table now carries the "Rust feature-isolated profile whole-suite compile" row and the M009 parenthetical is gone. The file is outside `plans/closure/` and was corrected in the coordinated freeze pass, not by this record |
 | Low | The plan's §6.4 required a file-level gate that is "a file-level `#![cfg(...)]` attribute expressing the feature requirement of that file's content". Four of the thirteen gates are a bare single-feature gate (`feature = "redirects"`) and do not name the specific API the file exercises | The gate is still per-file and precise enough to hide nothing under the default profile, and every gated file carries a comment naming the API it exercises; but four files share the identical bare `redirects` gate | Acceptable as implemented; the per-file comment is what makes the requirement legible |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/core-transport-policy-roadmap.md` milestone 9 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
 The milestone's own scope — the single-sourcing of the first-hop preparation,
 the lean-profile compile coverage of the whole test suite, the new Tier 1 gate
-and the equivalence fixture — is complete and measured. What remains is the
-cross-cutting release evidence (Tier 1 / Tier 2 / Tier 3 on the frozen SHA and
-the Stage C rebinding), which belongs to the release-verification subsystem,
-plus the three findings in §10 that are scoped to this milestone: the
-"exactly one exhaustive destructuring" wording, the default-profile execution
-of the thirteen gated targets, and the footprint measurement.
+and the equivalence fixture — is complete and measured, and the cross-cutting
+release evidence (Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
+rebinding) was delivered on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The findings in §10 that are
+scoped to this milestone remain open and await maintainer decisions: the
+"exactly one exhaustive destructuring" wording and the footprint measurement.
 
 The successor milestone (M010, core duplicate-helper consolidation) is not
 blocked by this one; on the contrary, M009 removes the duplication M010 was
@@ -586,9 +629,9 @@ scoped to address.
 
 `plans/registry.md`:
 
-- The core-transport-policy row records milestone 9 as conditionally closed,
-  with the Stage C rebinding and the frozen-SHA tier gate run named as the
-  outstanding condition.
+- The core-transport-policy row records milestone 9 as closed.
 - The implementation-plan table for M009 points at this closure record.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for every milestone closed in this pass, not for M009 alone.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass: it was
+  delivered on the bound SHA `26fa6192…`, together with the Tier 1 / Tier 2 /
+  Tier 3 run.

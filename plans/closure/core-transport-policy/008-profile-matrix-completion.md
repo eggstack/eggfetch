@@ -1,6 +1,6 @@
 # Core Transport Milestone 008 — Profile Matrix Completion
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -14,21 +14,52 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
-M008 is implemented and its own targeted gates are green, but it cannot be
-marked `closed` under `plans/closure/README.md`: the milestone changes
-validation scripts and adds two committed API snapshots, which are executable
-inputs under the exact-SHA rule in `.skills/verification-qualification.md`.
-That invalidates the live Stage C binding, and the Stage C rebinding plus a
-full Tier 1 / Tier 2 / Tier 3 run on the frozen SHA were deliberately not
-performed at this stage. The milestone is therefore **conditionally closed**,
-with the condition, risk, and the exact future evidence stated in §10 and
-§11.
+M008 is implemented, its own targeted gates are green, and the milestone **is
+closed**. The milestone changes validation scripts and adds two committed API
+snapshots, which are executable inputs under the exact-SHA rule in
+`.skills/verification-qualification.md`; that invalidated the live Stage C
+binding at the time of implementation. The Stage C binding has since been
+re-established and the frozen-SHA tier gates were run at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
+
+- **Tier 1** (`./scripts/check.sh`) is green — 1767 Rust workspace tests
+  passed (0 failed, 0 ignored), 581 Python behaviour tests passed, 134 HTTPX
+  compatibility smoke tests passed, the native Python API manifest (66
+  exports), the Python typing surface and typing fixture, the
+  lint-suppression guard self-test and policy scan, the H3 qualification-runner
+  self-test (runner logic only), the adapter feature ownership check and the
+  release version/ref validation all pass, the stable public contract fixtures
+  pass, and the feature-isolated profile whole-suite compile passes for all
+  four standard/native profiles.
+- **Tier 2** (`./scripts/check.sh extended`) is green across every phase —
+  the pinned HTTPX compatibility suite reports 2073 passed / 0 failed, the API
+  manifest comparison is clean for both facades (74 symbols for httpx 0.28.1,
+  76 symbols for httpx2 2.12.0; 0 unexplained, 0 stale), the Rust public-API
+  oracle passes in eight profiles and `cargo-semver-checks` 0.49.0 reports
+  "no semver update required" against the planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`, and the feature matrix, MSRV
+  matrix on the exact Rust 1.89.0 toolchain, documentation, FFI, resource,
+  lifecycle, soak, downstream behavioral-fixture, lossless-merge and Criterion
+  phases all pass. The only skip is the policy-defined optional one: the Node
+  JS surface, whose native `eggfetch.node` artifact is absent.
+- **Tier 3** (`./scripts/check.sh package`) is green, and the live security
+  preflight (`./scripts/check_security.sh`) reports
+  `advisories ok, bans ok, licenses ok, sources ok`.
+
+The two items that the previous closure pass left outstanding are therefore
+recorded as resolved in §10. The rebinding establishes a compatibility
+binding only: it authorizes no publication, and HTTP/3 remains experimental.
 
 The implementation itself is complete and is what the plan asked for:
 
@@ -45,8 +76,8 @@ The implementation itself is complete and is what the plan asked for:
   rather than a distinct transport.
 
 No Rust source, no cargo feature, no dependency, and no public engine surface
-changed. The only executable changes are the two validation scripts and the
-two new snapshot artifacts.
+changed by this milestone. The only executable changes are the two validation
+scripts and the two new snapshot artifacts.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -63,8 +94,8 @@ two new snapshot artifacts.
 | Eight-profile oracle is green (§10) | `python scripts/check_rust_public_api.py --skip-semver` → "Rust public API oracle passed (8 profiles)", exit 0 | Met | Run against the baseline tree with the deliverable scripts copied in |
 | Semver half is green (§10) | Full oracle → 223 checks: 223 pass, 30 skip; "Summary no semver update required" | Met | Default profile only, as the script already did |
 | Every profile's gate is documented (§6.4, §12) | `docs/architecture/feature-flags.md` "Gate coverage"; `docs/reference/feature-matrix.md` "Supported core profiles and gate coverage"; `docs/architecture/build-ci.md` Tier 1 rows; `compat/rust-public-api/README.md` "Profiles" | Met | No gate is claimed that does not exist |
-| Tier 1 and Tier 2 green on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred at this stage; see §10 |
-| Stage C rebinding to the frozen SHA (§13) | Not performed | **Not met** | The milestone changes validation scripts and adds API snapshots, which invalidates the live Stage C binding; see §10 |
+| Tier 1 and Tier 2 green on the frozen executable SHA (§13) | `./scripts/check.sh`, `./scripts/check.sh extended` and `./scripts/check.sh package` on `26fa6192…` — green | Met | Run on the bound Stage C SHA; the Rust sources are byte-identical to the freeze commit `d6c41adf…`. See §10 |
+| Stage C rebinding to the frozen SHA (§13) | Both HTTPX profiles and the ledger's Stage C SHA rebound to `26fa6192…` | Met | The binding that this milestone invalidated was re-established at the bound SHA, and the compat qualification was re-run against it; see §10 |
 
 ## 3. Production implementation evidence
 
@@ -166,10 +197,13 @@ git diff --stat -- compat/rust-public-api/
 | Existing snapshots changed | none — only `README.md` modified; both `.txt` files are new |
 | Generator fidelity (regenerated H1 snapshots vs committed) | byte-identical, 135 926 / 119 215 bytes |
 
-Not run, with reason: `./scripts/check.sh` (Tier 1), `./scripts/check.sh
-extended` (Tier 2), and `./scripts/check.sh package` (Tier 3) — deliberately
-deferred at this stage per the maintainer's instruction to keep verification
-scoped. The targeted equivalents listed above are the substitute evidence.
+At the time of the milestone's own verification the repository-wide gates
+were out of scope — `./scripts/check.sh` (Tier 1),
+`./scripts/check.sh extended` (Tier 2) and `./scripts/check.sh package`
+(Tier 3) — and the targeted equivalents listed above were the substitute
+evidence for the milestone's own changes. The full gates were subsequently
+run on the bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` and are
+green; see §10.
 
 ## 5. Invariant review
 
@@ -223,13 +257,17 @@ Supported core profiles and their gates after this milestone:
 | native-http2 + tls-rustls | Tier 1 (new) | yes | `native-http2-tls-rustls.txt` (new) |
 | all features | Tier 1 | yes | `all-features.txt` |
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone. `scripts/check.sh` and `scripts/check_rust_public_api.py` are
-validation scripts and `compat/rust-public-api/*.txt` are API snapshots; all
-three are executable inputs under `.skills/verification-qualification.md`.
-Until the Stage C binding is re-established at a frozen SHA that includes
-these changes, no publication may cite the previous binding. No SHA is
-claimed here because the milestone is not committed.
+**Exact-SHA binding.** This milestone changed validation scripts
+(`scripts/check.sh` and `scripts/check_rust_public_api.py`) and added API
+snapshots (`compat/rust-public-api/*.txt`); all three are executable inputs
+under `.skills/verification-qualification.md`, so the previous live Stage C
+binding was invalidated by it. The binding has since been re-established at
+the frozen SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries
+this milestone's changes in the freeze commit
+`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Both HTTPX profiles and the
+ledger's Stage C SHA point at that SHA, and the frozen-SHA qualification is
+green (§10). The rebinding establishes a compatibility binding only: it
+authorizes no publication, and HTTP/3 remains experimental.
 
 **Documentation consistency.** Three stale "six profiles" statements outside
 this milestone's original scope were corrected in the same pass, because the
@@ -272,30 +310,31 @@ no network access, and no credential is required.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding is invalidated by this milestone's validation-script and API-snapshot changes, and the Stage C rebinding was deliberately not performed at this stage | No publication may cite the previous Stage C binding; the compat profiles still point at the superseded SHA | Rebind both HTTPX profiles and the ledger's Stage C SHA to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2, and Tier 3 were not run on the frozen SHA (deliberately deferred) | The milestone's own gates are green, but the repository-wide gates are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on the frozen SHA before release |
-| Low | 13 core test targets still fail to compile under the lean profile | The lean gate covers only the two named behavioral targets; a lean-profile regression in an uncovered target stays invisible | Track and fix in core-transport-policy M009 (lean path single-sourcing); do not widen the gate until that milestone lands |
+| Resolved | The live Stage C binding was invalidated by this milestone's changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA | The repository-wide gates were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight |
+| Resolved | 13 core test targets failed to compile under the lean profile | The lean gate covered only the two named behavioral targets; a lean-profile regression in an uncovered target stayed invisible | **Resolved by core-transport-policy M009** (lean path single-sourcing), which gated the thirteen targets on the feature each file's own content requires and added the Tier 1 whole-suite compile gate. The gate is not widened beyond M009's four feature-isolated profiles |
 | Low | `env` on `PATH` in this environment ignores its arguments | Any `env VAR=… cmd` verification invocation silently no-ops and can produce false passes | Use the shell assignment prefix (`VAR=… cmd`); recorded here so the false-pass mode is not repeated |
-| Low | Filesystem at 98% with ~22 GB free | Future full-workspace builds may run out of space | Reclaim space before Tier 2 / Tier 3 |
+| Low | Filesystem headroom was 98% used with ~22 GB free at the time of the milestone's own verification | Future full-workspace builds may run out of space | Closed for this pass: the frozen-SHA qualification ran with roughly 122 GB free and Tier 1 / Tier 2 / Tier 3 all completed. Reclaim space before any later full-workspace run if the host fills again |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/core-transport-policy-roadmap.md` milestone 8 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
-The milestone's own scope is complete. What remains is the cross-cutting
-release evidence — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
-rebinding — which belongs to the release-verification subsystem, not to this
-milestone. The successor milestone (M009, lean path single-sourcing) is not
-blocked by this one.
+The milestone's own scope is complete, and the cross-cutting release evidence
+— Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C rebinding — was
+delivered on the bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The
+findings that are still open are listed in §10. The successor milestone
+(M009, lean path single-sourcing) is not blocked by this one.
 
 ## 12. Registry updates
 
 `plans/registry.md`:
 
-- The core-transport-policy row records milestone 8 as conditionally closed,
-  with the Stage C rebinding named as the outstanding condition.
+- The core-transport-policy row records milestone 8 as closed.
 - The implementation-plan table for M008 points at this closure record.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for all four milestones closed in this pass, not for M008 alone.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass: it was
+  delivered on the bound SHA `26fa6192…`, together with the Tier 1 / Tier 2 /
+  Tier 3 run.

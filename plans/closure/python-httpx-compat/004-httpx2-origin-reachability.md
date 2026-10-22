@@ -1,6 +1,6 @@
 # Python / HTTPX Compat Milestone 004 — httpx2 URL Origin Reachability
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -14,9 +14,14 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
@@ -42,14 +47,21 @@ records a different base class for `Request` and `Response`. Both are
 registered in `compat/httpx2/2.12.0/allowed-differences.toml` as
 `H2X-NEW-016` and `H2X-NEW-017`, and both API manifest comparisons are green.
 
-The milestone cannot be marked `closed` under `plans/closure/README.md`: it
-changes the Python package's executable source, its compatibility fixtures,
-and its API manifest allowlist, all of which are executable inputs under the
-exact-SHA rule in `.skills/verification-qualification.md`. That invalidates the
-live Stage C binding, and the Stage C rebinding plus a full Tier 1 / Tier 2 /
-Tier 3 run on the frozen SHA were deliberately not performed at this stage.
-The milestone is therefore **conditionally closed**, with the condition, risk,
-and the exact future evidence in §10 and §11.
+The milestone is **closed**. It changes the Python package's executable
+source, its compatibility fixtures, and its API manifest allowlist, all of
+which are executable inputs under the exact-SHA rule in
+`.skills/verification-qualification.md`; that change invalidated the previous
+live Stage C binding, and the binding has since been re-established at the
+bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — the implementation
+freeze `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` plus the lockfile-only
+dependency patch. The frozen-SHA tier gates were run at that SHA: Tier 1 is
+green, Tier 2 is green across every phase (2073 pinned HTTPX compatibility
+tests passed, 0 failed; the Rust public-API oracle passes in 8 profiles), and
+Tier 3 is green. The live security preflight reports `advisories ok, bans ok,
+licenses ok, sources ok`. §10 records the evidence. The milestone's own
+scoped findings — the `httpx2.Request` / `httpx2.Response` base-class deltas
+(`H2X-NEW-016` / `H2X-NEW-017`) and the `URL` constructor signature freeze —
+are unaffected by the binding and remain open by design.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -71,8 +83,8 @@ and the exact future evidence in §10 and §11.
 | Both API manifests are regenerated, not hand-edited, and both comparisons are green (§13) | `generate_httpx_api_manifest.py` run for both packages; `compare_httpx_api_manifest.py` exit 0 for both | Met | The two new allowlist entries were produced by the validated entries and verified by `--validate` |
 | The 0.28.1 and httpx2 conformance suites are green (§13) | See §4 | Met | — |
 | The httpx2 ledger entry states the real coverage (§13) | Recorded in `plans/httpx-parity-correction-status.md` | Met | Ledger updated in the same pass |
-| Tier 1, Tier 2, and Tier 3 pass on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred; see §10 |
-| Both HTTPX profiles are rebound to that exact SHA (§13) | Not performed | **Not met** | See §7 and §10 |
+| Tier 1, Tier 2, and Tier 3 pass on the frozen executable SHA (§13) | `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | All three green; §10 |
+| Both HTTPX profiles are rebound to that exact SHA (§13) | `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | §7 and §10 |
 
 ## 3. Production implementation evidence
 
@@ -208,10 +220,20 @@ httpx.Request url type          : eggfetch.compat.httpx._urls.URL
 httpx.Response url type         : URL
 ```
 
-Not run, with reason: `./scripts/check.sh` (Tier 1), `./scripts/check.sh
-extended` (Tier 2), and `./scripts/check.sh package` (Tier 3) — deliberately
-deferred at this stage per the maintainer's instruction to keep verification
-scoped.
+The repository-wide gates were subsequently run at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`: `./scripts/check.sh` (Tier 1),
+`./scripts/check.sh extended` (Tier 2), and `./scripts/check.sh package`
+(Tier 3) are all green, together with the live security preflight
+(`./scripts/check_security.sh` → `advisories ok, bans ok, licenses ok, sources
+ok`). Two host accommodations are recorded rather than hidden: the first
+Tier 2 attempt failed with a linker SIGBUS (`ld terminated with signal 7`)
+while compiling a test binary, which was host memory pressure from a
+concurrent build on the same 16-CPU / 15-GiB host and not a code defect — the
+same step re-verified clean immediately afterwards, the full gate then passed
+end to end, and the rerun used `CARGO_BUILD_JOBS=6`; and the downstream
+behavioral-fixture gate, which fails closed by design, executed rather than
+skipping because the operator's artifact manifest was produced for this
+qualification. §10 records the qualification evidence.
 
 ## 5. Invariant review
 
@@ -263,14 +285,15 @@ The `URL` symbol in the httpx2 manifest is **unchanged** — its constructor
 signature was deliberately preserved, including after the `__new__` override
 added during review, which was verified not to alter the recorded manifest.
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone: the Python package's executable source, the compatibility fixtures,
-and the compatibility manifest allowlist are executable inputs under
-`.skills/verification-qualification.md`. No SHA is claimed here because the
-milestone is not committed. Publication must not cite the previous binding
-until the Stage C binding is re-established at a frozen SHA that includes this
-milestone, and until the ledger's Stage C SHA and both HTTPX profiles are
-rebound to that same commit.
+**Exact-SHA binding.** This milestone's changes — the Python package's
+executable source, the compatibility fixtures, and the compatibility manifest
+allowlist — are executable inputs under `.skills/verification-qualification.md`,
+so they invalidated the previous live Stage C binding. The binding has since
+been re-established: the ledger's Stage C SHA and both HTTPX profiles are
+rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this
+milestone's implementation (`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`) and
+the lockfile-only dependency patch on top of it. No Rust source differs
+between the two commits.
 
 ## 8. Security review
 
@@ -293,7 +316,7 @@ rebound to that same commit.
 | File | Change |
 |---|---|
 | `docs/architecture/python-bindings.md` | The httpx2 subsection: the shared-semantics list no longer claims `_request` / `_response` are shared with the 0.28.1 facade; two new module-table rows for `httpx2/_request.py` and `httpx2/_response.py`; a new paragraph stating the reachability guarantee and the intentional identity change; the new test module added to the differential-test list. |
-| `plans/httpx-parity-correction-status.md` | The httpx2 parity entry now states the real coverage — including that `URL.origin` is reachable from request, response, client, and redirect observables — and records that the executable freeze changed and the Stage C binding must be re-established. |
+| `plans/httpx-parity-correction-status.md` | The httpx2 parity entry now states the real coverage — including that `URL.origin` is reachable from request, response, client, and redirect observables — and records that the executable freeze changed and that the Stage C binding required re-establishment. |
 
 Operations: no new dependency, no network access, no credential. The change is
 confined to the Python package's facade modules and its compatibility
@@ -303,29 +326,34 @@ fixtures.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding is invalidated by this milestone's Python source, fixture, and manifest changes, and the Stage C rebinding was deliberately not performed at this stage | No publication may cite the previous Stage C binding; the compat profiles still point at the superseded SHA | Rebind both HTTPX profiles and the ledger's Stage C SHA to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2, and Tier 3 were not run on the frozen SHA (deliberately deferred) | The milestone's own conformance suites are green; the repository-wide gates are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on the frozen SHA before release |
+| Resolved | The live Stage C binding was invalidated by this milestone's Python source, fixture, and manifest changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA | The repository-wide gates were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight |
 | Medium | `httpx2.Request` and `httpx2.Response` are no longer identical to their 0.28.1 counterparts | A caller that used `httpx2.Request is httpx.Request` as a feature test now sees `False`. `isinstance` / `issubclass` relationships are preserved | Intentional and recorded. Documented in `docs/architecture/python-bindings.md` and in the `migration-impact` field of `H2X-NEW-016` / `H2X-NEW-017` |
 | Low | The httpx2 `URL` constructor's recorded signature must stay identical to the reference; a future change to it would need a new allowlist entry and would invalidate `H2X-INH-060..063` | Any future change to the httpx2 `URL` constructor is a manifest break | Keep the constructor signature unchanged; add a new allowlist entry if it must change |
-| Low | Filesystem at 98% with ~22 GB free | Future full-workspace builds may run out of space | Reclaim space before Tier 2 / Tier 3 |
+| Low | The host filesystem had roughly 122 GB free during the frozen-SHA qualification | No space pressure was observed for the Tier 1 / Tier 2 / Tier 3 runs | None. Monitor before future full-workspace builds |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/python-httpx-compat-roadmap.md` milestone 4 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
-The milestone's own scope is complete. What remains is cross-cutting release
-evidence — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
-rebinding — which belongs to the release-verification subsystem, not to this
-milestone. Milestone 5 in the same subsystem is not blocked by this one.
+The milestone's own scope is complete, and the cross-cutting release evidence
+it was waiting on — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
+rebinding — was delivered on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The milestone's own scoped
+findings — the `httpx2.Request` / `httpx2.Response` base-class deltas
+(`H2X-NEW-016` / `H2X-NEW-017`) and the `URL` constructor signature freeze —
+remain open and are owned by the python-httpx-compat subsystem; they need a
+maintainer decision, not more release evidence. Milestone 5 in the same
+subsystem is not blocked by this one.
 
 ## 12. Registry updates
 
 `plans/registry.md`:
 
-- The python-httpx-compat row records milestone 4 as conditionally closed,
-  with the Stage C rebinding named as the outstanding condition.
+- The python-httpx-compat row records milestone 4 as closed.
 - The implementation-plan table for M004 points at this closure record.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for all four milestones closed in this pass.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass; the rebinding
+  was delivered on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`.

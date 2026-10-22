@@ -4,6 +4,159 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed after the eight-milestone implementation freeze (2026-10-22)
+
+Recorded designation: **Stage C qualified (unconditional renewal)** for both
+documented facades, bound to executable freeze
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The preceding
+`42a9c96db5b25354843bd83bd458c71757e95651` binding is historical because the
+2026-10-22 implementation pass changed executable inputs on every axis the
+exact-SHA rule covers: Rust sources, Python package sources, tests, build and
+validation scripts, compatibility fixtures, API snapshots, and the packaged
+artifact.
+
+That pass executed eight registered milestones as one coordinated program and
+committed them as the executable freeze
+`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`:
+
+- **core-transport M008** — profile matrix completion. The stable contract
+  matrix and the Rust public-surface oracle now cover eight profiles
+  (default, `http1`/`http2` with `tls-rustls`, `standard-http1`/`standard-http2`,
+  `native-http1`/`native-http2`), and the lean profile's behavioral suites run
+  in Tier 1.
+- **core-transport M009** — lean path single sourcing. The shared first-hop
+  builder moves to `crates/eggfetch-core/src/pipeline/hop.rs`; the lean path no
+  longer rebuilds cookie, auth, and header behavior. First-hop preparation
+  reduces to exactly one exhaustive `RequestParts` destructuring while the
+  transport-preparation and subsequent-hop destructurings required by the plan
+  remain exhaustive.
+- **core-transport M010** — core duplicate-helper consolidation. Seven
+  duplication clusters consolidated (direct-client construction, effective-port
+  validation, custom-dialing ladders, origin normalization, ALPN HTTP/2
+  detection, Hyper client policy, UTF-8 target conversion). No runtime behavior
+  changed and no public API changed.
+- **tls-proxy-protocols M005** — uncompiled-protocol request semantics, fail
+  closed, under ADR-0008. The CLI's `--http2` no longer silently downgrades, the
+  CLI's `--http3` no longer misreports a missing capability as a missing client,
+  and the FFI's strict policy fails closed.
+- **python-httpx-compat M004** — httpx2 URL origin reachability. The httpx2
+  `Request` and `Response` become real subclasses of the 0.28.1 facade's
+  classes, so `URL.origin` is reachable from every URL a user can observe. Two
+  intentional public-surface deltas follow and are registered in
+  `compat/httpx2/2.12.0/allowed-differences.toml` as `H2X-NEW-016` (`Request`
+  base class) and `H2X-NEW-017` (`Response` base class).
+- **python-httpx-compat M005** — compat policy authority reconciliation, under
+  ADR-0009. The engine's cookie jar and the facade's `http.cookiejar` verdict
+  are aligned, the redirect credential-rule divergence is measured and recorded
+  rather than papered over, and the native Python client no longer inherits the
+  compat `NO_PROXY` parser or the `socks5://` → `socks5h://` rewrite.
+- **release-verification M006** — verification guard hardening. The lint
+  suppression guard now rejects blanket lint lists, the downstream
+  qualification gate fails closed, the profile-isolated tier rows use a bare
+  `RUSTFLAGS=`, and the H3 runner self-test and lint-guard self-test run first
+  in Tier 1.
+- **release-verification M007** — planning and documentation truthfulness
+  hygiene.
+
+The bound SHA adds one further commit,
+`fix(security): patch the four dependencies with live RustSec advisories`,
+which changes only `Cargo.lock` and `fuzz/Cargo.lock`:
+
+- `quinn-proto` 0.11.16 → 0.11.18 — RUSTSEC-2026-0342, RUSTSEC-2026-0341,
+  RUSTSEC-2026-0338, RUSTSEC-2026-0339, RUSTSEC-2026-0340.
+- `rustls` 0.23.45 → 0.23.46 — RUSTSEC-2026-0347, RUSTSEC-2026-0349,
+  RUSTSEC-2026-0348, RUSTSEC-2026-0346.
+- `rustls-webpki` 0.103.15 → 0.103.16 — RUSTSEC-2026-0382.
+- `webpki-roots` 1.0.8 → 1.0.10 — RUSTSEC-2026-0381. The separately resolved
+  `webpki-roots` 0.26.11 compatibility package is explicitly unaffected by
+  that advisory.
+
+No Rust source changed in that commit, no dependency was added, removed, or
+moved across a major version, and the root lockfile diff is exactly four
+version lines and their checksums. The Rust public-surface oracle is
+byte-identical to the frozen snapshots in all eight profiles.
+
+Compatibility impact of the whole pass:
+
+- The httpx 0.28.1 facade gains no public surface. Its API manifest still
+  reports 74 symbols with 0 unexplained and 0 stale differences against the
+  pinned upstream package.
+- The httpx2 2.12.0 facade reports 76 symbols with 0 unexplained and 0 stale
+  differences. Its two deliberate deltas (`H2X-NEW-016`, `H2X-NEW-017`) are
+  registered and explain the entire difference set.
+- `isinstance` / `issubclass` relationships are preserved for both httpx2
+  classes; only identity comparisons against the 0.28.1 classes change.
+
+Qualification evidence on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`:
+
+- Tier 1 (`./scripts/check.sh`) green: 1767 Rust workspace tests passed (0
+  failed, 0 ignored), 581 Python behavior tests passed, 134 HTTPX compatibility
+  smoke tests passed, the native Python API manifest passed (66 exports), the
+  Python typing surface and typing fixture passed, the lint-suppression guard
+  self-test and policy scan passed, the H3 qualification-runner self-test
+  passed, the adapter feature-ownership gate passed, the stable Rust public
+  contract fixtures passed, and the feature-isolated whole-suite compile gate
+  passed for all four standard/native profiles.
+- Tier 2 (`./scripts/check.sh extended`) green across every phase: the full
+  pinned HTTPX 0.28.1 / HTTPX2 2.12.0 compatibility suite reported **2073
+  passed, 0 failed**; the API-manifest comparison is clean for both facades
+  (74 and 76 symbols, 0 unexplained, 0 stale); the Rust public API oracle
+  passed in 8 profiles and `cargo-semver-checks` 0.49.0 reported "no semver
+  update required" against planning baseline
+  `03ecba973010e2858bf16a2b5f84d51ce70adae4`; the feature matrix, the
+  feature-gated tests, the Rust 1.89.0 MSRV matrix (5 checks), the
+  documentation and doctest gates, the FFI tests, the resource regression
+  monitor, the lifecycle tests, the soak tests, the downstream behavioral
+  fixtures, the lossless merge tests, and the Criterion micro-benchmarks all
+  passed.
+- The **downstream behavioral-fixture gate executed rather than skipping**.
+  Since release-verification M006 it fails closed when its artifact manifest
+  is absent, and nothing in the repository produces that manifest. The
+  operator obligation documented in `compat/downstream/README.md` ("Update
+  Process") was met for this qualification: an eggfetch wheel built from the
+  bound SHA and the controlled httpx replacement wheel, with their SHA-256
+  hashes recorded in the manifest. The portfolio then passed **4/4 required
+  packages** — respx 0.21.1, httpx-sse, httpx-auth, and httpx-ws — with each
+  package's source hash verified against `compat/downstream/manifest.toml`.
+  This is the first renewal in which the release-blocking portfolio ran
+  instead of being skipped.
+- Tier 3 (`./scripts/check.sh package`) green: crate packaging validation, the
+  release wheel build, the wheel smoke test, the package content validation,
+  and the installed-wheel typing smoke.
+- Live security preflight (`./scripts/check_security.sh`):
+  `advisories ok, bans ok, licenses ok, sources ok`. The same run before the
+  dependency patch reported 11 advisories; that is what drove the patch
+  commit recorded above.
+- The only skip in any tier is the policy-defined optional one: the Node JS
+  surface, because the native `eggfetch.node` artifact is not built in this
+  checkout.
+
+Two host accommodations are recorded rather than hidden:
+
+- The first Tier 2 attempt at the code freeze failed while linking a test
+  binary with `collect2: fatal error: ld terminated with signal 7 [Bus
+  error]`. This was host memory pressure from an unrelated concurrent build on
+  the same 16-CPU / 15-GiB machine, not a code defect: the identical step
+  re-verified clean immediately afterwards, and the full gate then passed end
+  to end. The reruns used `CARGO_BUILD_JOBS=6` to bound linker parallelism.
+  No product or fixture code was changed for it.
+- The filesystem was at 97-99% full during the first attempt and was
+  reclaimed before the qualification runs, which started with roughly 122 GB
+  free. An unrelated concurrent build on the same host kept consuming space
+  during the runs, and the tree finished the qualification with roughly 25 GB
+  free. The freed space is a cargo incremental cache under `target/` and is
+  regenerable; nothing in the repository was affected.
+
+The canonical qualification records (`docs/residual-differences.md`,
+`docs/reference/compatibility.md`,
+`docs/reference/compatibility-stage-decision.md`, both `compat/*/profile.toml`)
+were renewed together with this binding.
+
+This renewal is not an H3 graduation claim, not an HTTPX 1.0 parity claim, and
+not a publication authorization. H3 remains experimental, HTTPX 1.0 remains
+gated on the upstream trigger, and Node maturation remains a separately
+registered future.
+
 ## Recorded state — Stage C renewed after M004 caller-owned H3 datagram routing (2026-10-05)
 
 Recorded designation: **Stage C qualified (unconditional renewal)** for both
@@ -2566,6 +2719,20 @@ Tier 3 on the frozen SHA, and rebind `compat/httpx/0.28.1/profile.toml` and
 `plans/registry.md`. Until it is done, no publication may cite the previous
 Stage C binding.
 
+> **Superseded 2026-10-22.** The condition above is met. The tree was
+> committed as the executable freeze
+> `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`, the live RustSec advisories
+> were cleared by a patch-level dependency update
+> (`26fa619299fb8d447f25cbcb5eb713a1f537a30c`), and the frozen-SHA
+> qualification ran green there — Tier 1, Tier 2, Tier 3, and the live
+> security preflight, with the downstream behavioral-fixture gate executing
+> rather than skipping. The binding now names
+> `26fa619299fb8d447f25cbcb5eb713a1f537a30c`; see **"Recorded state — Stage C
+> renewed after the eight-milestone implementation freeze (2026-10-22)"** at
+> the top of this ledger. This section is retained as the historical record of
+> the invalidation and of the corrected httpx2 parity coverage statement
+> below.
+
 ### httpx2 parity coverage — the corrected statement
 
 The httpx2 parity coverage claimed by earlier sections of this ledger was
@@ -2683,6 +2850,19 @@ the frozen SHA, then rebind `compat/httpx/0.28.1/profile.toml` and
 single shared condition on all eight conditionally closed milestones of this
 pass.
 
+> **Superseded 2026-10-22.** The condition above is met. The tree was
+> committed as the executable freeze
+> `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`, the live RustSec advisories
+> were cleared by a patch-level dependency update
+> (`26fa619299fb8d447f25cbcb5eb713a1f537a30c`), and the frozen-SHA
+> qualification ran green there — Tier 1, Tier 2, Tier 3, and the live
+> security preflight, with the downstream behavioral-fixture gate executing
+> rather than skipping. The binding now names
+> `26fa619299fb8d447f25cbcb5eb713a1f537a30c`; see **"Recorded state — Stage C
+> renewed after the eight-milestone implementation freeze (2026-10-22)"** at
+> the top of this ledger. This section is retained as the historical record of
+> the invalidation and of what each milestone changed.
+
 ### What changed, and what it means for the binding
 
 - **Core M009 — lean path single-sourcing.** The lean and redirect paths now
@@ -2764,3 +2944,17 @@ Targeted only, by instruction; the full tier gates were deliberately deferred.
 This is implementation evidence against the working tree, **not** Tier 1
 evidence. Tier 1 evidence requires the frozen-SHA run, which has not been
 performed.
+
+### Superseded by the 2026-10-22 renewal
+
+The two conditions this section left open are now met. The tree was committed
+as the executable freeze `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`, the
+live RustSec advisories were cleared by a patch-level dependency update
+(`26fa619299fb8d447f25cbcb5eb713a1f537a30c`), and the frozen-SHA qualification
+ran green there: Tier 1, Tier 2, Tier 3, and the live security preflight, with
+the downstream behavioral-fixture gate executing rather than skipping. The
+Stage C binding is renewed at `26fa619299fb8d447f25cbcb5eb713a1f537a30c`; see
+**"Recorded state — Stage C renewed after the eight-milestone implementation
+freeze (2026-10-22)"** at the top of this ledger. This section is retained as
+the historical record of the invalidation and of the targeted evidence
+collected while the change was still uncommitted.

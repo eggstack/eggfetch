@@ -1,6 +1,6 @@
 # TLS / Proxy / Protocols Milestone 005 — Uncompiled-protocol Fail-Closed at Adapter Boundaries
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -19,9 +19,14 @@ Repository baseline reviewed: `873ea28541c82817317430c9523fca8525d99c81`.
 
 Implementation commits:
 
-- None. The milestone is implemented in the working tree and is **not
-  committed**; the maintainer reviews the working tree before any commit is
-  made. No SHA is claimed for this milestone.
+- `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` — feat: implement the eight
+  registered milestones as one qualification freeze. This commit carries the
+  milestone's implementation together with the other seven milestones
+  executed in the same coordinated pass.
+- `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — fix(security): patch the four
+  dependencies with live RustSec advisories. The bound Stage C SHA; it
+  changes only `Cargo.lock` and `fuzz/Cargo.lock` relative to the freeze
+  commit above, and no Rust source.
 
 ## 1. Executive finding
 
@@ -45,17 +50,22 @@ missing-client message. No new error variant, no `TransportFailureKind`
 change, no new public engine surface, no retry, redirect, proxy, pool,
 deadline, or TLS-trust change.
 
-The milestone cannot be marked `closed` under `plans/closure/README.md`: it
-changes Rust sources, tests, and crate manifests, which are executable inputs
-under the exact-SHA rule in `.skills/verification-qualification.md`. That
-invalidates the live Stage C binding, and the Stage C rebinding plus a full
-Tier 1 / Tier 2 / Tier 3 run on the frozen SHA were deliberately not performed
-at this stage. The milestone is therefore **conditionally closed**, with the
-condition, risk, and the exact future evidence in §10 and §11.
+The milestone is **closed**. It changes Rust sources, tests, and crate
+manifests, which are executable inputs under the exact-SHA rule in
+`.skills/verification-qualification.md`; that change invalidated the previous
+live Stage C binding, and the binding has since been re-established at the
+bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` — the implementation
+freeze `d6c41adf4cf8f62ef990cccedf2f86512858fa0b` plus the lockfile-only
+dependency patch. The frozen-SHA tier gates were run at that SHA: Tier 1 is
+green, Tier 2 is green across every phase (2073 pinned HTTPX compatibility
+tests passed, 0 failed; the Rust public-API oracle passes in 8 profiles), and
+Tier 3 is green. The live security preflight reports `advisories ok, bans ok,
+licenses ok, sources ok`. §10 records the evidence.
 
 Two plan criteria are recorded as not fully met, with reasons, in §10: the FFI
 has no strict HTTP/3 policy value to reject, and the CLI's HTTP/2 negotiation
-success case could not be exercised without a new dev-dependency.
+success case could not be exercised without a new dev-dependency. Those two
+findings are unrelated to the binding and remain open by design.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -75,8 +85,8 @@ success case could not be exercised without a new dev-dependency.
 | Guards consume no deadline, pool permit, or connection | CLI guard runs before the client is built; FFI guard runs before dispatch | Met | — |
 | FFI strict-HTTP/3 rejection at the ABI boundary (§10) | The published FFI policy values contain **no** strict HTTP/3 value | **Not met** | See §10; requires a public ABI extension outside the plan's scope |
 | CLI `--http2` negotiates HTTP/2 against a suitable server (§10) | Guard does not reject and a connection is attempted when the feature is enabled | **Partially met** | See §10; a real H2 server fixture needs a new dev-dependency |
-| Tier 1 and Tier 2 green on the frozen executable SHA (§13) | Not run | **Not met** | Deliberately deferred; see §10 |
-| Stage C rebinding to the frozen SHA (§13) | Not performed | **Not met** | See §7 and §10 |
+| Tier 1 and Tier 2 green on the frozen executable SHA (§13) | `./scripts/check.sh` and `./scripts/check.sh extended` on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | Both green; §10 |
+| Stage C rebinding to the frozen SHA (§13) | The ledger's Stage C SHA and both HTTPX profiles rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c` | Met | §7 and §10 |
 
 ## 3. Production implementation evidence
 
@@ -182,10 +192,21 @@ rustfmt --edition 2021 --check <the touched .rs files>
 | Manual `./target/debug/eggfetch --http3 http://127.0.0.1:1/` | exit 5, capability message naming HTTP/3 |
 | Manual `./target/debug/eggfetch --http1 http://127.0.0.1:1/` | proceeds to the request (no capability rejection) |
 
-Not run, with reason: `./scripts/check.sh` (Tier 1), `./scripts/check.sh
-extended` (Tier 2), and `./scripts/check.sh package` (Tier 3) — deliberately
-deferred at this stage per the maintainer's instruction to keep verification
-scoped. The targeted equivalents listed above are the substitute evidence.
+The repository-wide gates were subsequently run at the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`: `./scripts/check.sh` (Tier 1),
+`./scripts/check.sh extended` (Tier 2), and `./scripts/check.sh package`
+(Tier 3) are all green, together with the live security preflight
+(`./scripts/check_security.sh` → `advisories ok, bans ok, licenses ok, sources
+ok`). Two host accommodations are recorded rather than hidden: the first
+Tier 2 attempt failed with a linker SIGBUS (`ld terminated with signal 7`)
+while compiling a test binary, which was host memory pressure from a
+concurrent build on the same 16-CPU / 15-GiB host and not a code defect — the
+same step re-verified clean immediately afterwards, the full gate then passed
+end to end, and the rerun used `CARGO_BUILD_JOBS=6`; and the downstream
+behavioral-fixture gate, which fails closed by design, executed rather than
+skipping because the operator's artifact manifest was produced for this
+qualification. The targeted equivalents listed above remain the milestone's own
+implementation evidence; §10 records the qualification evidence.
 
 ## 5. Invariant review
 
@@ -251,12 +272,14 @@ plan §9):
    got a silent downgrade (for `--http2`) or a misleading error (for
    `--http3`); both now name the missing capability.
 
-**Exact-SHA binding.** The live Stage C binding is **invalidated** by this
-milestone: Rust sources, tests, and crate manifests are executable inputs
-under `.skills/verification-qualification.md`. No SHA is claimed here because
-the milestone is not committed. Publication must not cite the previous
-binding until the Stage C binding is re-established at a frozen SHA that
-includes this milestone.
+**Exact-SHA binding.** This milestone's changes — Rust sources, tests, and crate
+manifests — are executable inputs under `.skills/verification-qualification.md`,
+so they invalidated the previous live Stage C binding. The binding has since
+been re-established: the ledger's Stage C SHA and both HTTPX profiles are
+rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which carries this
+milestone's implementation (`d6c41adf4cf8f62ef990cccedf2f86512858fa0b`) and
+the lockfile-only dependency patch on top of it. No Rust source differs
+between the two commits.
 
 ## 8. Security review
 
@@ -294,32 +317,36 @@ ABI value. No new dependency, network access, or credential is required.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | The live Stage C binding is invalidated by this milestone's Rust, test, and manifest changes, and the Stage C rebinding was deliberately not performed at this stage | No publication may cite the previous Stage C binding | Rebind both HTTPX profiles and the ledger's Stage C SHA to the frozen commit that includes this milestone, then re-run the compat qualification |
-| High | Tier 1, Tier 2, and Tier 3 were not run on the frozen SHA (deliberately deferred) | The milestone's own gates are green; the repository-wide gates are unproven for this tree | Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package` on the frozen SHA before release |
+| Resolved | The live Stage C binding was invalidated by this milestone's Rust, test, and manifest changes, and the Stage C rebinding had not been performed at the time of implementation | The previous binding could not be cited by any publication | **Resolved 2026-10-22.** Both HTTPX profiles and the ledger's Stage C SHA were rebound to `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the frozen-SHA qualification was re-run |
+| Resolved | Tier 1, Tier 2, and Tier 3 had not been run on the frozen SHA | The milestone's own gates are green; the repository-wide gates were unproven for this tree | **Resolved 2026-10-22.** Tier 1, Tier 2, and Tier 3 are green on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, together with the live security preflight |
 | Medium | The FFI has **no strict HTTP/3 policy value** to reject. The published values are `0`=`Http1Only`, `1`=`Http2Only`, `2`=`Auto{allow_http3:false}`, `3`=`Auto{allow_http3:true}`; ADR-0008 rule 3 requires `Auto` to keep negotiating down, so the reachable strict value is HTTP/2 only | The plan's §10 FFI bullet for strict HTTP/3 cannot be satisfied as written. The classification itself exists and is unit-tested; only the ABI value is missing | Maintainer decision: either add a strict-HTTP/3 FFI policy value (the guard path is already written and unit-tested, and `docs/ffi/README.md` would need the new value documented), or record the ABI surface as deliberately excluding strict HTTP/3 |
 | Medium | The CLI's `--http2` negotiation-success case could not be exercised end to end: an HTTP/2 server fixture needs `hyper` / `hyper-util` as a new dev-dependency in `eggfetch-cli`, which the milestone's constraints forbid | The guard's *rejection* path is fully covered; the *acceptance* path is covered only as "the guard does not reject and a connection is attempted" | Either authorise a dev-dependency in a follow-up plan, or accept the coverage as-is and record it as a known limitation of the CLI test surface |
 | Low | A published FFI consumer relying on `Http2Only` downgrading to HTTP/1.1 on a default FFI build now receives a named rejection | Intentional behavior change per ADR-0008; no in-repo consumer exists | None. Recorded in ADR-0008 and in this closure record |
-| Low | Filesystem at 98% with ~22 GB free | Future full-workspace builds may run out of space | Reclaim space before Tier 2 / Tier 3 |
+| Low | The host filesystem had roughly 122 GB free during the frozen-SHA qualification | No space pressure was observed for the Tier 1 / Tier 2 / Tier 3 runs | None. Monitor before future full-workspace builds |
 
 ## 11. Roadmap disposition
 
 `plans/subsystems/tls-proxy-protocols-roadmap.md` milestone 5 moves from
-`ready` to `conditionally closed`, with §11 (completion definition) and §12
+`conditionally closed` to `closed`, with §11 (completion definition) and §12
 (milestone status) updated in the same pass.
 
-The milestone's own scope is complete. What remains is cross-cutting release
-evidence — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
-rebinding — plus the maintainer decision on the FFI's strict-HTTP/3 policy
-value, which is recorded as a pending maintainer action in `plans/registry.md`.
+The milestone's own scope is complete, and the cross-cutting release evidence
+it was waiting on — Tier 1 / Tier 2 / Tier 3 on the frozen SHA and the Stage C
+rebinding — was delivered on the bound SHA
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. What remains is the milestone's
+own scoped findings: the maintainer decision on the FFI's strict-HTTP/3 policy
+value, the CLI's `--http2` negotiation-success coverage, and the intentional
+FFI `Http2Only` behavior change. The strict-HTTP/3 decision is recorded as a
+pending maintainer action in `plans/registry.md`.
 
 ## 12. Registry updates
 
 `plans/registry.md`:
 
-- The tls-proxy-protocols row records milestone 5 as conditionally closed,
-  with the Stage C rebinding named as the outstanding condition.
+- The tls-proxy-protocols row records milestone 5 as closed.
 - The implementation-plan table for M005 points at this closure record.
 - The pending maintainer actions table gains the FFI strict-HTTP/3 policy-value
   decision.
-- The blocked / operational work section records the Stage C rebinding as
-  pending for all four milestones closed in this pass.
+- The blocked / operational work section no longer records the Stage C
+  rebinding as pending for the milestones closed in this pass; the rebinding
+  was delivered on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`.
