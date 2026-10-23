@@ -59,12 +59,12 @@ These stay visible until they are done. The same list, with owners, is in
    plus `crates/eggfetch-core/src/http_version.rs:50` and
    `crates/eggfetch-core/src/response.rs:285` (both dead). The lint set was
    frozen for M007, so they are recorded rather than removed.
-9. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
+7. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
    the high-level path keys `http://[::1]:8080` as `[::1]` and the native path
    as `::1`, so the same IPv6 endpoint gets two different pool keys depending
    on the entry path. It is recorded in `docs/residual-differences.md`; closing
    it changes pool keying and needs its own plan.
-10. **Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry** —
+8. **Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry** —
    it was named by the compat profiles' comment log, which M007 removed. It is
    an HTTP/3 qualification binding and is held in the H3 records; its
    provenance is now stated in `docs/architecture/overview.md`.
