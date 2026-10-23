@@ -909,7 +909,10 @@ mod tests {
         }
 
         #[test]
-        #[allow(clippy::if_not_else)]
+        #[allow(
+            clippy::if_not_else,
+            reason = "the 303 rule is asserted as the two cases the rule distinguishes, and rewriting the HEAD case as a negation would hide it"
+        )]
         fn redirect_method_303_always_get(method in "[A-Z]{3,7}") {
             use http::Method;
             let m = Method::from_bytes(method.as_bytes());

@@ -91,7 +91,10 @@ impl Drop for BenchProxy {
 
 // Keep parsing, forwarding, and framing adjacent: this small fixture has a
 // single-request protocol boundary and its tests exercise that whole flow.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the fixture's request parsing, forwarding and framing are one linear flow over a single-request protocol boundary"
+)]
 fn handle_connection(mut client: TcpStream) {
     let _ = client.set_read_timeout(Some(Duration::from_secs(10)));
     let _ = client.set_write_timeout(Some(Duration::from_secs(10)));

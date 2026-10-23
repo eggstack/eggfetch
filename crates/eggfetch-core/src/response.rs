@@ -213,7 +213,10 @@ impl Response {
         // signal instead of a silent absence. Laziness is load-bearing: the
         // trace event must fire only when the value is dropped, so eager
         // evaluation is not equivalent here.
-        #[allow(clippy::unnecessary_lazy_evaluations)]
+        #[allow(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "the trace event must fire only when the value is dropped, so the lazy closure is not equivalent to eager evaluation"
+        )]
         let wire_content_encoding = headers
             .get("content-encoding")
             .and_then(|value| {
@@ -226,7 +229,10 @@ impl Response {
             .map(ToOwned::to_owned);
         // Laziness is load-bearing here as above: eager evaluation would
         // emit the drop trace event even for valid values.
-        #[allow(clippy::unnecessary_lazy_evaluations)]
+        #[allow(
+            clippy::unnecessary_lazy_evaluations,
+            reason = "the trace event must fire only when the value is dropped, so the lazy closure is not equivalent to eager evaluation"
+        )]
         let wire_content_length = headers
             .get("content-length")
             .and_then(|value| {
@@ -279,12 +285,6 @@ impl Response {
     #[must_use]
     pub fn trailers(&self) -> Option<HeaderMap> {
         self.trailers.get()
-    }
-
-    /// Consume the response and return its body.
-    #[allow(dead_code)]
-    pub(crate) fn into_body(self) -> ResponseBody {
-        self.body
     }
 
     /// Returns the HTTP status code.

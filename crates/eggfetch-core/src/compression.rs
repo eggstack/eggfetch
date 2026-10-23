@@ -174,7 +174,10 @@ pub fn accept_encoding_value() -> Option<&'static str> {
             // compliant server produce responses we cannot decode.
             // The pushes are feature-gated, so `vec![]` cannot express
             // this sequence.
-            #[allow(clippy::vec_init_then_push)]
+            #[allow(
+                clippy::vec_init_then_push,
+                reason = "the advertised codings are pushed under per-codec feature gates, so a vec! literal cannot express the compiled-in subset"
+            )]
             {
                 #[allow(
                     unused_mut,
@@ -1329,7 +1332,6 @@ mod tests {
             "expected the inner step to dominate: {inner_step} vs {total_ratio}"
         );
 
-        #[allow(clippy::cast_precision_loss)]
         let limit_value = total_ratio.midpoint(inner_step).ceil();
         let limit = DecompressionLimit {
             max_decoded_body_size: None,

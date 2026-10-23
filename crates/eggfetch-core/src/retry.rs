@@ -755,7 +755,10 @@ fn get_random_f64() -> Option<f64> {
     // `fetch_update` is deprecated in favor of `try_update` on recent
     // toolchains, but `try_update` is still unstable on MSRV 1.89, so the
     // rename cannot be adopted until MSRV moves forward.
-    #[allow(deprecated)]
+    #[allow(
+        deprecated,
+        reason = "fetch_update is deprecated in favour of try_update, which is still unstable on the MSRV toolchain"
+    )]
     let val = state
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |mut value| {
             value ^= value << 13;

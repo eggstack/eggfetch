@@ -235,7 +235,10 @@ pub(super) async fn send_sni_route(
 /// paths build their Hyper requests through [`build_hyper_request`] and call
 /// their respective `transport::direct`/`transport::uds` converters, so this
 /// helper exists only to keep the standard Hyper dispatch explicit.
-#[allow(clippy::too_many_arguments)] // Keeps the direct-send helper explicit; timeout wrapping is the only added phase input.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the standard-path helper keeps the request parts and the transport phase inputs explicit, and bundling them into a parameter struct would hide the request shape at the call site"
+)]
 #[cfg(feature = "high-level-url")]
 pub(super) async fn send_hyper_request(
     inner: &ClientInner,

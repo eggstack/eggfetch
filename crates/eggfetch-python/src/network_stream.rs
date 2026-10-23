@@ -81,7 +81,10 @@ impl From<eggfetch_core::network_stream::UpgradedStreamVariant> for StreamVarian
 /// own their own `Arc<Mutex<Option<UpgradedStream>>>` (sync = std,
 /// async = tokio). They cannot share the lock because `std::sync::MutexGuard`
 /// is not `Send` across the async boundary.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the alias documents the lock shape that the sync and async wrappers each instantiate with their own mutex type, and no in-crate code names it"
+)]
 pub(crate) type SharedStreamInner =
     Arc<Mutex<Option<eggfetch_core::network_stream::UpgradedStream>>>;
 
@@ -642,7 +645,10 @@ pub struct PyAsyncNetworkStream {
     /// for future hook points (e.g. dispatching across an explicit
     /// runtime); the `tokio::sync::Mutex` lock path currently picks
     /// up the ambient runtime through `pyo3_async_runtimes`.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the handle is reserved for the explicit-runtime dispatch hook and no current path reads it, so the allow keeps the reserved field warning-free"
+    )]
     runtime_handle: tokio::runtime::Handle,
     /// Construction-time upgrade flag (see `PyNetworkStream::upgraded`):
     /// `try_lock` on a contended Tokio mutex reports a live upgrade as

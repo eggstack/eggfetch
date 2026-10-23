@@ -584,7 +584,10 @@ fn classify_explicit(error: &Error) -> Option<TransportFailureKind> {
 /// per category), which is clearer than a bitmask for this fixed set.
 // Clippy's struct-bool lint prefers a bitmask past three flags; the four
 // named fields are kept because each maps to exactly one public category.
-#[allow(clippy::struct_excessive_bools)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the four flags map one-to-one onto the public failure categories, so a bitmask would hide which category each flag records"
+)]
 #[derive(Default)]
 struct TransportEvidence {
     tls: bool,

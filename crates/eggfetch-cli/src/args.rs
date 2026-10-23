@@ -229,7 +229,10 @@ impl std::fmt::Debug for Cli {
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
-#[allow(clippy::enum_variant_names)] // PowerShell is the canonical name; renaming breaks clap completion scripts
+#[allow(
+    clippy::enum_variant_names,
+    reason = "PowerShell is the canonical shell name and its variant repeats the enum name; renaming it would break the generated completion scripts"
+)]
 pub(crate) enum Shell {
     Bash,
     Zsh,

@@ -11,12 +11,11 @@
 //   because callers already own the value and passing by ref would be awkward.
 // - `elidable_lifetime_names`: explicit `'py` lifetimes kept for pyo3 API clarity.
 // - `module_name_repetitions`: types are prefixed for disambiguation in __all__.
-// - `complex_type`: `tokio::sync::mpsc::Receiver` wrapped in Arc<Mutex<...>> is
-//   the minimal type for async pyclass fields; factoring would obscure intent.
 #![allow(
     clippy::needless_pass_by_value,
     clippy::elidable_lifetime_names,
-    clippy::module_name_repetitions
+    clippy::module_name_repetitions,
+    reason = "the pyo3 binding patterns need owned iterator arguments, explicit lifetimes for API clarity, and prefixed type names for the module's __all__"
 )]
 
 use std::sync::atomic::{AtomicU8, Ordering};

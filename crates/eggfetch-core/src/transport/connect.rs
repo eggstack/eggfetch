@@ -146,7 +146,10 @@ pub(crate) struct ConnectProxyConnector {
 
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
 impl ConnectProxyConnector {
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the constructor takes the whole connection-scoped CONNECT policy (route, SNI hint, pinned target, origin TLS, phase budgets, version policy, metrics)"
+    )]
     pub(crate) fn new(
         dest_url: url::Url,
         proxy: ProxyConfig,
@@ -248,8 +251,14 @@ impl tower_service::Service<http::Uri> for ConnectProxyConnector {
 }
 
 /// Send an HTTPS request through an HTTP proxy using CONNECT tunneling.
-#[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
-#[allow(clippy::too_many_arguments)] // Transport hints added as a typed parameter.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the CONNECT attempt loop keeps the Hyper fast path, the target list, the per-attempt body clone and the 502/504 retry rule in one linear flow"
+)] // CONNECT owns the ordered proxy/tunnel/origin phases.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the destination, request line, body, proxy config and transport hints are forwarded unchanged to the Hyper path, the manual path and the per-target attempt"
+)] // Transport hints added as a typed parameter.
 pub(crate) async fn send_https_connect_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -322,7 +331,10 @@ pub(crate) async fn send_https_connect_request(
 /// Send an origin-form request over a CONNECT tunnel whose transport and
 /// lifecycle are owned by Hyper's reusable client.
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the reusable CONNECT client needs the origin destination, the request line, the body, the transport hints and the failure context as separate inputs"
+)]
 async fn send_https_connect_request_hyper(
     dest_url: &url::Url,
     method: &http::Method,
@@ -398,8 +410,14 @@ fn target_failure_may_retry(error: &Error) -> bool {
 /// This function retains Eggfetch policy: proxy dialing/TLS, phase
 /// timeouts, exact status policy, rejection-body handling, origin TLS,
 /// pooling/route identity, and metrics.
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the proxy dial, the CONNECT write, the bounded head read, the rejection policy and the origin TLS handshake are one ordered sequence over the same stream"
+)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the destination, proxy policy, transport hints, phase context and pinned target form one group that both CONNECT call sites pass through unchanged, and five arguments stay under the lint threshold"
+)]
 pub(crate) async fn establish_https_tunnel(
     dest_url: &url::Url,
     proxy_config: &ProxyConfig,
@@ -525,8 +543,14 @@ pub(crate) async fn establish_https_tunnel(
     }
 }
 
-#[allow(clippy::too_many_lines)] // CONNECT owns the ordered proxy/tunnel/origin phases.
-#[allow(clippy::too_many_arguments)] // Target pinning is an internal transport parameter.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the tunnel setup, the origin-form request write, the response read and the streaming body assembly are one ordered sequence over the same TLS stream"
+)] // CONNECT owns the ordered proxy/tunnel/origin phases.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the per-target attempt adds the pinned socket address to the same request line, body, proxy policy, transport hints and phase context the outer CONNECT call carries"
+)] // Target pinning is an internal transport parameter.
 async fn send_https_connect_request_once(
     dest_url: &url::Url,
     method: &http::Method,

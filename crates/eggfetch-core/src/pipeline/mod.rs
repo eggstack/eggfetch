@@ -175,7 +175,10 @@ pub(super) async fn drain_response_body(response: &mut Response, read_timeout: O
 /// (`route::select_route`); one common post-transport policy
 /// (`finalize::finalize_response`: decompression, decoded-size limiting,
 /// read-timeout and pool-lease attachment) applies to every route.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the body is the prepare, route-select and finalize sequence for one request, and the order of those three phases is the behaviour"
+)]
 #[cfg(all(
     any(feature = "transport-http1", feature = "transport-http2"),
     feature = "high-level-url"

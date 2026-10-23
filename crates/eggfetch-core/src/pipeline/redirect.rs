@@ -149,7 +149,10 @@ fn advance_redirect_hop(
 /// cookie injection, authentication) is delegated to the shared
 /// [`super::hop`] builder that the lean path also uses; this function owns
 /// the redirect decision, the redirect loop, and response post-processing.
-#[allow(clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_lines,
+    reason = "the redirect decision, the hop loop and the response post-processing are one linear sequence whose order is the behaviour"
+)]
 pub(crate) async fn send_with_redirects(client: &Client, request: Request) -> Result<Response> {
     // The effective redirect policy is resolved before the shared builder
     // consumes the request: the builder owns the exhaustive request

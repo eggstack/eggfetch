@@ -44,15 +44,6 @@ impl Default for HttpVersionPolicy {
     }
 }
 
-impl HttpVersionPolicy {
-    /// Returns `true` if HTTP/3 should be used.
-    #[cfg(any(feature = "http3", test))]
-    #[allow(dead_code)]
-    pub(crate) fn use_http3(self) -> bool {
-        matches!(self, Self::Http3Only) || matches!(self, Self::Auto { allow_http3: true })
-    }
-}
-
 /// Typed evidence about the HTTP/3 capability of the running build.
 ///
 /// The value is resolved from the compiled feature set so that failure

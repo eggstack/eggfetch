@@ -23,8 +23,7 @@ use tokio::io::AsyncWriteExt;
 
 #[allow(
     clippy::too_many_lines,
-    clippy::cast_precision_loss,
-    reason = "the CLI dispatch is one linear request/response flow that reads worse once split into helpers; the float allowance is scoped to the retry backoff factor"
+    reason = "the CLI dispatch is one linear request/response flow that reads worse once split into helpers"
 )]
 async fn run(cli: Cli) -> Result<()> {
     if let Some(shell) = cli.generate_completion {
@@ -342,8 +341,10 @@ async fn run(cli: Cli) -> Result<()> {
 
     let start = Instant::now();
 
-    #[allow(clippy::large_futures)]
-    // eggfetch-core RequestBuilder::send future is large due to hyper/h2 internals
+    #[allow(
+        clippy::large_futures,
+        reason = "the core RequestBuilder::send future is large because it carries the hyper and h2 state machine inline"
+    )]
     let send_result = req_builder.send().await;
 
     match send_result {

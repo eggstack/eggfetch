@@ -192,7 +192,10 @@ impl EggfetchResponse {
     /// such as multiple `Set-Cookie` lines.
     // N-API method arguments must be owned (`FromNapiValue`) values;
     // taking `&str` is not expressible here.
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "the N-API binding requires an owned String argument, so the value cannot be taken by reference"
+    )]
     #[napi]
     pub fn get_all(&self, name: String) -> Vec<String> {
         self.headers

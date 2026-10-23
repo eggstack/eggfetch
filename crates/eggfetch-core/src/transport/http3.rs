@@ -1032,7 +1032,6 @@ impl H3Connector {
     /// reconnects through the normal machinery. One-shot bodies are never
     /// replayed here. Failures report `body_committed` explicitly so the
     /// pipeline can gate safe fallback without string inference.
-    #[allow(clippy::too_many_lines)]
     #[allow(
         dead_code,
         reason = "kept for unit tests; pipeline uses send_request_with_alt"

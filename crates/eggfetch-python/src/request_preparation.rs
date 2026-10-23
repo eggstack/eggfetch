@@ -414,7 +414,10 @@ pub(crate) fn prepare_core_dispatch(
 /// Normalize the common request arguments while the GIL is held.
 // This boundary intentionally mirrors the public request signature so sync
 // and async adapters cannot silently diverge in argument handling.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the boundary mirrors the public request signature so the sync and async adapters cannot diverge, and bundling the arguments would hide that correspondence"
+)]
 pub(crate) fn prepare_request<'py>(
     py: Python<'py>,
     method: &str,

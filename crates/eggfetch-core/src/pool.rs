@@ -269,7 +269,10 @@ impl OriginKey {
     /// Build an `OriginKey` for tests or callers that already have the
     /// components.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the constructor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn from_parts(scheme: &str, host: &str, port: u16) -> Self {
         Self::from_components(scheme, host, port)
     }
@@ -277,7 +280,10 @@ impl OriginKey {
     /// Build an `OriginKey` with proxy route info for tests or callers
     /// that already have all components.
     #[cfg(all(feature = "proxy", any(test, feature = "test-util")))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the constructor is compiled into every proxy-enabled test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn from_parts_with_proxy(
         scheme: &str,
         host: &str,
@@ -300,7 +306,10 @@ impl OriginKey {
 
     /// Returns the scheme.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn scheme(&self) -> &str {
         &self.scheme
     }
@@ -312,28 +321,40 @@ impl OriginKey {
 
     /// Returns the effective port.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn port(&self) -> u16 {
         self.port
     }
 
     /// Returns the proxy hostname, if any.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn proxy_host(&self) -> Option<&str> {
         self.proxy_host.as_deref()
     }
 
     /// Returns the proxy port, if any.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn proxy_port(&self) -> Option<u16> {
         self.proxy_port
     }
 
     /// Returns whether this key represents a CONNECT tunnel.
     #[cfg(any(test, feature = "test-util"))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is compiled into every test-util build, but only the test modules call it, so a non-test test-util build has no caller"
+    )]
     pub(crate) fn is_tunnel(&self) -> bool {
         self.is_tunnel
     }
@@ -407,11 +428,15 @@ pub struct PoolGuard {
     pool: Arc<PoolInner>,
     pub(crate) origin: Option<OriginKey>,
     // These fields are held for their Drop impl (releasing semaphore permits).
-    // The `dead_code` allow is justified: the field value is read implicitly
-    // by `OwnedSemaphorePermit::drop`, not by source code.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the permit is released by its own Drop impl, so the field is never read by name"
+    )]
     pub(crate) global_permit: Option<OwnedSemaphorePermit>,
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the permit is released by its own Drop impl, so the field is never read by name"
+    )]
     pub(crate) origin_permit: Option<OwnedSemaphorePermit>,
     response_lifecycle: ResponseLifecycle,
 }
@@ -467,13 +492,19 @@ impl PoolGuard {
 
     /// Returns the origin this guard was acquired for, if any.
     #[must_use]
-    #[allow(dead_code)] // Exposed for future diagnostics and metrics.
+    #[allow(
+        dead_code,
+        reason = "the accessor is exercised by the pool tests and is part of the guard's diagnostic surface"
+    )]
     pub(crate) fn origin(&self) -> Option<&OriginKey> {
         self.origin.as_ref()
     }
 
     /// Returns the host portion of the origin, if any.
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the accessor is public API on the public PoolGuard type and is the host-only counterpart of origin()"
+    )]
     pub fn host(&self) -> Option<&str> {
         self.origin.as_ref().map(OriginKey::host)
     }

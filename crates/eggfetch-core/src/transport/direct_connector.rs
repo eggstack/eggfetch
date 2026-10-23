@@ -481,7 +481,10 @@ impl Service<Uri> for DirectConnector {
         Poll::Ready(Ok(()))
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the address resolution, the per-address socket setup, the connect retry, the failure classification and the TLS handshake are one ordered dial sequence"
+    )]
     fn call(&mut self, dst: Uri) -> Self::Future {
         let config = self.config.clone();
         #[cfg(feature = "tls-rustls")]

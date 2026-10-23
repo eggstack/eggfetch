@@ -637,14 +637,20 @@ impl PyResponse {
     }
 
     /// Close the response (no-op for buffered responses).
-    #[allow(clippy::unused_self)] // Intentional no-op: Python instance method for API compatibility.
+    #[allow(
+        clippy::unused_self,
+        reason = "the method is an intentional no-op that mirrors HTTPX's instance-method API, so the unused self is required by the signature"
+    )]
     fn close(&self) {}
 
     /// Async close (no-op for buffered responses).
     ///
     /// Returns a real coroutine so `await response.aclose()` works
     /// consistently with every other aclose implementation.
-    #[allow(clippy::unused_self)] // Intentional no-op: Python instance method for API compatibility.
+    #[allow(
+        clippy::unused_self,
+        reason = "the method is an intentional no-op that mirrors HTTPX's instance-method API, so the unused self is required by the signature"
+    )]
     fn aclose<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let func = noop_aclose_coroutine(py)?;
         func.call0()
@@ -682,39 +688,4 @@ impl PyResponse {
     fn __repr__(&self) -> String {
         format!("<Response [{} {}]>", self.status_code, self.reason_phrase)
     }
-}
-
-/// Snapshot the wire-level metadata of a [`eggfetch_core::Response`] into a
-/// Python dict compatible with HTTPX's `response.extensions`.
-///
-/// Keys mirror HTTPX's vocabulary:
-/// - `http_version`: e.g. `"HTTP/1.1"`, `"HTTP/2"`, `"HTTP/3"`.
-/// - `reason_phrase`: wire reason phrase if present (HTTP/1.x), else
-///   canonical reason phrase derived from the status code.
-/// - `network_stream`: a [`PyNetworkStream`] wrapper for 101 upgrades,
-///   or `None` for ordinary pooled responses where the connection has
-///   been returned to the pool.
-#[allow(dead_code)] // Wired into the HTTPX compatibility facade.
-pub(crate) fn response_extensions_from_core<'py>(
-    py: Python<'py>,
-    response: &eggfetch_core::Response,
-    network_stream: Option<&EitherNetworkStream>,
-) -> PyResult<Bound<'py, PyDict>> {
-    let dict = PyDict::new(py);
-    dict.set_item("http_version", version_to_string(response.version()))?;
-    let reason = response
-        .wire_reason_phrase()
-        .map(ToOwned::to_owned)
-        .or_else(|| response.status().canonical_reason().map(ToOwned::to_owned))
-        .unwrap_or_default();
-    dict.set_item("reason_phrase", reason)?;
-    match network_stream {
-        Some(stream) if stream.is_upgraded() => {
-            stream.insert_into_dict(py, &dict)?;
-        }
-        _ => {
-            dict.set_item("network_stream", py.None())?;
-        }
-    }
-    Ok(dict)
 }

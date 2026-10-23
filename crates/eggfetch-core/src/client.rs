@@ -1090,7 +1090,10 @@ impl ClientBuilder {
     /// unavailable, the client falls back to the packaged Mozilla root set
     /// while retaining certificate and hostname verification.
     #[must_use]
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the builder resolves the root store, the HTTP version policy and the pool limits in one pass, and splitting it would scatter the cfg-gated branches across helpers"
+    )]
     pub fn build(self) -> Client {
         #[cfg(any(
             feature = "transport-http1",

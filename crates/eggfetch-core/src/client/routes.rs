@@ -78,7 +78,10 @@ impl ResolvedRouteKey {
     /// `HttpOrigin::from_url` + `from_origin` so pool and route identity
     /// share one canonical constructor.
     #[cfg(all(feature = "high-level-url", any(test, feature = "test-util")))]
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the high-level adapter is retained as the test-util entry point for the canonical origin form; the current tree has no caller for it, so the allow keeps the retained constructor warning-free"
+    )]
     pub(crate) fn new(
         origin_url: &url::Url,
         target: &crate::transport_hints::ResolvedTarget,

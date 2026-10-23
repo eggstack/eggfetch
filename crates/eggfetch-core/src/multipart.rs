@@ -51,7 +51,10 @@ impl Boundary {
     // timestamp into a u64 state and truncates hashed bytes to u8; both
     // truncations are intentional for this non-cryptographic degradation
     // path (uniqueness within this process is what boundary safety needs).
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the degraded fallback truncates the nanosecond timestamp and the hashed bytes on purpose; it is a non-cryptographic path where uniqueness within the process is the only requirement"
+    )]
     #[must_use]
     pub fn random() -> Self {
         let mut bytes = [0u8; 50];

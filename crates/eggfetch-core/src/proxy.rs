@@ -1085,7 +1085,10 @@ fn parse_proxy_url(url_str: &str) -> Result<url::Url> {
 }
 
 #[cfg(test)]
-#[allow(clippy::items_after_test_module)]
+#[allow(
+    clippy::items_after_test_module,
+    reason = "the public proxy response parser is declared after this module in the file's existing layout, and moving it would churn the module for no behavioural gain"
+)]
 mod tests {
     use super::*;
 

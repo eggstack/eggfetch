@@ -321,7 +321,10 @@ impl tokio::io::AsyncWrite for ProxyIo {
 ///
 /// Routes to HTTP forwarding, CONNECT tunneling, or SOCKS5 tunneling
 /// based on the proxy scheme and destination scheme.
-#[allow(clippy::too_many_arguments)] // Transport hints added as a typed parameter.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the destination, request line, body, proxy config and transport hints are forwarded unchanged to the SOCKS5, HTTP-forward and CONNECT arms"
+)] // Transport hints added as a typed parameter.
 pub(crate) async fn send_proxy_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -558,7 +561,10 @@ fn proxy_server_name(proxy_host: &str) -> Result<rustls::pki_types::ServerName<'
     clippy::too_many_lines,
     reason = "the legacy fallback remains a bounded compatibility path for unsupported Hyper targets"
 )]
-#[allow(clippy::too_many_arguments)] // Forwarding needs the request and phase-specific proxy context.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the forward-proxy path needs the destination, the request line, the body, the proxy config, the transport hints and the phase context together"
+)] // Forwarding needs the request and phase-specific proxy context.
 async fn send_http_proxy_request(
     dest_url: &url::Url,
     method: &http::Method,
@@ -695,7 +701,10 @@ async fn send_http_proxy_request(
 /// with `Connected::proxy(true)`, so Hyper emits absolute-form targets and
 /// owns all successful request/response framing.
 #[cfg(any(feature = "transport-http1", feature = "transport-http2"))]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the reusable forward client needs the absolute-form destination, the request line, the body, the proxy auth and headers, the transport hints and the failure context"
+)]
 async fn send_http_proxy_request_hyper(
     dest_url: &url::Url,
     method: &http::Method,
@@ -760,7 +769,10 @@ fn push_header_line(out: &mut Vec<u8>, name: &str, value: &[u8]) {
 }
 
 /// Write an HTTP request to a stream.
-#[allow(clippy::too_many_arguments)] // Proxy headers channel added as a typed parameter.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the request line, the body, the origin headers and the proxy-only auth and header channel are all needed to assemble the forward-proxy request head"
+)] // Proxy headers channel added as a typed parameter.
 pub(crate) async fn write_proxy_request<S: tokio::io::AsyncWrite + Unpin>(
     stream: &mut S,
     method: &http::Method,
