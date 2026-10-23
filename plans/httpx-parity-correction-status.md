@@ -4,7 +4,80 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed at the lint-justification cleanup freeze (2026-10-23)
+
+Recorded designation: **Stage C qualified (renewal)** for both documented
+facades, bound to executable freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`.
+
+The cleanup pass that invalidated the previous binding has now been qualified in
+its own right. This is a compatibility binding only: it authorizes no
+release. H3 stays experimental, HTTPX 1.0 stays gated on the upstream trigger,
+and Node maturation stays a separately registered future.
+
+### What was qualified
+
+The freeze is the lint-justification cleanup. Every `allow`/`expect` attribute
+in `crates/*/src` carries a `reason =` — 185 attributes across the seven
+crates' `src` trees, 185 justified, 0 without — and the six stale-or-dead
+items that `plans/registry.md` listed as pending maintainer action 6 were
+resolved: three stale lint entries removed and three dead items deleted, every
+one of them a narrowing.
+
+The qualification ran on `32e102b2bab79cca7c54c32aaf403c1366472c57`, which is
+documentation-only on top of the executable freeze and therefore
+executable-identical to it.
+
+### Qualification evidence
+
+| Gate | Result |
+|---|---|
+| Tier 1 | exit 0 — the H3 runner self-test, formatting, the lint-suppression guard self-test and its policy scan, adapter feature ownership, release version validation, clippy, **1767 Rust workspace tests** across 72 binaries, the stable public contract fixtures, the feature-isolated profile whole-suite compile, the native Python API manifest, the Python typing surface and typing fixture, **581 Python behaviour tests** and **134 HTTPX compatibility smoke tests**. The Node JS surface skipped, which the policy defines as optional |
+| Tier 2 | exit 0 — the full pinned HTTPX compatibility suite **2073 passed / 0 failed**; the API manifest comparison at **74 symbols** for httpx 0.28.1 and **76 symbols** for httpx2 2.12.0, with 0 unexplained and 0 stale; the Rust public-API oracle **passed in 8 profiles**; `cargo-semver-checks` 0.49.0 reported **"no semver update required"** against the planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`; the feature matrix and the 5 feature-gated combinations green; **5 MSRV checks** on the exact Rust 1.89.0 toolchain; documentation and doctests; FFI; the resource regression check; the lifecycle and soak tests; the downstream behavioral-fixture portfolio **4/4 required packages** with `overall_pass: true`; lossless merge; Criterion micro-benchmarks. One optional check skipped: the Node JS surface |
+| Tier 3 | exit 0 — crate packaging, the release wheel build, the wheel smoke test, package content validation and the installed-wheel typing smoke |
+| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+
+### Host accommodations
+
+The host is shared with other projects and its filesystem was under heavy
+pressure during this qualification. The accommodations are recorded here
+rather than hidden.
+
+- `CARGO_BUILD_JOBS=6` and `CARGO_INCREMENTAL=0` were set for the run. The
+  second keeps the regenerable incremental cache from regrowing on a
+  filesystem shared with other builds; it changes build strategy, not what is
+  compiled or what the gates assert.
+- **Tier 2 was executed twice.** The first attempt failed at the downstream
+  behavioral-fixture gate because the operator artifact manifest had been
+  removed from `target/` by an unidentified cleaner; nothing in the repository
+  produces or removes it. The artifact was rebuilt, the manifest rewritten, and
+  Tier 2 re-executed to exit 0. Tier 1, Tier 3 and the security preflight are
+  green from the same run.
+- The second Tier 2 attempt failed on one test in the full compatibility
+  suite, `test_socks_https_uses_origin_tls_and_reuses_connection[reference]`,
+  whose 3-second read timeout expired while the **upstream httpx reference**
+  implementation talked to a local SOCKS proxy under concurrent host load. The
+  test passes in isolation (11 passed) and passed in the same suite on the
+  same tree in an earlier run. The tree is unchanged between the two runs, so
+  this is host scheduling, not a code regression. The third attempt was green.
+- The downstream artifact manifest was re-supplied by the operator as the
+  policy requires. It has no in-repository producer and must be re-supplied
+  for every future qualification.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding and
+requires a fresh exact-SHA qualification, with the downstream artifact manifest
+re-supplied for that run.
+
 ## Recorded state — Stage C binding invalidated by the lint-justification cleanup pass (2026-10-23)
+
+> **Superseded 2026-10-23.** The cleanup pass this section invalidated the
+> previous binding for has since been qualified in its own right. See
+> **"Recorded state — Stage C renewed at the lint-justification cleanup freeze
+> (2026-10-23)"** at the top of this ledger. The invalidation record below
+> remains the history of what happened and why.
+
 
 **The live Stage C binding is invalidated by this change.** The
 lint-justification cleanup pass changed executable inputs — Rust sources in six

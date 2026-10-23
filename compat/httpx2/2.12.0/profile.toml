@@ -10,11 +10,11 @@ created = "2026-09-10"
 # log is not duplicated here.
 stage = "stage-c-qualified"
 status = "qualified"
-qualification-sha = "26fa619299fb8d447f25cbcb5eb713a1f537a30c"
-qualification-date = "2026-10-22"
-previous-qualification-sha = "42a9c96db5b25354843bd83bd458c71757e95651"
-historical-current-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc"
-historical-qualification-sha = "015a56d7ec3edf186eec8ebccff01cbf5584274e"
+qualification-sha = "822b7246bab79cca7c54c32aaf403c1366472c57"
+qualification-date = "2026-10-23"
+previous-qualification-sha = "26fa619299fb8d447f25cbcb5eb713a1f537a30c"
+historical-current-qualification-sha = "42a9c96db5b25354843bd83bd458c71757e95651"
+historical-qualification-sha = "312cd4402ea2b4b27bf54cf7dc36924a1d449adc, 015a56d7ec3edf186eec8ebccff01cbf5584274e"
 reference = "httpx2==2.12.0"
 
 [reference]

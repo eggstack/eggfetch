@@ -490,12 +490,12 @@ here. All Python tooling ran under `.venv/bin/python`, because the system
 ### Cleanup pass (2026-10-23) — the post-binding lint and dead-code follow-ups
 
 Executed after the Stage C binding was established. This pass closes the
-remaining §10 follow-ups that this milestone named. It is **not** a
-qualification: it changes executable inputs, so it invalidates the binding
-recorded above, and a fresh exact-SHA qualification is required before the
-bound SHA can be cited again. The pass was committed as the executable freeze
-`822b7246bab79cca7c54c32aaf403c1366472c57`, and the invalidation is recorded
-in the live ledger `plans/httpx-parity-correction-status.md`.
+remaining §10 follow-ups that this milestone named. It changed executable
+inputs, so it invalidated the binding recorded above; the pass was committed as
+the executable freeze `822b7246bab79cca7c54c32aaf403c1366472c57` and was then
+qualified in its own right on 2026-10-23, so the live Stage C binding now
+names that freeze. The renewal and its evidence are recorded in the live
+ledger `plans/httpx-parity-correction-status.md`.
 
 | # | Invocation | Result |
 |---|---|---|
@@ -705,9 +705,10 @@ subsystem owns the remaining work; it is not this milestone's.
 
 The core lint-suppression pass B was completed on 2026-10-23, together with
 the two code follow-ups §10 named (§4, rows 40–47). That pass changed
-executable inputs, so it invalidated the Stage C binding and requires a fresh
-exact-SHA qualification before `26fa6192…` can be cited again; the
-invalidation is recorded in the live ledger.
+executable inputs, so it invalidated the Stage C binding at `26fa6192…`; it was
+then qualified in its own right on the same day, and the live Stage C binding
+now names the cleanup freeze `822b7246…`. The renewal and its evidence are
+recorded in the live ledger.
 
 The successor milestone (if any) is not blocked by this one.
 

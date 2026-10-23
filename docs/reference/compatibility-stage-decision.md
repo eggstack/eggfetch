@@ -1,24 +1,19 @@
 # Compatibility Stage Decision
 
 **Current decision — Stage C qualified on frozen executable SHA
-`26fa619299fb8d447f25cbcb5eb713a1f537a30c`, binding invalidated 2026-10-23**
+`822b7246bab79cca7c54c32aaf403c1366472c57`**
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
-documented httpx2 2.12.0 sibling surface were qualified on executable SHA
-`26fa619299fb8d447f25cbcb5eb713a1f537a30c` (2026-10-22, requalification
-after the eight-milestone implementation freeze — core-transport M008, M009 and
-M010, TLS/protocol M005, python-httpx-compat M004 and M005, and
-release-verification M006 and M007 — together with a patch-level dependency
-update that cleared 11 live RustSec advisories; no Rust source changed in that
-update and the Rust public-API oracle is byte-identical to the frozen snapshots
-in all eight profiles)
-**That binding was invalidated on 2026-10-23** by the lint-justification
-cleanup pass, which changed executable inputs — Rust sources in six crates.
-`26fa6192…` remains the last completed qualification; the current tree is
-unqualified, and a fresh exact-SHA qualification is required before any
-binding can be cited. The invalidation is recorded in
-`plans/httpx-parity-correction-status.md`.
-The prior `42a9c96db5b25354843bd83bd458c71757e95651` binding is historical.
+documented httpx2 2.12.0 sibling surface are qualified on executable SHA
+`822b7246bab79cca7c54c32aaf403c1366472c57` (2026-10-23, renewal after the
+lint-justification cleanup pass — every `allow`/`expect` attribute in
+`crates/*/src` carries a `reason =`, 185 attributes and 0 without, and the six
+stale-or-dead items that `plans/registry.md` listed as pending maintainer
+action 6 were resolved, every one of them a narrowing).
+The prior `26fa619299fb8d447f25cbcb5eb713a1f537a30c` binding is historical,
+and the binding before it, `42a9c96db5b25354843bd83bd458c71757e95651`, is
+historical too. The full history of every binding, renewal and supersession is
+in `plans/httpx-parity-correction-status.md`.
 The `015a56d7...` binding (the coordinated 0.2.2 candidate) is historical. The
 `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
 `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical; earlier

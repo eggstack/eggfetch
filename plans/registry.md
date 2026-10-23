@@ -164,8 +164,9 @@ dead items deleted), and every `allow`/`expect` attribute in `crates/*/src`
 now carries a `reason =`. See
 `plans/closure/release-verification/007-planning-and-documentation-hygiene.md`
 §4, rows 40–48. That pass changed executable inputs and therefore invalidated
-the Stage C binding; a fresh exact-SHA qualification is required before
-`26fa6192…` can be cited again.
+the Stage C binding at `26fa6192…`; it was qualified in its own right on the
+same day, and the live Stage C binding now names the cleanup freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`.
 
 ## Blocked / operational work
 
@@ -173,7 +174,7 @@ the Stage C binding; a fresh exact-SHA qualification is required before
 |---|---|---|
 | TLS, proxy, protocols | H3 graduation | Independent non-Quinn interop, GOAWAY/drain, public-origin, impairment, upstream-risk evidence. |
 | Python compat | HTTPX 1.0 program | Upstream RC/stable trigger has not fired. |
-| Release and verification | Downstream behavioral-fixture artifact | Tier 2's downstream gate fails closed by design. `target/downstream-qualification/artifact-manifest.json` has no in-repository producer; the operator must supply it. It was supplied for the 2026-10-22 qualification and the portfolio passed 4/4 required packages, but every future qualification needs it again. |
+| Release and verification | Downstream behavioral-fixture artifact | Tier 2's downstream gate fails closed by design. `target/downstream-qualification/artifact-manifest.json` has no in-repository producer; the operator must supply it. It was supplied for the 2026-10-23 qualification and the portfolio passed 4/4 required packages, but every future qualification needs it again. |
 | Core transport | IPv6 pool-key divergence | The high-level and native origin paths key the same IPv6 endpoint differently. Closing it changes pool keying, so it needs its own milestone. |
 
 ## Deferred work (explicitly not planned)
