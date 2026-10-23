@@ -426,8 +426,9 @@ Implementation must update:
 M009 closes only when:
 
 - exactly one exhaustive `Request::into_parts()` destructuring exists in the
-  engine's **first-hop preparation** path, with the transport-preparation and
-  subsequent-hop sites remaining exhaustive by this plan's own requirement;
+  **first-hop preparation** path, with `prepare_single_request` and
+  `advance_redirect_hop` remaining as the two transport- and subsequent-hop
+  sites, each exhaustive in its own right (§6.2);
 - the header merge, timeout merge, cookie injection, auth resolution and
   `Set-Cookie` update each exist in exactly one place;
 - the lean path and the redirect path produce identical prepared hops for the

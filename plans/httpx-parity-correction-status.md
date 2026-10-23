@@ -4,7 +4,89 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C binding invalidated by the lint-justification cleanup pass (2026-10-23)
+
+**The live Stage C binding is invalidated by this change.** The
+lint-justification cleanup pass changed executable inputs — Rust sources in six
+crates — so under `.skills/verification-qualification.md` the binding at
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c` no longer describes the tree. The
+cleanup pass was committed as the executable freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`. That SHA remains the **last
+completed qualification**: Tier 1, Tier 2, Tier 3 and the live security
+preflight are green at `26fa6192…`, with the downstream behavioral-fixture gate
+executing rather than skipping. The current tree is **unqualified**, and no
+publication may cite the previous Stage C binding until a fresh exact-SHA
+qualification runs at the new freeze.
+
+`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` are
+deliberately **unchanged**: they carry machine-readable binding fields, and
+their `qualification-sha` still names the last SHA that was actually
+qualified. This ledger, not the profiles, records whether that binding is
+currently live.
+
+### What the cleanup pass changed
+
+It closed the last open finding that release-verification M007's closure
+record carried, the footprint finding that core-transport M009's closure
+record carried, and pending maintainer action 6 in `plans/registry.md`.
+
+- **Every `allow`/`expect` attribute in `crates/*/src` now carries a
+  `reason =`.** 185 attributes across the seven crates' `src` trees, 185 with
+  a justification, 0 without. Core went from 78 of 119 to 115 of 115: the 41
+  added justifications and the 4 removed attributes land together.
+- **Six stale-or-dead items were resolved, every one of them a narrowing.**
+  Three stale lint entries were removed — `clippy::cast_precision_loss` in
+  `crates/eggfetch-cli/src/main.rs` and in
+  `crates/eggfetch-core/src/compression.rs`, and `clippy::too_many_lines` on a
+  six-line delegating wrapper in `crates/eggfetch-core/src/transport/http3.rs`.
+  Three dead items were deleted with their suppressions —
+  `response_extensions_from_core` in `crates/eggfetch-python/src/response.rs`,
+  `HttpVersionPolicy::use_http3` in
+  `crates/eggfetch-core/src/http_version.rs`, and `Response::into_body` in
+  `crates/eggfetch-core/src/response.rs`. No attribute was widened and no dead
+  item was kept under a suppression.
+- **The M009 footprint pair was re-measured on the frozen commit.** Against the
+  baseline `873ea285…`, the lean binary **shrank** by 3 928 B unstripped and
+  3 088 B stripped, so the plan's §13 binary criterion is met at the bound
+  SHA. The per-crate `eggfetch_core` `.text` growth of +10.2 KiB is cumulative
+  across the whole freeze and is **not** attributable to M009 alone: a tree
+  carrying only M009 is not constructible from the bundled commit.
+
+### Evidence collected for this pass
+
+Targeted, by instruction; the tier gates were deliberately not re-run.
+
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` —
+  exit 0, no warnings.
+- `cargo fmt --all -- --check` — exit 0.
+- `bash scripts/check_lint_suppressions.sh --self-test` — 33 cases, pass; the
+  guard itself — clean over `crates/` and `fuzz/`.
+- A scripted lint-multiset comparison, HEAD → the pass, over every changed
+  Rust file: **6** files changed a lint set, and every change is one of the six
+  narrowings listed above. The core lint set is otherwise byte-identical.
+- `cargo test -p eggfetch-core --all-features -- --test-threads=1`,
+  `cargo test -p eggfetch-cli --all-features -- --test-threads=1`, and the
+  Python behaviour suite after `maturin develop` rebuilt the extension.
+
+This is implementation evidence against the working tree, **not** Tier 1
+evidence. Tier 1 / Tier 2 / Tier 3 evidence requires the frozen-SHA run at the
+new freeze, which has not been performed.
+
+### The condition for renewal
+
+The renewal is the same procedure as the 2026-10-22 one: commit the tree as
+the executable freeze, run Tier 1, Tier 2, Tier 3 and the live security
+preflight on that exact SHA, re-supply the downstream artifact manifest for
+Tier 2's fail-closed downstream gate, and then rebind both compat profiles
+and this ledger to the new SHA.
+
 ## Recorded state — Stage C renewed after the eight-milestone implementation freeze (2026-10-22)
+
+> **Superseded 2026-10-23.** The binding this section records was invalidated by
+> the lint-justification cleanup pass, which changed executable inputs. The
+> designation below remains the historical record of the last completed
+> qualification; see **"Recorded state — Stage C binding invalidated by the
+> lint-justification cleanup pass (2026-10-23)"** at the top of this ledger.
 
 Recorded designation: **Stage C qualified (unconditional renewal)** for both
 documented facades, bound to executable freeze

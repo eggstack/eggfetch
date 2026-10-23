@@ -143,7 +143,7 @@ Implementation plan:
 - `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md`
 
 The earlier flat-file detail is absent from the migrated planning tree; the
-maintained plan is `plans/archive/implementation/release-verification/002-python-315-wheel-rehearsal.md` (closed).
+maintained plan is `plans/implementation/release-verification/002-python-315-wheel-rehearsal.md` (closed).
 
 Objective: `publish=false` rehearsal from the exact M001A 0.2.1 candidate;
 prove 18 wheels + 1 sdist, including Linux/macOS/Windows Python 3.15 rows.

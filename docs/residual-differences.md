@@ -1,6 +1,6 @@
 # Residual Differences from HTTPX 0.28.1
 
-The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
+The HTTPX 0.28.1 and httpx2 2.12.0 facades were Stage C qualified on frozen
 executable SHA
 `26fa619299fb8d447f25cbcb5eb713a1f537a30c` (2026-10-22, requalification
 after the eight-milestone implementation freeze — core-transport M008, M009 and
@@ -9,6 +9,12 @@ release-verification M006 and M007 — together with a patch-level dependency
 update that cleared 11 live RustSec advisories; no Rust source changed in that
 update and the Rust public-API oracle is byte-identical to the frozen snapshots
 in all eight profiles).
+**That binding was invalidated on 2026-10-23** by the lint-justification
+cleanup pass, which changed executable inputs — Rust sources in six crates.
+`26fa6192…` remains the last completed qualification; the current tree is
+unqualified, and a fresh exact-SHA qualification is required before any
+binding can be cited. The invalidation is recorded in
+`plans/httpx-parity-correction-status.md`.
 The prior `42a9c96db5b25354843bd83bd458c71757e95651` binding is historical.
 The `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding (the coordinated
 0.2.2 candidate) is historical.

@@ -38,13 +38,13 @@ single pass.
 
 | # | Cluster | Evidence | Copies |
 |---|---|---|---|
-| A | resolved-target and SNI client builders | `client/routes.rs` `build_resolved_client` (~144-198) vs `sni_client` (~207-259) | 2 |
-| B | resolved-destination effective-port validation | `pipeline/prepare.rs:348`, `pipeline/mod.rs:496`, `request.rs:853` (identical string), plus `prepare.rs:363` and `proxy.rs:664` for the proxied variants | 5 |
-| C | custom-dialing incompatibility ladder | `pipeline/prepare.rs:456,461,466,475` ≡ `pipeline/mod.rs:512,517,522,531` (identical strings), plus `pipeline/mod.rs:260` | 2 + 1 |
-| D | origin normalization | `pool.rs` `OriginKey::from_url` / `from_url_with_proxy_scheme` vs `http_origin.rs` `HttpOrigin::from_url` | 3 |
+| A | resolved-target and SNI client builders | `client/routes.rs` `build_resolved_client` (~144-198) vs `sni_client` (~207-259); the pair differs in three respects only — the resolved-target binding, the SNI binding (optional versus mandatory) and the enabler computed twice versus once (the same value both times) | 2 |
+| B | resolved-destination effective-port validation | six port-comparison sites — `pipeline/prepare.rs:348` (resolved) and `:363` (proxied), `pipeline/mod.rs:496` (native resolved), `request.rs:853` (resolved) and `:869` (proxied), `proxy.rs:664` (resolved proxy peer) — plus `pipeline/hyper_dispatch.rs:161`, which carries a third copy of the `"resolved destinations require an HTTP or HTTPS URL"` message and compares no port | 6 comparison sites over 7 call sites |
+| C | custom-dialing incompatibility ladder | `pipeline/prepare.rs:456,461,466,475` (the high-level preparation ladder, preceded by two non-ladder messages at `:433` and `:439`) and `pipeline/mod.rs:512,517,522,531` (the native ladder, with no built-in-proxy arm) — **not** two identical ladders; `pipeline/mod.rs:260` is the high-level dispatch-boundary arm, which the native path does not have | 2 ladders of 4 arms plus 1 dispatch-boundary arm |
+| D | origin normalization | `pool.rs` `OriginKey::from_url` / `from_url_with_proxy_scheme` vs `http_origin.rs` `HttpOrigin::from_url`; `HttpOrigin::from_uri` strips the IPv6 brackets (`::1`) while `HttpOrigin::from_url` and `OriginKey::from_url` keep them (`[::1]`) | 3 |
 | E | post-handshake ALPN `h2` detection | `transport/connect.rs`, `transport/uds.rs`, `transport/direct_connector.rs`, `transport/socks.rs` | 4 |
 | F | `HyperClientPolicy` constructor duplication | `transport/hyper_client.rs` `persistent` vs `cached_route` are byte-identical bodies | 2 |
-| G | `"target extension is not valid UTF-8"` literal | `pipeline/prepare.rs`, `proxy.rs`, `transport/connect.rs` | 8 |
+| G | `"target extension is not valid UTF-8"` literal | `pipeline/prepare.rs` (2), `transport/connect.rs` (2) and `transport/proxy.rs` (4) — not `src/proxy.rs` — with `Error::InvalidUrl` and identical text at all eight sites | 8 |
 
 ## 2. Why this milestone is ready
 
@@ -66,30 +66,62 @@ single pass.
 
 ## 3. Current implementation evidence
 
+The figures in this section were corrected against the closure record
+`plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md`
+on 2026-10-23, once the implementation had been measured against the tree.
+Where this section and that record disagree, the record is the authority.
+
 At the baseline:
 
 - `crates/eggfetch-core/src/client/routes.rs` contains
   `build_resolved_client` and `sni_client`, whose bodies share the TLS
   materialization, Hyper client policy derivation, and lifecycle
-  configuration steps;
-- `crates/eggfetch-core/src/pipeline/prepare.rs:348`,
-  `crates/eggfetch-core/src/pipeline/mod.rs:496` and
-  `crates/eggfetch-core/src/request.rs:853` emit the identical message
-  `"all resolved destinations must use the URL's effective port {expected_port}"`;
-- `crates/eggfetch-core/src/pipeline/prepare.rs:363` and
-  `crates/eggfetch-core/src/proxy.rs:664` emit the corresponding proxied and
-  proxy-peer variants;
-- `crates/eggfetch-core/src/pipeline/prepare.rs:456-475` and
-  `crates/eggfetch-core/src/pipeline/mod.rs:512-531` emit the same four
-  custom-dialing incompatibility messages, and
-  `crates/eggfetch-core/src/pipeline/mod.rs:260` emits a fifth in the
-  built-in proxy case;
+  configuration steps. The two differ in exactly three respects: the
+  resolved-target binding, the SNI binding (optional in one, mandatory in
+  the other), and the enabler being computed twice versus once (the same
+  value both times). The "neither" case — no resolved target and no SNI — is
+  the *persistent* direct singleton built in `client.rs`, with a different
+  Hyper policy source and different TLS-failure handling, and is not part
+  of this cluster;
+- six sites compare a resolved destination's port against the URL's
+  effective port: `crates/eggfetch-core/src/pipeline/prepare.rs:348`
+  (resolved) and `:363` (proxied),
+  `crates/eggfetch-core/src/pipeline/mod.rs:496` (native resolved),
+  `crates/eggfetch-core/src/request.rs:853` (resolved) and `:869` (proxied),
+  and `crates/eggfetch-core/src/proxy.rs:664` (resolved proxy peer). The
+  three resolved-destination sites emit the identical message
+  `"all resolved destinations must use the URL's effective port {expected_port}"`,
+  the two proxied sites emit the proxied variant, and the proxy-peer site
+  emits the proxy-peer variant. The five destination sites raise
+  `Error::InvalidResolvedTarget`; the proxy-peer site raises
+  `Error::InvalidProxyUrl`;
+- a seventh call site, `crates/eggfetch-core/src/pipeline/hyper_dispatch.rs:161`,
+  carries a third copy of `"resolved destinations require an HTTP or HTTPS
+  URL"` — the same error kind and the same text — without comparing a port;
+- the custom-dialing incompatibility messages are not two identical ladders.
+  The high-level preparation ladder is
+  `crates/eggfetch-core/src/pipeline/prepare.rs:456,461,466,475`, preceded
+  by two messages that are not ladder arms (`prepare.rs:433`,
+  "caller-supplied resolved destinations require direct routing; disable the
+  proxy explicitly", and `prepare.rs:439`, "caller-supplied resolved
+  destinations are incompatible with Unix-domain routing"). The native
+  ladder is `crates/eggfetch-core/src/pipeline/mod.rs:512,517,522,531`,
+  preceded by the native proxy rejection at `mod.rs:504`, and it has **no**
+  built-in-proxy arm. The built-in-proxy message
+  `"custom dialing is incompatible with built-in proxy routing"` at
+  `crates/eggfetch-core/src/pipeline/mod.rs:260` is the high-level
+  dispatch-boundary arm, which the native path does not have. All five
+  arms raise `Error::Unsupported`;
 - `crates/eggfetch-core/src/pool.rs` `OriginKey::from_url` accepts any
   scheme string and does not validate the host, while
   `crates/eggfetch-core/src/http_origin.rs` `HttpOrigin::from_url` rejects
   a non-HTTP(S) scheme and an empty host; `OriginKey::from_url_with_proxy_scheme`
   rebuilds the struct directly rather than going through the shared
-  constructor;
+  constructor. The two constructors also disagree on the IPv6 host form:
+  `HttpOrigin::from_uri` strips the brackets (`::1`), while
+  `HttpOrigin::from_url` and `OriginKey::from_url` keep them (`[::1]`) — a
+  residual divergence that this milestone records but does not fix, because
+  fixing it would change pool keying;
 - the post-handshake ALPN `h2` check is repeated in
   `crates/eggfetch-core/src/transport/connect.rs`,
   `transport/uds.rs`, `transport/direct_connector.rs` and
@@ -97,9 +129,10 @@ At the baseline:
 - `crates/eggfetch-core/src/transport/hyper_client.rs` `persistent` and
   `cached_route` have identical bodies;
 - the `"target extension is not valid UTF-8"` message appears eight times
-  across `crates/eggfetch-core/src/pipeline/prepare.rs`,
-  `crates/eggfetch-core/src/proxy.rs` and
-  `crates/eggfetch-core/src/transport/connect.rs`.
+  across `crates/eggfetch-core/src/pipeline/prepare.rs` (two),
+  `crates/eggfetch-core/src/transport/connect.rs` (two) and
+  `crates/eggfetch-core/src/transport/proxy.rs` (four). At all eight sites
+  the error kind is `Error::InvalidUrl` and the text is identical.
 
 ## 4. Invariants that must not regress
 
@@ -267,7 +300,7 @@ the extension further than today.
 4. Cluster E: introduce the shared ALPN check and update the four call
    sites.
 5. Cluster B: introduce the shared effective-port validation and update the
-   five call sites.
+   seven call sites.
 6. Cluster C: introduce the shared incompatibility ladder and update the
    two ladders and the built-in-proxy case.
 7. Cluster D: trace the callers of both origin normalizations, decide the
@@ -397,16 +430,28 @@ M010 closes only when:
 
 - each of the seven clusters has exactly one implementation of its rule;
 - the effective-port validation rejects the same inputs with the same error
-  kind and message as before;
+  kind and message as before — `Error::InvalidResolvedTarget` at the five
+  destination sites, `Error::InvalidProxyUrl` at the proxy-peer site — and
+  all seven call sites resolve to that one implementation, including the
+  route-key site that compares no port;
 - the custom-dialing ladder preserves its precedence and its five
-  incompatibilities;
-- the two origin normalizations agree on every URL shape in the test table,
-  and the chosen authoritative rule is recorded;
+  incompatibilities: the four preparation arms on the high-level path, the
+  same four arms on the native path, and the built-in-proxy arm at the
+  high-level dispatch boundary, which the native path does not have;
+- the origin normalizations are consolidated to one consistently validating
+  rule — the stricter `HttpOrigin` rule — and the chosen authoritative rule
+  is recorded with its caller trace; the legacy permissive rule and the
+  adopted strict rule differ on exactly one URL shape in the test table (a
+  non-HTTP(S) scheme), and that difference is proven unreachable;
 - pool keying is unchanged for every supported URL shape;
 - no public API changed in any profile;
-- every error **kind** is unchanged, and the shared error messages are
-  byte-identical to the current text;
-- the full workspace test suite is green;
+- every error **kind** is unchanged — cluster B keeps
+  `Error::InvalidResolvedTarget` and `Error::InvalidProxyUrl`, cluster G
+  keeps `Error::InvalidUrl` at all eight sites, and the ladder keeps
+  `Error::Unsupported` — and the shared error messages are byte-identical to
+  the current text;
+- the full workspace test suite is green on the bound SHA, as delivered by
+  the frozen-SHA qualification rather than by the milestone's own gates;
 - Tier 1 and Tier 2 are green on the frozen executable SHA;
 - both HTTPX profiles are rebound to that exact SHA.
 

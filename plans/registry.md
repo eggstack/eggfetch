@@ -144,9 +144,8 @@ closure unblocks none of them.
 | 3 | Decide whether the `tracing` feature is enabled in an adapter, given a test, or explicitly retired. | project maintainers | this registry |
 | 4 | Decide whether to authorise a dev-dependency on an HTTP/2 server fixture in `eggfetch-cli`, so the CLI's `--http2` negotiation-success path can be asserted end to end. The rejection path is fully covered today. | project maintainers | `plans/closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` §10 |
 | 5 | Supply the downstream behavioral-fixture artifact for each future qualification. Tier 2's downstream gate fails closed by design and `target/downstream-qualification/artifact-manifest.json` has no in-repository producer, so `./scripts/check.sh extended` cannot complete without it. It was supplied for the 2026-10-22 qualification and the portfolio passed 4/4 required packages; the next qualification needs it again. This is an operator obligation, not a code change. | project maintainers (operator) | `compat/downstream/README.md` "Update Process" |
-| 6 | Decide the fate of four stale lint suppressions and two dead items — `crates/eggfetch-cli/src/main.rs:24` (`clippy::cast_precision_loss`, the cast is gone), `crates/eggfetch-core/src/compression.rs:1332` (same), `crates/eggfetch-core/src/transport/http3.rs:1035` (`clippy::too_many_lines` on an 8-line function), `crates/eggfetch-python/src/response.rs:697` (a function with no caller), plus `crates/eggfetch-core/src/http_version.rs:50` and `crates/eggfetch-core/src/response.rs:285` (both dead). The lint set was frozen for M007, so they are recorded rather than removed. | project maintainers | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` §10 |
-| 7 | Decide whether the IPv6 pool-key divergence gets its own milestone. The high-level path keys `http://[::1]:8080` as `[::1]` and the native path as `::1`, so the same IPv6 endpoint gets two different pool keys depending on the entry path. Closing it changes pool keying and needs its own plan. | project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
-| 8 | Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry. It was named by the compat profiles' comment log, which M007 removed. It is an HTTP/3 qualification binding held in the H3 records; its provenance is now stated in `docs/architecture/overview.md`. | project maintainers | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` §10 |
+| 6 | Decide whether the IPv6 pool-key divergence gets its own milestone. The high-level path keys `http://[::1]:8080` as `[::1]` and the native path as `::1`, so the same IPv6 endpoint gets two different pool keys depending on the entry path. Closing it changes pool keying and needs its own plan. | project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
+| 7 | Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry. It was named by the compat profiles' comment log, which M007 removed. It is an HTTP/3 qualification binding held in the H3 records; its provenance is now stated in `docs/architecture/overview.md`. | project maintainers | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` §10 |
 
 Resolved in the current pass: ADR-0008 and ADR-0009 were accepted on
 2026-10-22 on maintainer instruction to execute their dependent milestones.
@@ -157,6 +156,16 @@ Tier 3 and the live security preflight green there, and the two conditions
 that had held the milestones at *conditionally closed* are therefore met. The
 maintainer still owns the publication decisions: this rebinding is a
 compatibility binding and authorizes no release.
+
+The former action 6 — the fate of four stale lint suppressions and two dead
+items — was resolved on 2026-10-23 by the lint-justification cleanup pass:
+every one of the six was a narrowing (three stale lint entries removed, three
+dead items deleted), and every `allow`/`expect` attribute in `crates/*/src`
+now carries a `reason =`. See
+`plans/closure/release-verification/007-planning-and-documentation-hygiene.md`
+§4, rows 40–48. That pass changed executable inputs and therefore invalidated
+the Stage C binding; a fresh exact-SHA qualification is required before
+`26fa6192…` can be cited again.
 
 ## Blocked / operational work
 

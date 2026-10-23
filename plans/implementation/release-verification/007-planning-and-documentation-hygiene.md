@@ -30,8 +30,10 @@ something the repository does not do, or that leaves a reader unable to tell
 whether a condition was met.
 
 1. **Plan acceptance criteria are not evaluated.** 83 plan files under
-   `plans/` carry 2,197 unchecked `- [ ]` boxes. Most of those files also
-   carry a completion record. The sharpest example is
+   `plans/` carry 2,197 unchecked `- [ ]` boxes. The files whose own record
+   says the work was executed are the sharpest problem: a file can carry a
+   completion record and still leave its criteria unticked, so a reader
+   cannot tell "met" from "assumed". The sharpest example is
    `plans/core-private-module-decomposition.md`: ten acceptance criteria at
    lines 188-197 remain unticked while line 205 reads
    `## Execution record — complete (2026-09-21)`. That file is cited as a
@@ -49,8 +51,12 @@ whether a condition was met.
 
 4. **The compat profiles accumulate a historical log in comments.**
    `compat/httpx/0.28.1/profile.toml` is 207 lines, of which 161 are
-   comments retaining eleven distinct historical SHA bindings. Only 46 lines
-   are machine-readable. The same pattern applies to the httpx2 profile.
+   comments retaining the historical SHA log — one full 40-character SHA
+   string and sixteen distinct abbreviated 8-character SHA prefixes, the
+   latter repeated across the comment block. Only 41 lines are
+   machine-readable content once blank lines are excluded; 46 non-comment
+   lines remain if blanks are counted. The same pattern applies to the
+   httpx2 profile.
 
 5. **Two near-identical httpx replacement packages.**
    `compat/httpx-shim/` and `compat/httpx-controlled-replacement/` contain
@@ -79,8 +85,8 @@ whether a condition was met.
   stale fuzz lock can resolve dependencies differently from the root lock.
 - Item 4 conflicts with the repository's own rule that the live SHA lives in
   the canonical qualification records and nowhere else. Comments retaining
-  eleven historical SHAs in a machine-read file are exactly the duplication
-  that rule forbids.
+  sixteen abbreviated historical SHA prefixes and one full SHA in a
+  machine-read file are exactly the duplication that rule forbids.
 - Item 5 is a bounded consolidation: the qualification path uses only the
   controlled-replacement, and the shim's `__eggfetch_shim__` marker is the
   only functional difference.
@@ -107,7 +113,9 @@ At the baseline:
 - `fuzz/Cargo.lock` records `eggfetch-core 0.1.0`;
   `crates/eggfetch-core/Cargo.toml` records `0.2.2`;
 - `compat/httpx/0.28.1/profile.toml` is 207 lines with 161 comment lines and
-  eleven distinct 40-character SHA strings in those comments;
+  41 non-blank machine-readable lines; those comments retain one distinct
+  40-character SHA string and sixteen distinct abbreviated 8-character SHA
+  prefixes;
 - `compat/httpx-shim/httpx/__init__.py` and
   `compat/httpx-controlled-replacement/httpx/__init__.py` differ only in
   their docstrings and the `__eggfetch_shim__` marker;
@@ -225,6 +233,12 @@ refreshed lock, and must record whether the refresh changed any fuzz
 dependency version. A version change in a fuzz dependency must be called out
 explicitly, because the fuzz tree is not covered by the root lock's review.
 
+The build is not implied by the lock refresh. Two pre-existing API drifts in
+the fuzz harness — `fuzz/fuzz_targets/fuzz_headers.rs` and
+`fuzz/fuzz_targets/fuzz_multipart.rs` — blocked the build against the
+refreshed lock and had to be fixed before the lock could be used. Those
+fixes are the main agent's edits, not the milestone's; see §17.
+
 ### 6.4 Clean the compat profiles
 
 The historical SHA log in the comments of
@@ -235,7 +249,12 @@ record that already carries the binding history.
 
 The machine-readable content of both profiles must be byte-identical before
 and after the change. The implementer must prove this by diffing the
-non-comment content.
+non-comment content. The count to quote is the **non-blank** non-comment
+count — 41 lines per profile at the baseline — and not the count that
+includes blank lines, so that no phantom change in machine-readable content
+is implied. The baseline comment block of each profile holds one full
+40-character SHA string and sixteen distinct abbreviated 8-character SHA
+prefixes; no SHA string of either shape remains in the comments afterwards.
 
 Each profile must retain a short comment stating where the live binding and
 its history live, so that a reader of the profile knows where to look.
@@ -521,19 +540,31 @@ Tiers and counts (the three rows sum back to the 2,267-box baseline):
 | Tier 2 — no execution record at all | 45 | 1,195 | dated "never executed" note, boxes left unticked |
 | Deferred (open items) | 5 | 62 | dated open-items section, boxes left unticked with a pointer |
 
-Tier 1 splits by where the execution record lives: **32** files carry the
-marker inside the file itself, and **7** carry it only in a linked sibling
-status record that the plan names
-(`plans/httpx-drop-in-phase-{0,1,2,3,4,5}-status.md` and
-`plans/httpx-drop-in-final-native-qualification-and-evidence-closure-status.md`).
+The tiering is the implementer's rule-based classification, not a scan a reader
+can reproduce. The completion markers in this corpus are not uniform —
+`## Execution record`, `## Execution update`, `## Implementation status`,
+`## Status`, `## Status: …`, `## Closure record (executed …)` and a
+front-matter `Status:` line all occur — so a scan for one heading shape
+finds materially fewer files than the rule does. The implementer reports
+**31** of the 83 legacy flat files under the in-file marker rule and **40**
+of the 83 under the broader rule that also accepts a linked sibling status
+record the plan names; those linked-sibling records include
+`plans/httpx-drop-in-phase-{0,1,2,3,4,5}-status.md` and
+`plans/httpx-drop-in-final-native-qualification-and-evidence-closure-status.md`.
 The two Tier-2 taxonomy plans (`006-windows-tls-…`, `006c2-…`) are counted in
-Tier 2: their `Status: ready` means no execution happened.
+Tier 2: their `Status: ready` means no execution happened. The marker list
+is not published, so the per-file tier assignment is not independently
+re-derivable; the closure record's §10 finding records the same limitation.
 
-Of the 83 legacy flat files, **40** carry an execution record under the rule
-"the file records an execution history, either inside the file or in a linked
-sibling status record that the plan names" (33 in-file plus 7 linked-sibling,
-one of which — `plans/httpx-drop-in-phase-1-production-semantics.md` — is
-partly deferred), and **43** carry none and are Tier 2.
+Of the 83 legacy flat files, **40** carry an execution record under that
+broader rule and **43** carry none and are Tier 2 (one file —
+`plans/httpx-drop-in-phase-1-production-semantics.md` — is partly deferred
+and therefore appears in two tiers).
+
+What a reader can rely on is the measured outcome, which is independently
+confirmed: **1,010** boxes newly ticked, **1,257** boxes left unticked
+across **50** files, and **0** acceptance violations — every remaining
+unticked box carries a dated disposition note or a dated open-items pointer.
 
 Per-class box counts across all 2,267 baseline boxes:
 
@@ -584,26 +615,49 @@ is the smallest change that makes the lock correct:
 - `crossbeam-utils`, `dashmap`, `hashbrown`, `lock_api`, `parking_lot_core`,
   `redox_syscall`, `scopeguard` removed (they were only reachable through the
   old core's `dashmap` dependency);
-- 66 dependencies unchanged.
+- **134** of the **143** baseline lock packages unchanged in version.
+
+The count is by distinct package name in `fuzz/Cargo.lock`: 143 names at the
+baseline, 137 after the refresh, with 1 added, 7 removed and 2 version-changed
+(`eggfetch-core` and `base64`). The raw `[[package]]` block count is 146 → 140,
+the difference being three packages (`getrandom`, `webpki-roots`,
+`windows-sys`) that carry two version entries each. The later dependency
+patch that closed the live RustSec advisories moved three further registry
+packages in the fuzz lock (`rustls`, `rustls-webpki`, `webpki-roots`) without
+changing the package count, so the "unchanged in version" figure above
+describes this milestone's own lock refresh.
 
 A full `cargo generate-lockfile --offline` was rejected: it moved 85 packages,
 including major-version bumps (`syn` 2→3, `http` 1.4→1.5, `hyper` 1.10→1.12,
 `brotli` 8→9, `zstd` 0.13→0.14) that would have changed fuzz-target behavior —
 a §14 stop condition.
 
-The fuzz tree still does **not** compile, and did not compile before this
-change either: `fuzz_targets/fuzz_headers.rs:34` (`headers.extend(other)` now
-needs `&Headers`) and `fuzz_targets/fuzz_multipart.rs:46-47` (`content_length`
-is now `Option<u64>`). Both are pre-existing API drift in the fuzz harness
-against `eggfetch-core` 0.2.2, unchanged by the lock refresh, and outside this
-change's ownership.
+**The fuzz tree now builds.** The lock refresh alone did not make it compile:
+two pre-existing API drifts in the fuzz harness against `eggfetch-core` 0.2.2
+blocked the build and had to be fixed before the refreshed lock could be
+used. Those fixes are the **main agent's** edits, not this change's:
+
+- `fuzz/fuzz_targets/fuzz_headers.rs:34` — `headers.extend(other)` →
+  `headers.extend(&other)`, matching the current
+  `Headers::extend(&mut self, other: &Self)` signature;
+- `fuzz/fuzz_targets/fuzz_multipart.rs:37` and `:46-50` — `content_length()`
+  returns `Option<u64>`, not `usize`; the invariant is now asserted only when
+  the length is known.
+
+With those in place, `cargo check --manifest-path fuzz/Cargo.toml --all-targets
+--offline` exits **0** and checks all twelve declared fuzz-target binaries.
+That green build is recorded evidence in the closure record (§4, row 15); it
+was not re-run for this amendment.
 
 ### §6.4 — compat profiles
 
-The historical SHA log was removed from the **comments** of both profiles. The
-non-comment content is byte-identical before and after (verified by
-`grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$'` before/after `diff`), and
-neither profile retains any SHA in its comments. The machine-readable keys
+The historical SHA log was removed from the **comments** of both profiles. What
+was removed per profile was **one full 40-character SHA string** and
+**sixteen distinct abbreviated 8-character SHA prefixes**; the comment blocks
+held no other SHA of either shape. The non-blank, non-comment content is
+**41 lines per profile** and is byte-identical before and after (verified by
+`grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$'` before/after `diff`),
+and neither profile retains any SHA in its comments. The machine-readable keys
 (`rebaseline-sha`, `qualification-sha`, `previous-qualification-sha`,
 `historical-current-qualification-sha`, `historical-qualification-sha`) are
 unchanged. Each profile keeps a short comment pointing at
