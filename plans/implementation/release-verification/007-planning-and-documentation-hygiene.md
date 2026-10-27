@@ -166,7 +166,9 @@ At the baseline:
 
 - moving the 249 flat legacy plan files into `plans/archive/`, which is a
   separate bulk reorganization;
-- the CLI's 581-line `run()` function, which is deferred because the CLI
+- the CLI's `run()` function (586 lines at
+  `crates/eggfetch-cli/src/main.rs:28-613`, 509 of them non-blank and
+  non-comment), which is deferred because the CLI
   adapter has no owning subsystem roadmap and needs a maintainer ownership
   decision first;
 - the `tracing` feature's lack of a test or an adapter consumer, which is a

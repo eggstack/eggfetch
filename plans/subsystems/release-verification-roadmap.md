@@ -292,7 +292,7 @@ publish guard and identity verification still passing; every suppression is
 justified with no lint set changed; Tier 1/2 green.
 
 Deferred: moving the 249 flat legacy plan files into `plans/archive/`; the
-CLI's 581-line `run()` decomposition, which needs a maintainer ownership
+CLI's `run()` decomposition (586 lines), which needs a maintainer ownership
 decision because no subsystem roadmap owns the CLI adapter; the `tracing`
 feature's missing test and consumer, which is a capability decision; the Node
 adapter's missing tests and the FFI's missing capabilities, which are

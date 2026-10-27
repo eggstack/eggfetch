@@ -48,6 +48,14 @@ Validation tiers: `.skills/verification-qualification.md`. Normative policy:
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | M006 and M007 closed | Both closed on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the exact-SHA binding renewed there. M003 standing corrective intake remains proposed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Campaigns closed; fixtures repaired | New optimization needs its own milestone plan. |
 
+In the two tables below and above, a SHA recorded against a closed milestone
+is **where that milestone closed**, not the live binding. Each of those
+milestones was renewed at `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which
+was superseded on 2026-10-23 by the lint-justification cleanup freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`. The live binding is named only by
+`plans/httpx-parity-correction-status.md` and the two `compat/*/profile.toml`
+files.
+
 ## Dependency-ready implementation plans
 
 | Subsystem | Milestone | Status | Implementation plan | Dependencies / handoff note |
@@ -83,8 +91,10 @@ core M010, release-verification M006, release-verification M007. All eight are
 executable freeze `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Because each one
 changes executable inputs, the live Stage C binding was invalidated; the
 rebinding and the frozen-SHA Tier 1 / Tier 2 / Tier 3 run were then performed
-on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which is the SHA the binding
-now names.
+on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`. That binding was superseded on
+2026-10-23 by the lint-justification cleanup freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`, which is the SHA the binding now
+names.
 
 **Remaining recommended order:** none of the registered milestones remain. The
 four previously queued milestones — core M009, core M010, release-verification
@@ -107,8 +117,9 @@ there.
 
 **Python compat gate:** M004 and M005 are closed. ADR-0009 was
 accepted on 2026-10-22. Both change executable Python inputs and therefore
-renew the exact-SHA binding, which now names
-`26fa619299fb8d447f25cbcb5eb713a1f537a30c`. The HTTPX 1.0 program stays gated
+renew the exact-SHA binding, which was re-established on
+`26fa619299fb8d447f25cbcb5eb713a1f537a30c` and now names
+`822b7246bab79cca7c54c32aaf403c1366472c57`. The HTTPX 1.0 program stays gated
 on the upstream trigger.
 
 **TLS/protocol execution gate:** M005 is closed; ADR-0008 was
@@ -140,12 +151,11 @@ closure unblocks none of them.
 | # | Action | Owner | Reference |
 |---|---|---|---|
 | 1 | Decide whether the FFI publishes a strict HTTP/3 policy value. The published values are `0`=`Http1Only`, `1`=`Http2Only`, `2`/`3`=`Auto`, so no strict HTTP/3 value exists to reject. The guard path is written and unit-tested; only the ABI value and `docs/ffi/README.md` are missing. | project maintainers | `plans/closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` §10 |
-| 2 | Decide whether the CLI adapter gets an owning subsystem roadmap, or whether CLI work is admitted under an existing subsystem. The CLI's 581-line `run()` decomposition is deferred until this is decided. | project maintainers | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` §5 |
+| 2 | Decide whether the CLI adapter gets an owning subsystem roadmap, or whether CLI work is admitted under an existing subsystem. The CLI's `run()` — 586 lines at `crates/eggfetch-cli/src/main.rs:28-613`, 509 of them non-blank and non-comment — is deferred until this is decided. | project maintainers | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` §5 |
 | 3 | Decide whether the `tracing` feature is enabled in an adapter, given a test, or explicitly retired. | project maintainers | this registry |
 | 4 | Decide whether to authorise a dev-dependency on an HTTP/2 server fixture in `eggfetch-cli`, so the CLI's `--http2` negotiation-success path can be asserted end to end. The rejection path is fully covered today. | project maintainers | `plans/closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` §10 |
-| 5 | Supply the downstream behavioral-fixture artifact for each future qualification. Tier 2's downstream gate fails closed by design and `target/downstream-qualification/artifact-manifest.json` has no in-repository producer, so `./scripts/check.sh extended` cannot complete without it. It was supplied for the 2026-10-22 qualification and the portfolio passed 4/4 required packages; the next qualification needs it again. This is an operator obligation, not a code change. | project maintainers (operator) | `compat/downstream/README.md` "Update Process" |
+| 5 | Supply the downstream behavioral-fixture artifact for each future qualification. Tier 2's downstream gate fails closed by design and `target/downstream-qualification/artifact-manifest.json` has no in-repository producer, so `./scripts/check.sh extended` cannot complete without it. It was supplied for the 2026-10-23 qualification and the portfolio passed 4/4 required packages; the next qualification needs it again. This is an operator obligation, not a code change. | project maintainers (operator) | `compat/downstream/README.md` "Update Process" |
 | 6 | Decide whether the IPv6 pool-key divergence gets its own milestone. The high-level path keys `http://[::1]:8080` as `[::1]` and the native path as `::1`, so the same IPv6 endpoint gets two different pool keys depending on the entry path. Closing it changes pool keying and needs its own plan. | project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
-| 7 | Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry. It was named by the compat profiles' comment log, which M007 removed. It is an HTTP/3 qualification binding held in the H3 records; its provenance is now stated in `docs/architecture/overview.md`. | project maintainers | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md` §10 |
 
 Resolved in the current pass: ADR-0008 and ADR-0009 were accepted on
 2026-10-22 on maintainer instruction to execute their dependent milestones.
@@ -168,6 +178,22 @@ the Stage C binding at `26fa6192…`; it was qualified in its own right on the
 same day, and the live Stage C binding now names the cleanup freeze
 `822b7246bab79cca7c54c32aaf403c1366472c57`.
 
+The former action 7 — whether the `639bf186a71c054e11278d1b160ffe7a6f172c02`
+HTTP/3 SHA needs an HTTPX-ledger entry — was resolved on 2026-10-27: **no new
+HTTPX binding entry is to be added.** The M007 closure record offered two
+remedies ("add a canonical entry in `plans/httpx-parity-correction-status.md`,
+or record it in the H3 ledger's own canonical place and cross-reference it"),
+and the second is the one already in force: the SHA is held by
+`plans/http3-public-origin-spot-check-ledger.json:5`,
+`plans/http3-production-qualification-evidence.md:4` and
+`plans/http3-post-freeze-diagnostics-requalification-corrective-closure.md:5`;
+the HTTPX ledger cross-references all three and states that the binding "does
+not belong in the HTTPX binding history"
+(`plans/httpx-parity-correction-status.md:3068-3077`); and its provenance is
+recorded in `docs/architecture/overview.md:266`. Recording an HTTP/3 binding
+in the HTTPX ledger's binding history would re-introduce exactly the
+categorisation error M007 corrected. Six actions remain open.
+
 ## Blocked / operational work
 
 | Subsystem | Milestone | Blocker |
@@ -186,7 +212,7 @@ because it was overlooked.
 | Item | Reason for deferral |
 |---|---|
 | Moving the 249 flat legacy plan files into `plans/archive/` | Bulk reorganization with no correctness value; the flat set is a documented grandfathered legacy archive. |
-| Decomposing the CLI's 581-line `run()` | Polish, and no subsystem roadmap currently owns the CLI adapter. Needs a maintainer ownership decision first. |
+| Decomposing the CLI's `run()` (586 lines) | Polish, and no subsystem roadmap currently owns the CLI adapter. Needs a maintainer ownership decision first. |
 | `tracing` feature has no test and no adapter consumer | A capability decision, not hygiene. See pending maintainer action 3. |
 | Node adapter has zero automated tests | Registered gated future requiring an explicit scope decision. |
 | FFI has no proxy, multipart, custom-CA, UDS, dialer, SNI, trailers, metrics or retry-policy surface | Registered gated future; out of scope for the protocol-capability milestone. |
@@ -220,13 +246,16 @@ successfully. All M006-family work is also closed. M005 closed on candidate
 `015a56d7ec3edf186eec8ebccff01cbf5584274e` with build-only rehearsal
 `36991057953` and PyPI publish run `36994291293`. That candidate's binding is
 now historical; the live binding is
-`26fa619299fb8d447f25cbcb5eb713a1f537a30c` unless executable or qualification
+`822b7246bab79cca7c54c32aaf403c1366472c57` unless executable or qualification
 inputs change again.
 
 The eight milestones closed in the 2026-10-22 pass each required renewed
 exact-SHA Stage C qualification at their own freeze, and each invalidated the
 binding when it landed. The tree was committed, the binding was re-established
 on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, and the full tier gates plus
-the live security preflight were run there. The publication decisions remain
+the live security preflight were run there. That binding was superseded on
+2026-10-23 by the lint-justification cleanup freeze
+`822b7246bab79cca7c54c32aaf403c1366472c57`, which was qualified in its own
+right with the same four gates green. The publication decisions remain
 with the maintainer: the rebinding is a compatibility binding and authorizes
 no release.

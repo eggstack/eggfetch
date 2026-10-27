@@ -36,8 +36,9 @@ These stay visible until they are done. The same list, with owners, is in
    no strict HTTP/3 value exists to reject. The guard path is written and
    unit-tested; only the ABI value and `docs/ffi/README.md` are missing.
 2. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
-   roadmap or is admitted under an existing one. The CLI's 581-line `run()`
-   decomposition is deferred until this is decided.
+   roadmap or is admitted under an existing one. The CLI's `run()` — 586 lines
+   at `crates/eggfetch-cli/src/main.rs:28-613`, 509 of them non-blank and
+   non-comment — is deferred until this is decided.
 3. **Decide the `tracing` feature's fate** — enabled in an adapter, given a
    test, or explicitly retired.
 4. **Decide whether to authorise an HTTP/2 server fixture dev-dependency in
@@ -48,25 +49,32 @@ These stay visible until they are done. The same list, with owners, is in
    `target/downstream-qualification/artifact-manifest.json` has no
    in-repository producer, so `./scripts/check.sh extended` cannot complete
    without it. This is an operator obligation, not a code change. It was
-   supplied for the 2026-10-22 qualification and the portfolio passed 4/4
+   supplied for the 2026-10-23 qualification and the portfolio passed 4/4
    required packages; the next qualification needs it again.
 6. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
    the high-level path keys `http://[::1]:8080` as `[::1]` and the native path
    as `::1`, so the same IPv6 endpoint gets two different pool keys depending
    on the entry path. It is recorded in `docs/residual-differences.md`; closing
    it changes pool keying and needs its own plan.
-7. **Decide whether the `639bf186…` HTTP/3 SHA needs an HTTPX-ledger entry** —
-   it was named by the compat profiles' comment log, which M007 removed. It is
-   an HTTP/3 qualification binding and is held in the H3 records; its
-   provenance is now stated in `docs/architecture/overview.md`.
+
+**Resolved 2026-10-27 — the former item 7 needs no HTTPX-ledger entry.** The
+SHA `639bf186a71c054e11278d1b160ffe7a6f172c02` is an HTTP/3 qualification
+binding; its canonical home is the H3 ledger
+(`plans/http3-public-origin-spot-check-ledger.json:5`), the HTTPX ledger
+cross-references it and states that it does not belong in the HTTPX binding
+history (`plans/httpx-parity-correction-status.md:3068-3077`), and its
+provenance is recorded in `docs/architecture/overview.md:266`. Recording it in
+the HTTPX binding history would re-introduce the categorisation error M007
+corrected. **Six actions remain open.**
 
 ADR-0008 and ADR-0009 were accepted on 2026-10-22 and are no longer pending.
 The former item 6 — the fate of four stale lint suppressions and two dead
 items — was resolved on 2026-10-23 by the lint-justification cleanup pass:
 every one of the six was a narrowing, and every `allow`/`expect` attribute in
 `crates/*/src` now carries a `reason =`. That pass changed executable inputs
-and therefore invalidated the Stage C binding; a fresh exact-SHA qualification
-is required before `26fa6192…` can be cited again.
+and therefore invalidated the Stage C binding at `26fa6192…`; it was qualified
+in its own right the same day, and the live Stage C binding now names the
+cleanup freeze `822b7246bab79cca7c54c32aaf403c1366472c57`.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the
