@@ -1,12 +1,18 @@
 # Residual Differences from HTTPX 0.28.1
 
-The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
+The HTTPX 0.28.1 and httpx2 2.12.0 facades were Stage C qualified on frozen
 executable SHA
 `822b7246bab79cca7c54c32aaf403c1366472c57` (2026-10-23, renewal after the
 lint-justification cleanup pass — every `allow`/`expect` attribute in
 `crates/*/src` carries a `reason =`, 185 attributes and 0 without, and the six
 stale-or-dead items that `plans/registry.md` listed as pending maintainer
 action 6 were resolved, every one of them a narrowing).
+**That binding was invalidated on 2026-10-27** by the Batch A decision-closure
+pass, which changed executable inputs — the FFI's C ABI, the CLI adapter's
+manifest and sources, and a validation script. `822b7246…` remains the last
+completed qualification; the current tree is unqualified, and a fresh
+exact-SHA qualification is required before any binding can be cited. The
+invalidation is recorded in `plans/httpx-parity-correction-status.md`.
 The prior `26fa619299fb8d447f25cbcb5eb713a1f537a30c` binding is historical,
 and the binding before it, `42a9c96db5b25354843bd83bd458c71757e95651`, is
 historical too. The full history of every binding, renewal and supersession is

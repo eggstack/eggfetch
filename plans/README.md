@@ -9,11 +9,15 @@
 > so each invalidated the live Stage C binding; the rebinding and the
 > frozen-SHA Tier 1/2/3 run have since been completed on
 > `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where Tier 1, Tier 2, Tier 3
-> and the live security preflight are green, so the binding now names that
-> SHA. **No registered milestone remains open** — the four previously queued
-> milestones have all been executed, and the next unit of work needs its own
-> plan. The publication decisions remain with the maintainer: the rebinding is
-> a compatibility binding and authorizes no release.
+> and the live security preflight are green, so the binding then named that
+> SHA. It was renewed on 2026-10-23 at the lint-justification cleanup freeze
+> `822b7246bab79cca7c54c32aaf403c1366472c57`, and that binding was invalidated
+> on 2026-10-27 by the Batch A decision-closure freeze
+> `5519ad996857f7879668190f92e3b06419ec98ab`, which is pending fresh
+> qualification. **No registered milestone remains open** — the four previously
+> queued milestones have all been executed, and the next unit of work needs its
+> own plan. The publication decisions remain with the maintainer: the rebinding
+> is a compatibility binding and authorizes no release.
 > ADR-0008 and ADR-0009 were accepted on 2026-10-22.
 > Core-transport M007, release-verification M005, and TLS/protocol M004 remain
 > closed and published; coordinated **0.2.2** remains the current public
@@ -31,31 +35,32 @@
 These stay visible until they are done. The same list, with owners, is in
 `plans/registry.md`.
 
-1. **Decide whether the FFI publishes a strict HTTP/3 policy value** — the
-   published values are `0`=`Http1Only`, `1`=`Http2Only`, `2`/`3`=`Auto`, so
-   no strict HTTP/3 value exists to reject. The guard path is written and
-   unit-tested; only the ABI value and `docs/ffi/README.md` are missing.
-2. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
+1. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
    roadmap or is admitted under an existing one. The CLI's `run()` — 586 lines
    at `crates/eggfetch-cli/src/main.rs:28-613`, 509 of them non-blank and
    non-comment — is deferred until this is decided.
-3. **Decide the `tracing` feature's fate** — enabled in an adapter, given a
-   test, or explicitly retired.
-4. **Decide whether to authorise an HTTP/2 server fixture dev-dependency in
-   `eggfetch-cli`** — so the CLI's `--http2` negotiation-success path can be
-   asserted end to end. The rejection path is fully covered today.
-5. **Supply the downstream behavioral-fixture artifact for each future
-   qualification** — Tier 2's downstream gate fails closed by design.
-   `target/downstream-qualification/artifact-manifest.json` has no
-   in-repository producer, so `./scripts/check.sh extended` cannot complete
-   without it. This is an operator obligation, not a code change. It was
-   supplied for the 2026-10-23 qualification and the portfolio passed 4/4
-   required packages; the next qualification needs it again.
-6. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
+2. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
    the high-level path keys `http://[::1]:8080` as `[::1]` and the native path
    as `::1`, so the same IPv6 endpoint gets two different pool keys depending
-   on the entry path. It is recorded in `docs/residual-differences.md`; closing
-   it changes pool keying and needs its own plan.
+   on the entry path, and the per-origin concurrency limit is not shared
+   between the two entry paths. It is recorded in
+   `docs/residual-differences.md`; closing it changes pool keying and needs
+   its own plan.
+
+Two actions remain open. They carry the numbers they held before the
+2026-10-27 pass, which resolved the four actions that were open alongside
+them.
+
+**Resolved 2026-10-27 — the Batch A decision-closure pass closed four
+actions.** The FFI now publishes a strict HTTP/3 policy value (ABI value 4 is
+`Http3Only`); the `tracing` feature is **enabled in an adapter with a test**
+rather than retired, because the native-root trust-store fallback it reports
+is otherwise silent; the CLI's `--http2` negotiation-success path is asserted
+end to end against a real HTTP/2 ALPN fixture; and the downstream artifact
+manifest now has an in-repository producer,
+`scripts/build_downstream_artifact.py`. The pass was committed as the
+executable freeze `5519ad996857f7879668190f92e3b06419ec98ab` and invalidated
+the Stage C binding at `822b7246…`.
 
 **Resolved 2026-10-27 — the former item 7 needs no HTTPX-ledger entry.** The
 SHA `639bf186a71c054e11278d1b160ffe7a6f172c02` is an HTTP/3 qualification
@@ -65,7 +70,7 @@ cross-references it and states that it does not belong in the HTTPX binding
 history (`plans/httpx-parity-correction-status.md:3068-3077`), and its
 provenance is recorded in `docs/architecture/overview.md:266`. Recording it in
 the HTTPX binding history would re-introduce the categorisation error M007
-corrected. **Six actions remain open.**
+corrected.
 
 ADR-0008 and ADR-0009 were accepted on 2026-10-22 and are no longer pending.
 The former item 6 — the fate of four stale lint suppressions and two dead
@@ -73,8 +78,9 @@ items — was resolved on 2026-10-23 by the lint-justification cleanup pass:
 every one of the six was a narrowing, and every `allow`/`expect` attribute in
 `crates/*/src` now carries a `reason =`. That pass changed executable inputs
 and therefore invalidated the Stage C binding at `26fa6192…`; it was qualified
-in its own right the same day, and the live Stage C binding now names the
-cleanup freeze `822b7246bab79cca7c54c32aaf403c1366472c57`.
+in its own right the same day, and the binding it established at
+`822b7246bab79cca7c54c32aaf403c1366472c57` was itself invalidated by the
+2026-10-27 Batch A pass and is awaiting fresh qualification.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the

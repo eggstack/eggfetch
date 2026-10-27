@@ -4,7 +4,114 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C binding invalidated by the Batch A decision-closure pass (2026-10-27)
+
+**The live Stage C binding is invalidated by this change.** The Batch A
+decision-closure pass changed executable inputs — the FFI's C ABI, the CLI
+adapter's manifest and sources, and a validation script — so under
+`.skills/verification-qualification.md` the binding at
+`822b7246bab79cca7c54c32aaf403c1366472c57` no longer describes the tree. The
+pass was committed as the executable freeze
+`5519ad996857f7879668190f92e3b06419ec98ab`. That SHA remains the **last
+completed qualification**: Tier 1, Tier 2, Tier 3 and the live security
+preflight are green at `822b7246…`, with the downstream behavioral-fixture
+gate executing rather than skipping. The current tree is **unqualified**, and
+no publication may cite the previous Stage C binding until a fresh exact-SHA
+qualification runs at the new freeze.
+
+`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` are
+deliberately **unchanged**: they carry machine-readable binding fields, and
+their `qualification-sha` still names the last SHA that was actually
+qualified. This ledger, not the profiles, records whether that binding is
+currently live.
+
+### What this pass changed
+
+It closed four of the seven pending maintainer actions in `plans/registry.md`,
+each by landing the change the action asked for, in its own commit.
+
+- **Pending action 1 — the FFI's strict HTTP/3 policy value.** ABI value 4 is
+  now `Http3Only`. The engine already had the variant and the FFI's
+  capability guard already knew how to reject it, but no published ABI value
+  produced it. The new value follows the precedent of value 1: a strict
+  policy is published even though the shipped default build cannot satisfy
+  it, because `http3` is not in the FFI crate's default feature set, exactly
+  as `http2` is not. `crates/eggfetch-ffi/src/builder.rs:1` carries the
+  mapping; `docs/ffi/README.md` now lists the published value set in full.
+- **Pending action 3 — the fate of the `tracing` feature.** The feature is
+  **enabled in an adapter, with a test**, rather than retired. It is
+  **enabled**, not retired, because the condition it reports is a
+  security-relevant one: the native-root trust store falling back to
+  packaged WebPKI roots is reported only through `tracing::warn`, and core's
+  own documentation states that the substitution is silent without the
+  feature. Retiring it would have removed that signal. The CLI gained an
+  opt-in `tracing` feature that forwards the engine's events and installs a
+  subscriber writing them to stderr, with credentials redacted through the
+  helper the CLI already uses for its own error output. The feature is off by
+  default, adds no package to the dependency graph, and
+  `crates/eggfetch-cli/tests/tracing_diagnostics.rs` pins both halves of the
+  difference against one fixture.
+- **Pending action 4 — the CLI's `--http2` negotiation-success path.** The
+  rejection path was already covered; the success path was not, and the
+  existing test proved nothing about the protocol that was negotiated. The
+  new fixture is a TLS server that advertises `h2` as its only ALPN protocol
+  and speaks HTTP/2 over it, and it records the negotiated protocol and the
+  requests it served. A negative control runs the same fixture with
+  `--http1` and must fail **on the protocol**, not on the trust store, or it
+  would pass for the wrong reason.
+- **Pending action 5 — the downstream behavioral-fixture artifact.** The
+  manifest still has no automatic producer, and the gate still fails closed
+  when it is missing — that contract is unchanged and is correct. What
+  changed is that the manifest is now produced **in this repository**:
+  `scripts/build_downstream_artifact.py` builds both wheels from the current
+  checkout, hashes them, and writes the manifest at the path the gate reads.
+  The guide the gate prints now names the command. The script's `--self-test`
+  runs in Tier 1 and asks the real consumer to resolve both wheels from a
+  produced manifest, including the property that a hash mismatch is
+  rejected.
+
+Pending actions 2 (CLI adapter ownership) and 6 (the IPv6 pool-key
+divergence) remain open. Both are recorded in `plans/registry.md`.
+
+### Evidence collected for this pass
+
+Targeted, by instruction; the tier gates were deliberately not re-run.
+
+- `cargo clippy -p eggfetch-cli -p eggfetch-ffi --all-targets --all-features
+  -- -D warnings` — exit 0, no warnings.
+- `cargo fmt --all -- --check` — exit 0.
+- `bash scripts/check_lint_suppressions.sh` — clean over `crates/` and
+  `fuzz/`; `--self-test` — 33 cases, pass.
+- `.venv/bin/python scripts/check_doc_links.py` — all internal links OK.
+- `.venv/bin/python scripts/check_adapter_features.py` — passed.
+- `.venv/bin/python scripts/build_downstream_artifact.py --self-test` —
+  passed.
+- `cargo test -p eggfetch-cli -p eggfetch-ffi --all-features
+  -- --test-threads=1` — CLI 106 tests and FFI 50 tests, 0 failed. The FFI
+  suite includes the new strict-HTTP/3 rejection, the with-`http3` acceptance
+  and the unknown-value cases; the CLI suite includes the new HTTP/2
+  negotiation fixture and the diagnostics fixture.
+
+This is implementation evidence against the working tree, **not** Tier 1
+evidence. Tier 1 / Tier 2 / Tier 3 evidence requires the frozen-SHA run at the
+new freeze, which has not been performed.
+
+### The condition for renewal
+
+The renewal is the same procedure as the 2026-10-23 one: commit the tree as
+the executable freeze, run Tier 1, Tier 2, Tier 3 and the live security
+preflight on that exact SHA, re-supply the downstream artifact manifest for
+Tier 2's fail-closed downstream gate — with
+`scripts/build_downstream_artifact.py` as the producer — and then rebind both
+compat profiles and this ledger to the new SHA.
+
 ## Recorded state — Stage C renewed at the lint-justification cleanup freeze (2026-10-23)
+
+> **Superseded 2026-10-27.** The Batch A decision-closure pass invalidated this
+> binding when it changed executable inputs. See **"Recorded state — Stage C
+> binding invalidated by the Batch A decision-closure pass (2026-10-27)"** at
+> the top of this ledger. The renewal record below remains the history of
+> what happened and why.
 
 Recorded designation: **Stage C qualified (renewal)** for both documented
 facades, bound to executable freeze
