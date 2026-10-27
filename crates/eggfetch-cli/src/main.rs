@@ -615,6 +615,11 @@ async fn run(cli: Cli) -> Result<()> {
 async fn main() -> ExitCode {
     let cli = Cli::parse();
 
+    // The subscriber has to be in place before the first engine event can
+    // fire, so it is installed before the request is dispatched.
+    #[cfg(feature = "tracing")]
+    diagnostics::install();
+
     let result = tokio::select! {
         result = run(cli) => result,
         _ = tokio::signal::ctrl_c() => {
@@ -1158,6 +1163,8 @@ mod files;
 pub(crate) use files::{create_output_file, derive_filename};
 mod protocol;
 pub(crate) use protocol::{require as require_capability, ProtocolCapability};
+#[cfg(feature = "tracing")]
+mod diagnostics;
 
 #[cfg(test)]
 use errors::{EXIT_CONNECT, EXIT_PROTOCOL, EXIT_STATUS, EXIT_TIMEOUT, EXIT_USAGE};

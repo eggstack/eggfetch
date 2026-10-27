@@ -272,7 +272,9 @@ This feature also carries the experimental caller-owned datagram routing seam (A
 **Status:** implemented.
 `eggfetch-cli` forwards its protocol capability to the core with two opt-in
 crate features: `http2 = ["eggfetch-core/http2"]` and
-`http3 = ["eggfetch-core/http3"]`. The CLI's `default` feature set is empty,
+`http3 = ["eggfetch-core/http3"]`, and adds a third opt-in feature,
+`tracing = ["eggfetch-core/tracing", "dep:tracing"]`, for the diagnostics
+channel described below. The CLI's `default` feature set is empty,
 so the published default binary compiles neither `http2` nor `http3` and
 keeps its established capability set (`cookies`, `multipart`, `proxy` from the
 core dependency). The CLI reads its compiled capability with
@@ -291,6 +293,20 @@ downgrade of `HttpVersionPolicy::Auto` (and of `Http2Only`/`Http3Only` for
 native Rust callers) is a separate contract and is not reachable from the CLI
 flags. See "Protocol and compression support" in
 [cli.md](cli.md).
+
+The CLI's `tracing` feature is the CLI's consumer of the engine's optional
+diagnostics channel. The engine emits `tracing` events for conditions an
+operator should be able to see — a dropped non-UTF-8 header value, a skipped
+malformed cookie, a trust-store substitution — and the engine deliberately
+leaves the subscriber to the embedder. The CLI is a binary, so with the
+feature enabled it installs a subscriber that writes those diagnostics to
+stderr, one line each, with credentials redacted the same way the CLI
+redacts its own error output. With the feature disabled no subscriber is
+installed and the drops are silent, exactly as before. The feature adds no
+package to the dependency graph — `tracing` is already in the workspace
+through the core — and the published default binary keeps its current
+dependency set. Tests: `crates/eggfetch-cli/tests/tracing_diagnostics.rs`
+pins both halves of the difference against the same fixture.
 
 ### tls-rustls
 

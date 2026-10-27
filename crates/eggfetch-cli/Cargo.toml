@@ -19,6 +19,10 @@ workspace = true
 default = []
 http2 = ["eggfetch-core/http2"]
 http3 = ["eggfetch-core/http3"]
+# Opt-in diagnostics: forwards the engine's `tracing` events and installs a
+# stderr subscriber so they reach the operator. Off by default, so the
+# published binary keeps its current behaviour and dependency set.
+tracing = ["eggfetch-core/tracing", "dep:tracing"]
 
 [[bin]]
 name = "eggfetch"
@@ -34,6 +38,7 @@ anyhow = "1"
 bytes = "1"
 futures-util = "0.3"
 http = "1"
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
