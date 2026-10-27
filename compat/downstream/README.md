@@ -75,6 +75,12 @@ pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
 2. Build the eggfetch wheel and controlled HTTPX replacement, write their
    paths and SHA-256 values to an artifact manifest, and run
    `python scripts/run_downstream_compat.py --artifact-manifest ...`.
+   The repository produces that manifest with
+   `python scripts/build_downstream_artifact.py`: it builds both wheels from
+   the current checkout and writes
+   `target/downstream-qualification/artifact-manifest.json`, the path
+   `./scripts/check.sh extended` reads. Producing the manifest is a separate,
+   explicit step — the gate still fails closed when it is missing.
 
 The release-blocking portfolio uses `--required-only`. Packages that import
 private HTTPX modules or target an incompatible HTTPX generation remain

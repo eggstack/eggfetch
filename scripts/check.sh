@@ -114,6 +114,14 @@ tier1_adapter_features() {
     "$PYTHON_BIN" "$SCRIPT_DIR/check_adapter_features.py"
 }
 
+tier1_downstream_artifact_self_test() {
+    info "Downstream artifact producer self-test (manifest schema only — not a portfolio result)"
+    # Checks that the manifest this repository produces is readable by the
+    # downstream consumer, and that a hash mismatch is rejected. It builds no
+    # wheel, opens no socket, and asserts nothing about the portfolio.
+    "$PYTHON_BIN" "$SCRIPT_DIR/build_downstream_artifact.py" --self-test
+}
+
 tier1_release_validation() {
     info "Release version/ref validation"
     "$PYTHON_BIN" "$SCRIPT_DIR/test_validate_release_versions.py"
@@ -244,6 +252,7 @@ run_tier1() {
     tier1_lint_suppression_self_test
     tier1_lint_suppressions
     tier1_adapter_features
+    tier1_downstream_artifact_self_test
     tier1_release_validation
     tier1_clippy
     tier1_rust_tests
@@ -449,13 +458,17 @@ FAIL: the downstream compatibility portfolio is release-blocking and its
 
   Operator obligation: build the eggfetch wheel and the controlled httpx
   replacement wheel, write their paths and SHA-256 hashes into the manifest
-  at the path above, and re-run ./scripts/check.sh extended. The procedure is
-  documented in compat/downstream/README.md ("Update Process"); the consumer
-  is scripts/run_downstream_compat.py.
+  at the path above, and re-run ./scripts/check.sh extended.
 
-  Nothing in this repository produces the manifest automatically, and no CI
-  job does either. Until the operator supplies it, ./scripts/check.sh extended
-  fails here by design.
+  This repository produces the manifest with one command:
+
+    python scripts/build_downstream_artifact.py
+
+  It builds both wheels from this checkout and writes the manifest at the
+  path above. The gate still fails closed when the manifest is missing:
+  producing it is a separate, explicit step, not something the gate does
+  for you. The procedure is documented in compat/downstream/README.md
+  ("Update Process"); the consumer is scripts/run_downstream_compat.py.
 DOWNSTREAM_GUIDE
         fail "Downstream behavioral fixtures — release-blocking artifact manifest missing"
     fi
