@@ -514,10 +514,14 @@ dependencies = [
  "eggfetch-core",
  "flate2",
  "futures-util",
+ "h2",
  "http",
+ "rcgen",
+ "rustls",
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]

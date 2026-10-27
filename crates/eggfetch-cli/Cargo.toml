@@ -39,3 +39,13 @@ http = "1"
 tempfile = "3"
 serde_json = "1"
 flate2 = "1"
+# The `--http2` negotiation fixture needs a TLS server that speaks HTTP/2
+# over ALPN. Every crate below is already in the workspace lockfile through
+# `eggfetch-core`, so the fixture adds a dev-dependency edge but no new
+# package to the dependency graph. `resolver = "3"` keeps these features out
+# of the published binary.
+h2 = "0.4"
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["std", "ring", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "time", "sync"] }
