@@ -300,6 +300,7 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
 /// - 1: `Http2Only`
 /// - 2: `Auto` (`allow_http3` = false)
 /// - 3: `Auto` (`allow_http3` = true)
+/// - 4: `Http3Only`
 ///
 /// A strict policy (`Http2Only`, `Http3Only`) needs a protocol capability
 /// that this library may not have: `Http2Only` requires the `http2` feature
@@ -308,6 +309,11 @@ pub unsafe extern "C" fn eggfetch_client_builder_default_header(
 /// the built client is rejected before any connection is attempted, with an
 /// error that names the missing capability. `Auto` is not strict: it
 /// negotiates down to the protocols this build has and is always accepted.
+///
+/// Neither strict capability is in this crate's default feature set, so a
+/// client built from the published default build rejects both strict values.
+/// That is the fail-closed contract, not a defect: a consumer that needs
+/// HTTP/2 or HTTP/3 builds `eggfetch-ffi` with the matching feature.
 ///
 /// Returns 0 on success, -1 if handle is invalid or policy value is unknown.
 ///
@@ -328,6 +334,7 @@ pub unsafe extern "C" fn eggfetch_client_builder_http_version(
             1 => eggfetch_core::HttpVersionPolicy::Http2Only,
             2 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: false },
             3 => eggfetch_core::HttpVersionPolicy::Auto { allow_http3: true },
+            4 => eggfetch_core::HttpVersionPolicy::Http3Only,
             _ => return -1,
         };
         // Record the capability gap for strict policies this build cannot

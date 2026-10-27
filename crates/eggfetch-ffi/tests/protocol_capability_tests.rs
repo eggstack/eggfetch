@@ -16,10 +16,17 @@
 //! negotiates down to the protocols the build has and stays accepted.
 //!
 //! The published policy values are `0` (`Http1Only`), `1` (`Http2Only`),
-//! `2` (`Auto` without HTTP/3), and `3` (`Auto` with HTTP/3). Only `1` is a
-//! strict value in that set, so the HTTP/2 capability is the one observable
-//! at the ABI boundary; the HTTP/3 strict classification is covered by the
-//! crate's unit tests and by the engine's own classification.
+//! `2` (`Auto` without HTTP/3), `3` (`Auto` with HTTP/3), and `4`
+//! (`Http3Only`). Values `1` and `4` are strict, so each one names the
+//! capability the build lacks and fails closed; `Auto` is not strict and
+//! never fails closed.
+//!
+//! Neither `http2` nor `http3` is in the FFI crate's default feature set,
+//! so a default build rejects both strict values. That is the fail-closed
+//! contract: a consumer that needs HTTP/2 or HTTP/3 builds `eggfetch-ffi`
+//! with the matching feature. The strict HTTP/2 rejection is observable at
+//! the ABI boundary below; the strict HTTP/3 rejection is asserted against
+//! the same ABI surface.
 
 use std::ffi::CString;
 use std::io::{Read, Write};
@@ -236,6 +243,85 @@ fn http1_policy_is_accepted_and_the_request_succeeds() {
         assert!(!response.is_null(), "HTTP/1.1 must not fail");
         eggfetch_ffi::eggfetch_response_free(response);
         eggfetch_ffi::eggfetch_client_free(client);
+    }
+}
+
+#[test]
+#[cfg(not(feature = "http3"))]
+fn strict_http3_policy_is_rejected_and_names_http3() {
+    // Value `4` is `Http3Only`: a strict request that needs the `http3`
+    // capability this build does not have. The ABI accepts the value; the
+    // request fails closed and names the missing capability.
+    let server = CountingServer::start();
+    unsafe {
+        let builder = eggfetch_ffi::eggfetch_client_builder_new();
+        assert_eq!(
+            eggfetch_ffi::eggfetch_client_builder_http_version(builder, 4),
+            0
+        );
+        let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
+        assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
+
+        let message = send_and_read_error(client, &server.url());
+        assert!(message.contains("HTTP/3"), "{message}");
+        assert!(!message.contains(GENERIC_MARKER), "{message}");
+        eggfetch_ffi::eggfetch_client_free(client);
+    }
+    assert_eq!(
+        server.accepted_connections(),
+        0,
+        "a rejected protocol request must not open a connection"
+    );
+}
+
+#[test]
+#[cfg(feature = "http3")]
+fn strict_http3_policy_is_not_rejected_with_the_capability() {
+    // With the `http3` feature compiled in, the same ABI value must not be
+    // rejected by the capability guard.
+    let server = CountingServer::start();
+    unsafe {
+        let builder = eggfetch_ffi::eggfetch_client_builder_new();
+        assert_eq!(
+            eggfetch_ffi::eggfetch_client_builder_http_version(builder, 4),
+            0
+        );
+        let client = eggfetch_ffi::eggfetch_client_builder_build(builder);
+        assert!(!client.is_null());
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
+
+        let url = CString::new(server.url()).expect("url");
+        let request = eggfetch_ffi::eggfetch_client_get(client, url.as_ptr());
+        assert!(!request.is_null());
+        let mut err: *mut eggfetch_ffi::ErrorHandle = ptr::null_mut();
+        let response = eggfetch_ffi::eggfetch_client_send(client, request, &raw mut err);
+        if response.is_null() {
+            let message = take_string(eggfetch_ffi::eggfetch_error_message(err));
+            eggfetch_ffi::eggfetch_error_free(err);
+            assert!(
+                !message.contains("is not supported by this build"),
+                "the capability guard must not reject HTTP/3: {message}"
+            );
+            assert!(!message.contains(GENERIC_MARKER), "{message}");
+        } else {
+            eggfetch_ffi::eggfetch_response_free(response);
+        }
+        eggfetch_ffi::eggfetch_client_free(client);
+    }
+}
+
+#[test]
+fn unknown_policy_value_is_rejected() {
+    // The published value set is `0..=4`. Anything above it is unknown and
+    // must still fail at the ABI boundary rather than silently defaulting.
+    unsafe {
+        let builder = eggfetch_ffi::eggfetch_client_builder_new();
+        assert_eq!(
+            eggfetch_ffi::eggfetch_client_builder_http_version(builder, 5),
+            -1
+        );
+        eggfetch_ffi::eggfetch_client_builder_free(builder);
     }
 }
 
