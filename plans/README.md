@@ -11,10 +11,12 @@
 > `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where Tier 1, Tier 2, Tier 3
 > and the live security preflight are green, so the binding then named that
 > SHA. It was renewed on 2026-10-23 at the lint-justification cleanup freeze
-> `822b7246bab79cca7c54c32aaf403c1366472c57`, and that binding was invalidated
+> `822b7246bab79cca7c54c32aaf403c1366472c57`; that binding was invalidated
 > on 2026-10-27 by the Batch A decision-closure freeze
-> `5519ad996857f7879668190f92e3b06419ec98ab`, which is pending fresh
-> qualification. **No registered milestone remains open** — the four previously
+> `5519ad996857f7879668190f92e3b06419ec98ab`, and that binding was superseded
+> on 2026-10-28 by the advisory-patch freeze
+> `b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`, where Tier 1, Tier 2, Tier 3 and
+> the live security preflight are green. **No registered milestone remains open** — the four previously
 > queued milestones have all been executed, and the next unit of work needs its
 > own plan. The publication decisions remain with the maintainer: the rebinding
 > is a compatibility binding and authorizes no release.
@@ -62,6 +64,18 @@ manifest now has an in-repository producer,
 executable freeze `5519ad996857f7879668190f92e3b06419ec98ab` and invalidated
 the Stage C binding at `822b7246…`.
 
+**Renewed 2026-10-28 — the advisory-patch freeze is the live binding.** The
+live security preflight at the Batch A freeze failed on two newly published
+RustSec advisories, RUSTSEC-2026-0386 in `tokio` and RUSTSEC-2026-0391 in
+`zstd`, so the tree was patched and re-frozen as
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`: `tokio` is pinned to 1.53.3
+rather than the newer 1.54.x because 1.54.0 regresses the HTTP/1 client path,
+`zstd` was raised to 0.14.3 and `brotli` to 9.1.1, and both `Cargo.lock` and
+`fuzz/Cargo.lock` carry the same pins. Tier 1, Tier 2, Tier 3 and the live
+security preflight are all green at that freeze, and the binding names it. The
+pin and the regression net that holds it are recorded in
+`docs/architecture/dependency-policy.md`.
+
 **Resolved 2026-10-27 — the former item 7 needs no HTTPX-ledger entry.** The
 SHA `639bf186a71c054e11278d1b160ffe7a6f172c02` is an HTTP/3 qualification
 binding; its canonical home is the H3 ledger
@@ -80,7 +94,9 @@ every one of the six was a narrowing, and every `allow`/`expect` attribute in
 and therefore invalidated the Stage C binding at `26fa6192…`; it was qualified
 in its own right the same day, and the binding it established at
 `822b7246bab79cca7c54c32aaf403c1366472c57` was itself invalidated by the
-2026-10-27 Batch A pass and is awaiting fresh qualification.
+2026-10-27 Batch A pass and is now historical; the live binding is the
+2026-10-28 advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the

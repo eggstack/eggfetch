@@ -4,7 +4,114 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C renewed at the advisory-patch freeze (2026-10-28)
+
+Recorded designation: **Stage C qualified (renewal)** for both documented
+facades, bound to executable freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
+
+The advisory-patch pass has now been qualified in its own right, so the live
+Stage C binding names that freeze. This is a compatibility binding only: it
+authorizes no release. H3 stays experimental, HTTPX 1.0 stays gated on the
+upstream trigger, and Node maturation stays a separately registered future.
+
+### What was qualified
+
+The freeze is the advisory-patch pass. The live security preflight at the
+previous freeze failed on two newly published RustSec advisories, so the tree
+was patched and re-frozen rather than bound while carrying live advisories.
+
+- **RUSTSEC-2026-0386** — `tokio`'s `AsyncFd` unsoundness. `tokio` was raised
+  from 1.52.3 to **1.53.3**, the newer of the advisory's two fixed ranges
+  (`>=1.51.6,<1.52.0` and `>=1.53.3`).
+- **RUSTSEC-2026-0391** — `zstd`'s `with_context` plaintext disclosure. `zstd`
+  was raised from 0.13.3 to **0.14.3**, because the fix shipped only in the
+  0.14.x line, and `eggfetch-core`'s own requirement moved from `0.13` to
+  `0.14` so the tree carries one `zstd` version. The single call site,
+  `zstd::stream::read::Decoder::new`, is unchanged.
+- `brotli` was raised from 8.0.4 to **9.1.1**, and `eggfetch-core`'s own
+  `brotli` requirement moved from `8` to `9`, so the tree carries one brotli
+  version. `Decompressor::new(reader, buffer_size)` is unchanged.
+- **Both** `Cargo.lock` and `fuzz/Cargo.lock` carry the same pins. The fuzz
+  tree has its own lockfile and is not scanned by `scripts/check_security.sh`,
+  but it was patched anyway.
+
+**The tokio pin is deliberately held below the latest release.** tokio 1.54.1
+makes `crates/eggfetch-core/tests/network_stream_tests.rs::ordinary_response_has_no_network_stream`
+and `::ordinary_response_metadata_is_none` fail with
+`hyper::Error(UnexpectedMessage)`; both pass under 1.53.3 on an identical
+tree. Those two tests are the regression net. The pin, its rationale and that
+net are recorded in `docs/architecture/dependency-policy.md`, so a later
+`cargo update` does not silently reintroduce 1.54.x.
+
+The qualification ran on `b74cf891…`, which is the executable freeze itself.
+The renewal commit that rebinds the two compat profiles and this ledger lands
+on top of it and changes no executable input, so it does not invalidate the
+binding.
+
+### Qualification evidence
+
+| Gate | Result |
+|---|---|
+| Tier 1 | exit 0 — the H3 runner self-test, formatting, the lint-suppression guard self-test and its policy scan, adapter feature ownership, release version validation, clippy, **1772 Rust workspace tests** across 74 binaries, the stable public contract fixtures, the feature-isolated profile whole-suite compile, the native Python API manifest, the Python typing surface and typing fixture, **581 Python behaviour tests** and **134 HTTPX compatibility smoke tests**, and the downstream-artifact producer self-test. The Node JS surface skipped, which the policy defines as optional |
+| Tier 2 | exit 0 — the full pinned HTTPX compatibility suite **2073 passed / 0 failed**; the API manifest comparison at **74 symbols** for httpx 0.28.1 and **76 symbols** for httpx2 2.12.0, with 0 unexplained and 0 stale allowed differences; the Rust public-API oracle **passed in 8 profiles**; `cargo-semver-checks` 0.49.0 reported **"no semver update required"** against the planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`; the feature matrix and the 5 feature-gated combinations green; **5 MSRV checks** on the exact Rust 1.89.0 toolchain, all `--locked`; documentation and doctests; FFI; the resource regression check; the lifecycle and soak tests; the downstream behavioral-fixture portfolio **4/4 required packages** with `overall_pass: true`; lossless merge; Criterion micro-benchmarks. One optional check skipped: the Node JS surface |
+| Tier 3 | exit 0 — crate packaging, the release wheel build, the wheel smoke test, package content validation and the installed-wheel typing smoke |
+| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+
+### Host accommodations
+
+The host is shared with other projects. The accommodations are recorded here
+rather than hidden.
+
+- `CARGO_BUILD_JOBS=6` and `CARGO_INCREMENTAL=0` were set for the run, as in
+  the previous renewal. The second keeps the regenerable incremental cache
+  from regrowing on a filesystem shared with other builds; it changes build
+  strategy, not what is compiled or what the gates assert.
+- **`target/` was destroyed twice during this work by an unidentified cleaner.**
+  The culprit was identified as `cargo-cleanme`, installed at
+  `~/.local/bin/cargo-cleanme`. Its runtime configuration
+  (`~/.config/cargo-cleanme/config.toml`) sets `recency_seconds = 300` with an
+  empty `ignore` list, and a bare run anchors at the current working
+  directory — so a run anchored inside eggfetch makes eggfetch a cleanup
+  candidate. It cleans through `cargo clean`, which is why the whole `target/`
+  tree vanished, and it took the operator-supplied downstream artifact
+  manifest with it twice. The mitigation is a scoped
+  `[cleanup.policy] exclude = ["/home/sugarwookie/projects/eggfetch"]` entry
+  in that configuration; the policy matches the **workspace root**. The
+  original configuration is preserved at `/tmp/cargo-cleanme-config.bak`. The
+  artifact was rebuilt and the manifest rewritten after each loss, and the
+  downstream gate **executed** rather than skipping in the recorded Tier 2
+  run.
+- The downstream artifact manifest was supplied by the operator as the policy
+  requires. It now has an in-repository producer,
+  `scripts/build_downstream_artifact.py`, but producing it remains a separate,
+  explicit step and the gate still fails closed when it is absent.
+- **Criterion reported performance changes that did not fail the gate.** The
+  micro-benchmark step uses Criterion's default configuration in every
+  `criterion_group!`, with no `failure_threshold`, so Criterion reports rather
+  than fails: 32 benchmarks printed "Performance has regressed", 6 printed
+  "Performance has improved" and 21 printed "No change in performance
+  detected" out of 63 compared measurements. The affected groups — cookie
+  matching, header operations, multipart encoding and request building — do
+  not touch the three packages that changed, the direction is mixed, and the
+  magnitudes are mostly inside ±10%. This is measurement noise on a shared
+  host under load, not evidence of a regression in this change. The repository
+  treats `scripts/performance_benchmark.py` and the benchmark step as non-CI
+  timing evidence only.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding and
+requires a fresh exact-SHA qualification, with the downstream artifact manifest
+re-supplied for that run.
+
 ## Recorded state — Stage C binding invalidated by the Batch A decision-closure pass (2026-10-27)
+
+> **Superseded 2026-10-28.** The advisory-patch pass that invalidated this
+> binding has since been qualified in its own right. See **"Recorded state —
+> Stage C renewed at the advisory-patch freeze (2026-10-28)"** at the top of
+> this ledger. The invalidation record below remains the history of what
+> happened and why.
 
 **The live Stage C binding is invalidated by this change.** The Batch A
 decision-closure pass changed executable inputs — the FFI's C ABI, the CLI

@@ -52,9 +52,12 @@ In the two tables below and above, a SHA recorded against a closed milestone
 is **where that milestone closed**, not the live binding. Each of those
 milestones was renewed at `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, which
 was superseded on 2026-10-23 by the lint-justification cleanup freeze
-`822b7246bab79cca7c54c32aaf403c1366472c57` and that by the 2026-10-27 Batch A
+`822b7246bab79cca7c54c32aaf403c1366472c57`, then by the 2026-10-27 Batch A
 decision-closure freeze
-`5519ad996857f7879668190f92e3b06419ec98ab`. The live binding is named only by
+`5519ad996857f7879668190f92e3b06419ec98ab`, and then by the 2026-10-28
+advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`, which is the SHA the binding now
+names. The live binding is named only by
 `plans/httpx-parity-correction-status.md` and the two `compat/*/profile.toml`
 files.
 
@@ -95,8 +98,11 @@ changes executable inputs, the live Stage C binding was invalidated; the
 rebinding and the frozen-SHA Tier 1 / Tier 2 / Tier 3 run were then performed
 on `26fa619299fb8d447f25cbcb5eb713a1f537a30c`. That binding was superseded on
 2026-10-23 by the lint-justification cleanup freeze
-`822b7246bab79cca7c54c32aaf403c1366472c57`, which is the SHA the binding now
-names.
+`822b7246bab79cca7c54c32aaf403c1366472c57`, then on 2026-10-27 by the Batch A
+decision-closure freeze
+`5519ad996857f7879668190f92e3b06419ec98ab`, and then on 2026-10-28 by the
+advisory-patch freeze `b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`, which is the
+SHA the binding now names.
 
 **Remaining recommended order:** none of the registered milestones remain. The
 four previously queued milestones — core M009, core M010, release-verification
@@ -121,9 +127,10 @@ there.
 accepted on 2026-10-22. Both change executable Python inputs and therefore
 renew the exact-SHA binding, which was re-established on
 `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, then on
-`822b7246bab79cca7c54c32aaf403c1366472c57`, and is now invalidated by the
-2026-10-27 Batch A freeze
-`5519ad996857f7879668190f92e3b06419ec98ab` pending fresh qualification. The
+`822b7246bab79cca7c54c32aaf403c1366472c57`, then on the 2026-10-27 Batch A
+freeze `5519ad996857f7879668190f92e3b06419ec98ab`, and is now re-established
+on the 2026-10-28 advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f` with all four gates green. The
 HTTPX 1.0 program stays gated on the upstream trigger.
 
 **TLS/protocol execution gate:** M005 is closed; ADR-0008 was
@@ -181,7 +188,9 @@ now carries a `reason =`. See
 the Stage C binding at `26fa6192…`; it was qualified in its own right on the
 same day, and the binding it established at the cleanup freeze
 `822b7246bab79cca7c54c32aaf403c1366472c57` was itself invalidated on
-2026-10-27.
+2026-10-27 by the Batch A decision-closure freeze and is now historical. The
+live binding is the 2026-10-28 advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
 
 The former action 7 — whether the `639bf186a71c054e11278d1b160ffe7a6f172c02`
 HTTP/3 SHA needs an HTTPX-ledger entry — was resolved on 2026-10-27: **no new
@@ -243,6 +252,20 @@ binding at `822b7246…`. The invalidation is recorded in
 `plans/httpx-parity-correction-status.md`, and the renewal condition is the
 same procedure as the 2026-10-23 one.
 
+That renewal was then performed. The live security preflight at the Batch A
+freeze `5519ad99…` failed on two newly published RustSec advisories —
+RUSTSEC-2026-0386 in `tokio` and RUSTSEC-2026-0391 in `zstd` — so the tree was
+patched and re-frozen as
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`: `tokio` is pinned to 1.53.3
+rather than the newer 1.54.x because 1.54.0 regresses the HTTP/1 client path,
+`zstd` was raised to 0.14.3 and `brotli` to 9.1.1, and both `Cargo.lock` and
+`fuzz/Cargo.lock` carry the same pins. The pin and the regression net that
+holds it are recorded in `docs/architecture/dependency-policy.md`. Tier 1,
+Tier 2, Tier 3 and the live security preflight are all green at that freeze,
+and the live binding names it. The publication decisions remain with the
+maintainer: this rebinding is a compatibility binding and authorizes no
+release.
+
 ## Blocked / operational work
 
 | Subsystem | Milestone | Blocker |
@@ -262,7 +285,6 @@ because it was overlooked.
 |---|---|
 | Moving the 249 flat legacy plan files into `plans/archive/` | Bulk reorganization with no correctness value; the flat set is a documented grandfathered legacy archive. |
 | Decomposing the CLI's `run()` (586 lines) | Polish, and no subsystem roadmap currently owns the CLI adapter. Needs a maintainer ownership decision first. |
-| `tracing` feature has no test and no adapter consumer | A capability decision, not hygiene. See pending maintainer action 3. |
 | Node adapter has zero automated tests | Registered gated future requiring an explicit scope decision. |
 | FFI has no proxy, multipart, custom-CA, UDS, dialer, SNI, trailers, metrics or retry-policy surface | Registered gated future; out of scope for the protocol-capability milestone. |
 | FFI `multipart` cargo feature has no reachable C ABI | Would need an ABI surface decision; belongs with the FFI surface milestone. |
@@ -294,9 +316,8 @@ candidate before publication. M004 publish run `36255517733` completed
 successfully. All M006-family work is also closed. M005 closed on candidate
 `015a56d7ec3edf186eec8ebccff01cbf5584274e` with build-only rehearsal
 `36991057953` and PyPI publish run `36994291293`. That candidate's binding is
-now historical; the live binding is invalidated by the 2026-10-27 Batch A
-freeze `5519ad996857f7879668190f92e3b06419ec98ab` and is pending fresh
-exact-SHA qualification.
+now historical; the live binding is the 2026-10-28 advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
 
 The eight milestones closed in the 2026-10-22 pass each required renewed
 exact-SHA Stage C qualification at their own freeze, and each invalidated the
@@ -307,7 +328,9 @@ the live security preflight were run there. That binding was superseded on
 `822b7246bab79cca7c54c32aaf403c1366472c57`, which was qualified in its own
 right with the same four gates green. That binding was invalidated on
 2026-10-27 by the Batch A decision-closure freeze
-`5519ad996857f7879668190f92e3b06419ec98ab`, which is pending fresh exact-SHA
-qualification. The publication decisions remain
+`5519ad996857f7879668190f92e3b06419ec98ab`, and that binding was superseded on
+2026-10-28 by the advisory-patch freeze
+`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`, which was qualified in its own
+right with the same four gates green. The publication decisions remain
 with the maintainer: the rebinding is a compatibility binding and authorizes
 no release.
