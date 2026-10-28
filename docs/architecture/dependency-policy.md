@@ -257,6 +257,36 @@ files.
 
 Every dependency in the tree must have an explicit reason documented in code or review.
 
+### Runtime dependency pins held below the latest release
+
+`tokio` is pinned to **1.53.3** in `Cargo.lock` and `fuzz/Cargo.lock`, not to the
+latest 1.x. The pin is not a preference: it is the lowest release that carries
+the fix for RUSTSEC-2026-0386 (`AsyncFd`'s safe constructors accepting an
+arbitrary `AsRawFd`, which allows a closed or duplicated file descriptor to be
+registered with the I/O driver). The advisory's fixed ranges are `>=1.51.6,
+<1.52.0` and `>=1.53.3`, and 1.53.3 is the newer of the two.
+
+The pin must not be raised to 1.54.x. Tokio 1.54.0 changes the I/O driver's
+file-descriptor registration path, and the HTTP/1 client path fails with it:
+`crates/eggfetch-core/tests/network_stream_tests.rs` reports
+`hyper::Error(UnexpectedMessage)` for `ordinary_response_has_no_network_stream`
+and `ordinary_response_metadata_is_none` under 1.54.1 while both pass under
+1.53.3 on an otherwise identical tree. Those two tests are the regression
+net: a `cargo update` that raises the pin turns them red.
+
+Both lockfiles carry the same pin. The fuzz workspace has its own lockfile and
+is not scanned by `scripts/check_security.sh`, so a pin held in only one of
+them would leave the other carrying the advisory.
+
+The zstd fix (RUSTSEC-2026-0391) required a minor-version bump rather than a
+patch: the corrected `with_context` session reset first shipped in `zstd`
+0.14.3, so `eggfetch-core`'s requirement moved from `0.13` to `0.14`. The
+bump pulled `async-compression` 0.4.51 and `compression-codecs` 0.4.46, which
+in turn moved `brotli` to 9.x. `eggfetch-core`'s own `brotli` requirement was
+raised from `8` to `9` in the same change so the tree carries one `brotli`
+version rather than two; the `Decompressor::new(reader, buffer_size)` call
+site is unchanged across that bump.
+
 ## Pool Key Semantics
 
 The connection pool uses `OriginKey` as its concurrency-control key. The
