@@ -617,12 +617,18 @@ async fn handle_connect_tunnel(
             let _ = client_write.shutdown().await;
         };
 
-        tokio::select! {
-            () = c2d => {}
-            () = d2c => {}
-            Ok(()) = close_rx.recv() => {
-                closed_tunnel_count.fetch_add(1, Ordering::SeqCst);
-            }
+        let closed_by_fixture = tokio::select! {
+            () = c2d => false,
+            () = d2c => false,
+            Ok(()) = close_rx.recv() => true,
+        };
+        if closed_by_fixture {
+            // Close the proxy-side TCP connection before waking tests that
+            // issue the reconnect. Otherwise the next request can race the
+            // server's read loop and observe a half-closed TLS tunnel instead
+            // of deterministically exercising a fresh CONNECT handshake.
+            let _ = client_stream.shutdown().await;
+            closed_tunnel_count.fetch_add(1, Ordering::SeqCst);
         }
     } else {
         let resp = b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
