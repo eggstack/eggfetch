@@ -572,20 +572,26 @@ async fn uds_upgrade_reports_uds_without_ips() {
     use std::io::{Read, Write};
     use std::os::unix::net::UnixListener;
 
-    let path = "/tmp/eggfetch_metadata_uds.sock";
-    let _ = std::fs::remove_file(path);
+    let path =
+        std::env::temp_dir().join(format!("eggfetch_metadata_uds_{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
     let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let sd = shutdown.clone();
     // Bind synchronously on the test thread so the socket exists before the
     // client connects. Binding inside the spawned thread raced the client's
     // first connect under parallel-test load (fixed 50 ms sleep was not a
     // readiness signal). No behavior change: same listener, same accept loop.
-    let listener = UnixListener::bind(path).unwrap();
+    let listener = UnixListener::bind(&path).unwrap();
     listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
         while !sd.load(std::sync::atomic::Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    // On macOS an accepted Unix socket can inherit the
+                    // nonblocking state of its listener. The fixture reads
+                    // the complete request before writing the 101 response,
+                    // so make that contract explicit.
+                    stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 4096];
                     let mut acc = Vec::new();
                     stream.set_read_timeout(Some(Duration::from_secs(1))).ok();
@@ -616,7 +622,7 @@ async fn uds_upgrade_reports_uds_without_ips() {
         }
     });
     let client = eggfetch_core::Client::builder()
-        .uds_path(path.to_owned())
+        .uds_path(path.to_string_lossy().into_owned())
         .build();
     let mut response = client
         .get("http://localhost/")
@@ -635,7 +641,7 @@ async fn uds_upgrade_reports_uds_without_ips() {
     assert!(meta.tls_info.is_none());
     shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
     let _ = handle.join();
-    let _ = std::fs::remove_file(path);
+    let _ = std::fs::remove_file(&path);
 }
 
 #[tokio::test]
