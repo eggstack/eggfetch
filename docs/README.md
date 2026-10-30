@@ -28,6 +28,7 @@ policy) and `residual-differences.md` (known intentional compatibility deltas).
 - **New to eggfetch?** Start with `getting-started/quickstart.md`
 - **Rust users?** See `rust/guide.md`
 - **Python users?** See `python/guide.md`
+- **HTTPX SDK transport integration?** See `python/httpx-transport.md`
 - **CLI users?** See `cli/guide.md`
 - **Migrating?** Check `migration/from-requests.md` or `migration/from-httpx.md`
 - **Releasing?** See `releases/process.md` for the release workflow and `releases/compatibility-policy.md` for versioning

@@ -35,8 +35,10 @@
 //!   connect budget shared across address fallback attempts. `Timeout.total`
 //!   remains the outer logical deadline enforced by the pipeline and is never
 //!   restarted per address or reconnect.
-//! - `Timeout.read` applies to response-body progress at the documented
-//!   response boundary (post-transport wrapper). `Timeout.write` applies to
+//! - `Timeout.read` currently applies to response-body progress at the
+//!   documented response boundary (post-transport wrapper); response-header
+//!   waiting remains total-bounded on this experimental transport.
+//!   `Timeout.write` applies to
 //!   streamed request-body progress via the pre-transport wrapper installed
 //!   before dispatch.
 //! - QUIC idle lifetime derives from `PoolConfig::idle_timeout`

@@ -33,7 +33,13 @@ pub(super) fn build_hyper_request(
     headers: Headers,
     body: RequestBody,
 ) -> Result<http::Request<crate::transport::HyperRequestBody>> {
-    build_http_request_owned(method, uri, version, headers, body.into_http_body())
+    build_http_request_owned(
+        method,
+        uri,
+        version,
+        headers,
+        crate::transport::HyperRequestBody::new(body.into_http_body()),
+    )
 }
 
 /// Build a request by moving an already-owned header map into the request.
@@ -70,6 +76,7 @@ pub(super) async fn send_uds_route(
     url: url::Url,
     transport_hints: &TransportHints,
     remaining_total: Option<Duration>,
+    read_timeout: Option<Duration>,
 ) -> Result<Response> {
     #[cfg(all(unix, feature = "advanced-routing"))]
     {
@@ -83,6 +90,8 @@ pub(super) async fn send_uds_route(
             hyper_request,
             url,
             transport_hints.trace.as_deref(),
+            read_timeout,
+            remaining_total,
         );
         super::send_with_total_timeout(send_future, remaining_total).await
     }
@@ -98,6 +107,7 @@ pub(super) async fn send_uds_route(
             url,
             transport_hints,
             remaining_total,
+            read_timeout,
         );
         Err(Error::Unsupported(
             "Unix domain sockets are not supported on this platform".into(),
@@ -123,6 +133,7 @@ pub(super) async fn send_custom_route(
     transport_hints: &TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
     remaining_total: Option<Duration>,
+    read_timeout: Option<Duration>,
 ) -> Result<Response> {
     let custom_client = if let Some(sni_hostname) = transport_hints.sni_hostname.as_deref() {
         inner.sni_custom_client(sni_hostname).await?
@@ -140,6 +151,8 @@ pub(super) async fn send_custom_route(
         url,
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     );
     super::send_with_total_timeout(send_future, remaining_total).await
 }
@@ -162,6 +175,7 @@ pub(super) async fn send_direct_route(
     transport_hints: &TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
     remaining_total: Option<Duration>,
+    read_timeout: Option<Duration>,
 ) -> Result<Response> {
     let resolved_client;
     let direct_client = if let Some(target) = transport_hints.resolved_target.as_ref() {
@@ -189,6 +203,8 @@ pub(super) async fn send_direct_route(
         url,
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     );
     super::send_with_total_timeout(send_future, remaining_total).await
 }
@@ -210,6 +226,7 @@ pub(super) async fn send_sni_route(
     transport_hints: &TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
     remaining_total: Option<Duration>,
+    read_timeout: Option<Duration>,
 ) -> Result<Response> {
     // SNI override separates DNS/TCP (to the original host) from TLS
     // (with the override hostname).
@@ -225,6 +242,8 @@ pub(super) async fn send_sni_route(
         url,
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     );
     super::send_with_total_timeout(send_future, remaining_total).await
 }
@@ -250,6 +269,7 @@ pub(super) async fn send_hyper_request(
     remaining_total: Option<Duration>,
     transport_hints: &TransportHints,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<Duration>,
 ) -> Result<Response> {
     let hyper_client = inner.hyper_client.as_ref().ok_or_else(|| {
         crate::http_version::missing_client_error(inner.config.http_version_policy)
@@ -264,6 +284,8 @@ pub(super) async fn send_hyper_request(
         url,
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     );
 
     super::send_with_total_timeout(send_future, remaining_total).await

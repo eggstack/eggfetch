@@ -323,6 +323,7 @@ pub(crate) async fn send_single_request(
                 url,
                 &transport_hints,
                 remaining_total,
+                hop_timeout.read,
             )
             .await?
         }
@@ -339,6 +340,7 @@ pub(crate) async fn send_single_request(
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
+                hop_timeout.read,
             )
             .await?
         }
@@ -355,6 +357,7 @@ pub(crate) async fn send_single_request(
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
+                hop_timeout.read,
             )
             .await?
         }
@@ -397,6 +400,7 @@ pub(crate) async fn send_single_request(
                 &transport_hints,
                 failure_context.as_deref(),
                 remaining_total,
+                hop_timeout.read,
             )
             .await?
         }
@@ -436,6 +440,7 @@ pub(crate) async fn send_single_request(
                 remaining_total,
                 &transport_hints,
                 failure_context.as_deref(),
+                hop_timeout.read,
             )
             .await?
         }
@@ -664,10 +669,21 @@ where
                     .uds_client
                     .as_ref()
                     .ok_or_else(|| Error::Unsupported("UDS client not available".into()))?;
-                let hyper_request =
-                    hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
+                let hyper_request = hyper_dispatch::build_http_request_owned(
+                    method,
+                    uri,
+                    version,
+                    headers,
+                    crate::transport::HyperRequestBody::new(body),
+                )?;
                 send_with_total_timeout(
-                    crate::transport::direct::send_raw_request(uds_client, hyper_request, trace),
+                    crate::transport::direct::send_raw_request(
+                        uds_client,
+                        hyper_request,
+                        trace,
+                        timeout.read,
+                        remaining_total,
+                    ),
                     remaining_total,
                 )
                 .await?
@@ -692,10 +708,21 @@ where
                     .ok_or_else(|| Error::Unsupported("custom dialer client not available".into()))?
                     .clone()
             };
-            let hyper_request =
-                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
+            let hyper_request = hyper_dispatch::build_http_request_owned(
+                method,
+                uri,
+                version,
+                headers,
+                crate::transport::HyperRequestBody::new(body),
+            )?;
             send_with_total_timeout(
-                crate::transport::direct::send_raw_request(&custom_client, hyper_request, trace),
+                crate::transport::direct::send_raw_request(
+                    &custom_client,
+                    hyper_request,
+                    trace,
+                    timeout.read,
+                    remaining_total,
+                ),
                 remaining_total,
             )
             .await?
@@ -718,10 +745,21 @@ where
                     .as_ref()
                     .ok_or_else(|| Error::Unsupported("direct client not available".into()))?
             };
-            let hyper_request =
-                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
+            let hyper_request = hyper_dispatch::build_http_request_owned(
+                method,
+                uri,
+                version,
+                headers,
+                crate::transport::HyperRequestBody::new(body),
+            )?;
             send_with_total_timeout(
-                crate::transport::direct::send_raw_request(direct_client, hyper_request, trace),
+                crate::transport::direct::send_raw_request(
+                    direct_client,
+                    hyper_request,
+                    trace,
+                    timeout.read,
+                    remaining_total,
+                ),
                 remaining_total,
             )
             .await?
@@ -732,10 +770,21 @@ where
                 Error::RequestBuild("SNI route selected without sni_hostname".into())
             })?;
             let sni_client = inner.sni_client(sni_hostname).await?;
-            let hyper_request =
-                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
+            let hyper_request = hyper_dispatch::build_http_request_owned(
+                method,
+                uri,
+                version,
+                headers,
+                crate::transport::HyperRequestBody::new(body),
+            )?;
             send_with_total_timeout(
-                crate::transport::direct::send_raw_request(&sni_client, hyper_request, trace),
+                crate::transport::direct::send_raw_request(
+                    &sni_client,
+                    hyper_request,
+                    trace,
+                    timeout.read,
+                    remaining_total,
+                ),
                 remaining_total,
             )
             .await?
@@ -744,10 +793,21 @@ where
             let hyper_client = inner.hyper_client.as_ref().ok_or_else(|| {
                 crate::http_version::missing_client_error(inner.config.http_version_policy)
             })?;
-            let hyper_request =
-                hyper_dispatch::build_http_request_owned(method, uri, version, headers, body)?;
+            let hyper_request = hyper_dispatch::build_http_request_owned(
+                method,
+                uri,
+                version,
+                headers,
+                crate::transport::HyperRequestBody::new(body),
+            )?;
             send_with_total_timeout(
-                crate::transport::direct::send_raw_request(hyper_client, hyper_request, trace),
+                crate::transport::direct::send_raw_request(
+                    hyper_client,
+                    hyper_request,
+                    trace,
+                    timeout.read,
+                    remaining_total,
+                ),
                 remaining_total,
             )
             .await?

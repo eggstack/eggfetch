@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "eggfetch"
-version = "0.2.2"
+version = "0.3.0"
 description = "Python bindings for eggfetch"
 readme = "../../README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,9 @@ Repository = "https://github.com/eggstack/eggfetch"
 test = [
     "pytest>=8.4",
     "pytest-asyncio>=1.0",
+]
+httpx-transport = [
+    "httpx>=0.28,<0.29",
 ]
 
 [tool.maturin]

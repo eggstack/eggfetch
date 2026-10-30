@@ -172,10 +172,11 @@ The PyPI wheel workflow (`.github/workflows/pypi.yml`) is a manually dispatched,
 | Operating system | Architecture | Python versions | Build method |
 |---|---|---|---|
 | Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
+| Linux manylinux2014 | aarch64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action on native `ubuntu-24.04-arm` |
 | macOS | arm64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
 | Windows | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
 
-18 wheels + 1 sdist = 19 distributions per release.
+24 wheels + 1 sdist = 25 distributions per release.
 
 ### Workflow Modes
 

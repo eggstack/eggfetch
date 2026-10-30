@@ -142,6 +142,43 @@ jobs:
             maturin-args: --target x86_64-unknown-linux-gnu
             manylinux: "2014"
             python: "3.15"
+          # Linux aarch64 uses a native runner for build and import smoke.
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.10"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.11"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.12"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.13"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.14"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            manylinux: "2014"
+            python: "3.15"
           # macOS arm64
           - os: macos
             arch: arm64
@@ -220,12 +257,6 @@ jobs:
           # interpreters. The same row resolves a stable 3.15.x automatically
           # once 3.15.0 final ships, with no further change.
           allow-prereleases: ${{ matrix.python == '3.15' }}
-
-      - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
-        with:
-          platforms: arm64
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -419,8 +450,8 @@ jobs:
           echo "Sdists: $sdist_count"
           echo "Total: $total"
 
-          if [[ $wheel_count -ne 18 ]]; then
-            echo "FAIL: expected 18 wheels, found $wheel_count" >&2; exit 1
+          if [[ $wheel_count -ne 24 ]]; then
+            echo "FAIL: expected 24 wheels, found $wheel_count" >&2; exit 1
           fi
           if [[ $sdist_count -ne 1 ]]; then
             echo "FAIL: expected 1 sdist, found $sdist_count" >&2; exit 1

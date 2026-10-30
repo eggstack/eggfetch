@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use eggfetch_core::{Client, NativeRequestOptions, Timeout};
+use eggfetch_core::{Client, Error, NativeRequestOptions, Timeout, TimeoutPhase};
 use http_body::{Body, Frame};
 use http_body_util::{BodyExt, StreamBody};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -379,6 +379,48 @@ async fn native_response_read_timeout_starts_on_first_body_poll() {
         .to_bytes();
     assert_eq!(bytes, "ok");
     task.await.unwrap();
+}
+
+#[tokio::test]
+async fn native_response_header_wait_obeys_read_timeout() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let read = socket.read(&mut buffer).await.unwrap();
+            if read == 0 {
+                return;
+            }
+            request.extend_from_slice(&buffer[..read]);
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+            .await;
+    });
+    let request = http::Request::get(format!("http://{address}/"))
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    let options = NativeRequestOptions::default().timeout(Timeout {
+        connect: Some(Duration::from_secs(1)),
+        read: Some(Duration::from_millis(50)),
+        ..Timeout::default()
+    });
+    let error = Client::new()
+        .execute_http_body(request, options)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        Error::Timeout {
+            phase: TimeoutPhase::Read,
+            ..
+        }
+    ));
+    task.abort();
 }
 
 #[tokio::test]

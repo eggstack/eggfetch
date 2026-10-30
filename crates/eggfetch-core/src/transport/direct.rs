@@ -3,6 +3,7 @@
 #[cfg(feature = "transport-http2")]
 use std::error::Error as StdError;
 use std::sync::Arc;
+use std::time::Duration;
 
 use bytes::Bytes;
 
@@ -144,20 +145,26 @@ async fn finish_hyper_response(
 #[cfg(feature = "high-level-url")]
 pub(crate) async fn send_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
-    request: http::Request<HyperRequestBody>,
+    mut request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
 ) -> Result<Response>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), request.uri())?;
 
-    let result = hyper_client
-        .request(request)
-        .await
-        .map_err(|error| map_send_error_with_context(error, failure_context));
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async {
+        hyper_client
+            .request(request)
+            .await
+            .map_err(|error| map_send_error_with_context(error, failure_context))
+    };
+    let result = send_with_read_timeout(send, completion, read_timeout, remaining_total).await;
 
     match result {
         Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
@@ -174,19 +181,25 @@ where
 #[cfg(feature = "proxy")]
 pub(crate) async fn send_proxy_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
-    request: http::Request<HyperRequestBody>,
+    mut request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
 ) -> Result<Response>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), request.uri())?;
-    let result = hyper_client
-        .request(request)
-        .await
-        .map_err(|error| map_send_error_for_proxy(error, failure_context));
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async {
+        hyper_client
+            .request(request)
+            .await
+            .map_err(|error| map_send_error_for_proxy(error, failure_context))
+    };
+    let result = send_with_read_timeout(send, completion, read_timeout, remaining_total).await;
     match result {
         Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
         Err(error) => {
@@ -202,21 +215,25 @@ where
 /// pipeline.
 pub(crate) async fn send_raw_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
-    request: http::Request<HyperRequestBody>,
+    mut request: http::Request<HyperRequestBody>,
     trace: Option<&dyn TraceObserver>,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
 ) -> Result<http::Response<hyper::body::Incoming>>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), request.uri())?;
-    match hyper_client.request(request).await {
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async { hyper_client.request(request).await.map_err(map_send_error) };
+    match send_with_read_timeout(send, completion, read_timeout, remaining_total).await {
         Ok(response) => {
             emit_receive_complete(trace, response.status().as_u16());
             Ok(response)
         }
         Err(error) => {
             emit_send_failed(trace);
-            Err(map_send_error(error))
+            Err(error)
         }
     }
 }
@@ -233,20 +250,26 @@ where
 #[cfg(feature = "high-level-url")]
 pub(crate) async fn send_direct_request<C>(
     hyper_client: &hyper_util::client::legacy::Client<C, HyperRequestBody>,
-    request: http::Request<HyperRequestBody>,
+    mut request: http::Request<HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn TraceObserver>,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
 ) -> Result<Response>
 where
     C: hyper_util::client::legacy::connect::Connect + Clone + Send + Sync + 'static,
 {
     emit_send_start(trace, request.method().as_str(), request.uri())?;
 
-    let result = hyper_client
-        .request(request)
-        .await
-        .map_err(|error| map_send_error_with_context(error, failure_context));
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async {
+        hyper_client
+            .request(request)
+            .await
+            .map_err(|error| map_send_error_with_context(error, failure_context))
+    };
+    let result = send_with_read_timeout(send, completion, read_timeout, remaining_total).await;
 
     match result {
         Ok(hyper_response) => Ok(finish_hyper_response(hyper_response, url, trace).await),
@@ -254,6 +277,68 @@ where
             emit_send_failed(trace);
             Err(e)
         }
+    }
+}
+
+/// Bound response-header wait after Hyper consumes the request body.
+///
+/// Connection setup and request-body production keep their existing connect
+/// and write budgets. When the total deadline is earlier than or tied with
+/// the read deadline, the outer total wrapper remains authoritative.
+pub(crate) async fn send_with_read_timeout<F, T>(
+    send_future: F,
+    completion: Option<tokio::sync::oneshot::Receiver<tokio::time::Instant>>,
+    read_timeout: Option<Duration>,
+    remaining_total: Option<Duration>,
+) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>>,
+{
+    use crate::timeout::TimeoutPhase;
+
+    let (Some(completion), Some(read_timeout)) = (completion, read_timeout) else {
+        return send_future.await;
+    };
+    let started = tokio::time::Instant::now();
+    tokio::pin!(send_future);
+    tokio::pin!(completion);
+
+    let sent_at = tokio::select! {
+        biased;
+        result = &mut send_future => return result,
+        completed = &mut completion => match completed {
+            Ok(at) => at,
+            Err(_) => return send_future.await,
+        },
+    };
+    let read_deadline = sent_at + read_timeout;
+    let total_deadline = remaining_total.map(|remaining| started + remaining);
+    if total_deadline.is_some_and(|deadline| deadline <= read_deadline) {
+        return send_future.await;
+    }
+
+    if tokio::time::Instant::now() >= read_deadline {
+        return Err(Error::Timeout {
+            phase: TimeoutPhase::Read,
+            elapsed: tokio::time::Instant::now().saturating_duration_since(sent_at),
+        });
+    }
+    tokio::select! {
+        biased;
+        () = tokio::time::sleep_until(read_deadline) => Err(Error::Timeout {
+            phase: TimeoutPhase::Read,
+            elapsed: tokio::time::Instant::now().saturating_duration_since(sent_at),
+        }),
+        result = &mut send_future => {
+            if tokio::time::Instant::now() >= read_deadline {
+                Err(Error::Timeout {
+                    phase: TimeoutPhase::Read,
+                    elapsed: tokio::time::Instant::now().saturating_duration_since(sent_at),
+                })
+            } else {
+                result
+            }
+        },
     }
 }
 

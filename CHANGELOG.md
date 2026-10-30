@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-30
+
+### Added
+
+- Python: add the optional `eggfetch[httpx-transport]` extra with the
+  synchronous `EggFetchTransport` for HTTPX 0.28.x. The adapter preserves
+  HTTPX request/response semantics and maps EggFetch failures to HTTPX's
+  exception hierarchy. Async HTTPX transports and HTTP/3 are not supported by
+  this integration.
+- PyPI: build and smoke-test Linux aarch64 wheels on native ARM runners for
+  Python 3.10–3.15. The release matrix now produces 24 wheels plus one source
+  distribution.
+
+### Fixed
+
+- Core: on HTTP/1.1 and HTTP/2 routes, apply the configured read timeout while
+  waiting for response headers, beginning after request-body production
+  completes. Connect and upload time remain owned by their respective timeout
+  phases; the total deadline keeps precedence. Experimental HTTP/3 retains its
+  documented body-read-only timeout behavior. This brings the synchronous
+  HTTPX transport bridge in line with HTTPX read-timeout behavior.
+- Benchmarks: restore blocking mode on accepted proxy sockets. The listener
+  remains nonblocking for shutdown, but accepted sockets are explicitly made
+  blocking before the handler uses blocking reads. This prevents intermittent
+  `WouldBlock`/`IncompleteMessage` failures on platforms that preserve
+  nonblocking mode on accepted sockets.
+- Security: update Tokio, zstd, and Brotli to versions that clear the live
+  RustSec advisories recorded during the release qualification pass.
+
+### Changed
+
+- The coordinated pre-1.0 version is now `0.3.0` across all six published
+  crates and the PyPI package. The new Python integration is opt-in and does
+  not change AInews or other consumers' HTTP client behavior.
+
 ## [0.2.2] - 2026-10-02
 
 ### Added
@@ -291,7 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/eggstack/eggfetch/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.2
 [0.2.1]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.1
 [0.2.0]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.0

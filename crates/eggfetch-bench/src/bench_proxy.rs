@@ -37,6 +37,14 @@ impl BenchProxy {
             while !thread_stop.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((stream, _)) => {
+                        // The listener is nonblocking so shutdown can wake
+                        // its accept loop. Accepted sockets must be blocking:
+                        // the connection handler uses blocking line/body I/O,
+                        // and some platforms preserve nonblocking mode on
+                        // accepted sockets.
+                        if stream.set_nonblocking(false).is_err() {
+                            continue;
+                        }
                         thread_count.fetch_add(1, Ordering::Relaxed);
                         if let Ok(handler) = thread::Builder::new()
                             .name("eggfetch-bench-proxy-client".into())
@@ -225,16 +233,17 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
     use std::thread;
+    use std::time::{Duration, Instant};
 
     type RequestRecords = Arc<Mutex<Vec<Vec<u8>>>>;
 
-    fn origin() -> (String, RequestRecords, thread::JoinHandle<()>) {
+    fn origin(expected_requests: usize) -> (String, RequestRecords, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let seen = Arc::new(Mutex::new(Vec::new()));
         let records = Arc::clone(&seen);
         let handle = thread::spawn(move || {
-            for _ in 0..3 {
+            for _ in 0..expected_requests {
                 let Ok((mut stream, _)) = listener.accept() else {
                     break;
                 };
@@ -259,7 +268,7 @@ mod tests {
 
     #[tokio::test]
     async fn forwards_complete_origin_form_requests_and_repeated_gets() {
-        let (origin_url, records, origin_thread) = origin();
+        let (origin_url, records, origin_thread) = origin(3);
         let mut proxy = BenchProxy::start();
         let client = Client::builder()
             .proxy(Proxy::http(&proxy.url()).unwrap())
@@ -294,6 +303,44 @@ mod tests {
             assert!(text.ends_with("\r\n\r\n"));
         }
         assert_eq!(proxy.connections_served(), 3);
+        proxy.shutdown();
+    }
+
+    #[test]
+    fn accepted_socket_waits_for_a_later_request_head() {
+        let (origin_url, records, origin_thread) = origin(1);
+        let mut proxy = BenchProxy::start();
+        let proxy_address = proxy.url().trim_start_matches("http://").to_owned();
+        let mut client = std::net::TcpStream::connect(proxy_address).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+
+        let accept_deadline = Instant::now() + Duration::from_secs(1);
+        while proxy.connections_served() == 0 && Instant::now() < accept_deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(proxy.connections_served(), 1, "proxy did not accept client");
+
+        // Give the handler time to call read_line before the request arrives.
+        // If an accepted socket inherited O_NONBLOCK from the listener, that
+        // read returns WouldBlock and the proxy closes the connection here.
+        thread::sleep(Duration::from_millis(50));
+        let host = origin_url.trim_start_matches("http://");
+        write!(
+            client,
+            "GET {origin_url}/delayed HTTP/1.1\r\nHost: {host}\r\n\r\n"
+        )
+        .unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        let response = String::from_utf8_lossy(&response);
+        assert!(response.starts_with("HTTP/1.1 200 OK\r\n"), "{response}");
+        assert!(response.ends_with("\r\n\r\nok"), "{response}");
+
+        origin_thread.join().unwrap();
+        assert!(String::from_utf8_lossy(&records.lock().unwrap()[0])
+            .starts_with("GET /delayed HTTP/1.1\r\n"));
         proxy.shutdown();
     }
 }
