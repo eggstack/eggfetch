@@ -269,7 +269,7 @@ run_tier1() {
 
 # ── Tier 2: Extended validation ──────────────────────────────────────────
 tier2_full_compat() {
-    info "Full HTTPX compatibility suite"
+    info "Full versioned HTTPX compatibility suites"
     # Verify compatibility dependencies are installed
     if ! "$PYTHON_BIN" -c "import httpx; assert httpx.__version__ == '0.28.1'" 2>/dev/null; then
         cat >&2 <<'SETUP_GUIDE'
@@ -293,12 +293,17 @@ SETUP_GUIDE
             fail "Required Python module not found: $mod. Install into the active venv: python -m pip install -r compat/httpx/0.28.1/requirements.txt"
         fi
     done
-    (
-        cd "$REPO_ROOT"
-        EGGFETCH_COMPAT_REQUIRED=1 "$PYTHON_BIN" -m pytest \
-            "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
-            -v --strict-markers
-    )
+    local profile
+    for profile in "httpx/0.28.1" "httpx2/2.12.0"; do
+        info "Full compatibility profile: ${profile}"
+        (
+            cd "$REPO_ROOT"
+            EGGFETCH_COMPAT_PROFILE="$profile" EGGFETCH_COMPAT_REQUIRED=1 \
+                "$PYTHON_BIN" -m pytest \
+                "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
+                -v --strict-markers
+        )
+    done
 }
 
 tier2_api_manifest() {
