@@ -351,6 +351,7 @@ tier2_rust_public_api() {
     info "Rust public API oracle"
     require_command cargo-public-api
     require_command cargo-semver-checks
+    "$PYTHON_BIN" "$SCRIPT_DIR/test_rust_public_api_oracle.py"
     "$PYTHON_BIN" "$SCRIPT_DIR/check_rust_public_api.py"
 }
 
