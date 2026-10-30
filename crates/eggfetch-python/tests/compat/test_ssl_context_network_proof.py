@@ -118,6 +118,7 @@ def _generate_self_signed_ca(cert_dir: str) -> tuple[str, str]:
             "-days", "1", "-nodes",
             "-subj", "/CN=Test CA",
             "-addext", "basicConstraints=critical,CA:TRUE",
+            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
         ],
         check=True, capture_output=True,
     )

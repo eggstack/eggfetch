@@ -40,6 +40,10 @@ def _load_resource_thresholds():
         data = tomllib.load(f)
 
     system = platform.system().lower()
+    # The policy names the Apple platform by OS family, while Python reports
+    # its system string as "Darwin" on both Intel and Apple Silicon Macs.
+    if system == "darwin":
+        system = "macos"
     if system not in data.get("platform", {}):
         pytest.fail(f"No resource thresholds for platform: {system}")
     return data["platform"][system]
