@@ -264,13 +264,24 @@ impl Drop for AltSvcH1Server {
 // ---------------------------------------------------------------------------
 
 /// Observable state shared between the harness and its routes.
-#[derive(Default)]
 struct CarrierProbe {
     dials: AtomicUsize,
     live_routes: AtomicUsize,
     observed_targets: Mutex<Vec<(String, u16)>>,
-    /// Route id whose receive side should terminate, or 0 for none.
-    kill_route: AtomicUsize,
+    /// Broadcasts the route id whose receive side should terminate, or 0 for none.
+    kill_route: watch::Sender<usize>,
+}
+
+impl Default for CarrierProbe {
+    fn default() -> Self {
+        let (kill_route, _) = watch::channel(0);
+        Self {
+            dials: AtomicUsize::default(),
+            live_routes: AtomicUsize::default(),
+            observed_targets: Mutex::default(),
+            kill_route,
+        }
+    }
 }
 
 impl CarrierProbe {
@@ -287,6 +298,10 @@ impl CarrierProbe {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    fn terminate_route(&self, route_id: usize) {
+        self.kill_route.send_replace(route_id);
     }
 }
 
@@ -327,6 +342,7 @@ struct CarrierRoute {
     fault: CarrierFault,
     /// Distinguishes this route from later replacements of the same origin.
     route_id: usize,
+    kill_route: watch::Receiver<usize>,
     probe: Arc<CarrierProbe>,
 }
 
@@ -339,6 +355,7 @@ impl CarrierRoute {
             peer: plan.peer,
             fault: plan.fault,
             route_id,
+            kill_route: probe.kill_route.subscribe(),
             probe,
         })
     }
@@ -386,18 +403,35 @@ impl DatagramRoute for CarrierRoute {
             if let CarrierFault::SlowRecv = self.fault {
                 tokio::time::sleep(Duration::from_millis(1)).await;
             }
-            // Scoped to this exact route id so a replacement route for the same
-            // origin is unaffected.
-            if self.route_id == self.probe.kill_route.load(Ordering::Relaxed) {
-                return Err(DialError::new(
-                    DialErrorKind::Connection,
-                    "carrier receive terminated",
-                ));
+            // Watch the socket and route-specific shutdown together. Checking
+            // an atomic before `recv_from` alone is racy: a blocked receive
+            // would never observe a later kill signal until another packet
+            // happened to arrive.
+            let mut kill_route = self.kill_route.clone();
+            loop {
+                if *kill_route.borrow_and_update() == self.route_id {
+                    return Err(DialError::new(
+                        DialErrorKind::Connection,
+                        "carrier receive terminated",
+                    ));
+                }
+                tokio::select! {
+                    result = self.socket.recv_from(buffer) => {
+                        let (len, _source) = result.map_err(|e| {
+                            DialError::new(DialErrorKind::Connection, format!("carrier recv: {e}"))
+                        })?;
+                        return Ok(len);
+                    }
+                    changed = kill_route.changed() => {
+                        if changed.is_err() || *kill_route.borrow_and_update() == self.route_id {
+                            return Err(DialError::new(
+                                DialErrorKind::Connection,
+                                "carrier receive terminated",
+                            ));
+                        }
+                    }
+                }
             }
-            let (len, _source) = self.socket.recv_from(buffer).await.map_err(|e| {
-                DialError::new(DialErrorKind::Connection, format!("carrier recv: {e}"))
-            })?;
-            Ok(len)
         })
     }
 
@@ -808,7 +842,7 @@ async fn terminal_route_io_evicts_only_the_current_generation() {
     let first_route_id = 1;
 
     // Terminate the receive side of the *first* origin's live route only.
-    probe.kill_route.store(first_route_id, Ordering::Relaxed);
+    probe.terminate_route(first_route_id);
 
     // A terminal route I/O error is discovered lazily: the request riding the
     // doomed generation is the one that observes the failure, and that
