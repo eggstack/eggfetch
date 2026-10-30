@@ -2292,3 +2292,35 @@ tests = [
     "test_native_proxy_tls.py::TestProxyForwarding::test_proxy_headers_candidate_for_async_client",
 ]
 non_expiring = true
+
+[[difference]]
+id = "CODES-CTOR-001"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-constructor-differences"
+reference-behavior = "HTTPX 0.28.1 codes exposes **kwargs."
+eggfetch-behavior = "eggfetch codes exposes **kwargs, matching HTTPX 0.28.1."
+rationale = "The HTTPX 0.28.1 API manifest now matches this constructor exactly; the former allowance is stale."
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; internal implementation detail"
+owner = "eggfetch-team"
+review-milestone = "release-0.3.0"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "CODES-CTOR-001-2"
+category = "resolved"
+symbol = "codes"
+behavior-case = "codes-constructor-differences"
+reference-behavior = "HTTPX 0.28.1 codes self is POSITIONAL_ONLY."
+eggfetch-behavior = "eggfetch codes self is POSITIONAL_ONLY, matching HTTPX 0.28.1."
+rationale = "The HTTPX 0.28.1 API manifest now matches this parameter kind exactly; the former allowance is stale."
+compatibility-stage-impact = "resolved"
+security-improvement = "false"
+migration-impact = "None; internal implementation detail"
+owner = "eggfetch-team"
+review-milestone = "release-0.3.0"
+tests = ["test_config_objects.py"]
+non_expiring = true
