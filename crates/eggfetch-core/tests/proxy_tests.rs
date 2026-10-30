@@ -604,7 +604,7 @@ async fn handle_connect_tunnel(
         let resp = b"HTTP/1.1 200 Connection Established\r\n\r\n";
         client_stream.write_all(resp).await?;
 
-        let (mut client_read, mut client_write) = tokio::io::split(client_stream);
+        let (mut client_read, mut client_write) = tokio::io::split(&mut *client_stream);
         let (mut dest_read, mut dest_write) = dest_stream.into_split();
 
         let c2d = async {
