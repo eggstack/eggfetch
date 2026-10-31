@@ -43,7 +43,7 @@ coverage rationale and the tool-bump update rule.
 Two GitHub Actions workflows:
 
 - **`ci.yml`** — routine push/PR validation. One Ubuntu job, no matrix, no artifact exchange. Calls `./scripts/check.sh`. This is the only automatic workflow.
-- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 24 wheels across 4 targets (linux-x86_64, linux-aarch64, macos-arm64, windows-x86_64) and Python 3.10–3.15, builds and validates an sdist, assembles the release set, and optionally publishes via Trusted Publishing (OIDC).
+- **`pypi.yml`** — manual-dispatch PyPI release pipeline. Builds 24 wheels across 4 targets (linux-x86_64, linux-aarch64, macos-arm64, windows-x86_64) and Python 3.10–3.15, builds and validates an sdist, assembles the 25-distribution release set, and optionally publishes via Trusted Publishing (OIDC).
 
 See [verification-policy.md](../verification-policy.md) for the normative policy.
 

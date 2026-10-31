@@ -511,8 +511,8 @@ jobs:
           set -euo pipefail
           count=$(find dist/ -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l)
           echo "Distributions to publish: $count"
-          if [[ $count -ne 19 ]]; then
-            echo "FAIL: expected 19 distributions, found $count" >&2; exit 1
+          if [[ $count -ne 25 ]]; then
+            echo "FAIL: expected 25 distributions, found $count" >&2; exit 1
           fi
 
       - name: Publish to PyPI
