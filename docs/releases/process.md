@@ -82,7 +82,7 @@ PyPI publication is performed via the manually dispatched `.github/workflows/pyp
 | macOS | arm64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
 | Windows | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
 
-24 wheels + 1 source distribution = 25 distributions per release. Linux aarch64 wheels are built and smoke-tested on native `ubuntu-24.04-arm` runners.
+24 wheels + 1 source distribution = 25 distributions per release. Linux aarch64 wheels are built and smoke-tested on native `ubuntu-24.04-arm` runners. The publish job checks for all 25 assembled distributions before upload.
 
 ### Dispatch Procedure
 
