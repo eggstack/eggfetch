@@ -67,6 +67,14 @@ cargo publish -p eggfetch-python
 cargo publish -p eggfetch-node
 ```
 
+For `eggfetch-python`, if Cargo's standalone package verification fails while
+linking PyO3's `extension-module` symbols, publish the crate archive with
+`cargo publish --no-verify -p eggfetch-python`. Do this only after the normal
+package-content validation and successful maturin wheel builds, wheel smoke
+tests, sdist build, and assembled-set validation in `pypi.yml`. Cargo's
+standalone verifier does not supply the Python extension-linker flags; on the
+0.3.0 release host its failure was confined to unresolved `Py_*` symbols.
+
 **Important:** crates.io versions are immutable. If a published version is incorrect or publication is partial, correct the defect, bump the version, and publish a new version. Do not attempt to overwrite an existing version.
 
 ## PyPI Publication

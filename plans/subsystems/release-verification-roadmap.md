@@ -1,6 +1,6 @@
 # Release and Verification Roadmap
 
-Status: active — M006 and M007 closed
+Status: active — M006, M007, and M008 closed
 
 Long-term references:
 
@@ -65,15 +65,16 @@ signed tag, PyPI, and GitHub Release. M004 build-only run `36253723990` and
 publish run `36255517733` are historical green evidence.
 
 Core-transport M007 is closed and its additive TransportFailureKind /
-Error::transport_failure_kind() API is now published: M005 released
-coordinated 0.2.2 from candidate
-`015a56d7ec3edf186eec8ebccff01cbf5584274e`, which is also the live Stage C
-binding. All six crates.io packages, the signed `v0.2.2` tag, the 19 PyPI
-files, and GitHub Release `401746856` are public and were verified from a
-fresh consumer. The release gate also found and fixed one real defect on that
-candidate (`eggfetch-ffi` did not compile where `c_char` is `u8`); details and
-the full evidence set are in
-`plans/closure/release-verification/005-0-2-2-m007-publication.md`.
+Error::transport_failure_kind() API is published. M008 renewed the Stage C
+qualification on executable SHA `6093cc7aa0961194f096cbf2f92c3fc057671a34`
+and released coordinated 0.3.0 from commit
+`9e0a7a909b146c19fe77d94ce2ce6e57b9e80cde`. All six crates.io packages,
+the annotated `v0.3.0` tag, 24 PyPI wheels plus one sdist, and GitHub Release
+are public. The PyPI publish job and post-release install/import smoke passed.
+The tag is unsigned because the environment had no signing identity associated
+with the authenticated GitHub account. Full evidence and release-process
+follow-ups are in
+`plans/closure/release-verification/008-0-3-0-publication.md`.
 
 ## 5. Target architecture
 

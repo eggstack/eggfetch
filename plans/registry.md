@@ -73,6 +73,7 @@ files.
 | Core transport and request policy | M010 core duplicate-helper consolidation | closed | `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md` | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md`. Seven duplication clusters consolidated with no runtime and no public-API change: the Rust public-API oracle is byte-identical to the frozen snapshots in all eight profiles. Cluster D adopts the stricter origin rule, which changes nothing observable; the IPv6 pool-key divergence it exposes is recorded, not fixed. Closed on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
 | Release and verification | M006 verification guard hardening | closed | `plans/implementation/release-verification/006-verification-guard-hardening.md` | `plans/closure/release-verification/006-verification-guard-hardening.md`. The lint guard now anchors on the attribute's lint list and rejects blanket `allow`/`expect`/`deny` in any form, scans `fuzz/`, and self-tests in Tier 1; the Tier 2 downstream gate fails closed instead of skipping a release-blocking gate; the Tier 2 profile-isolated rows use the same bare `RUSTFLAGS=` treatment as Tier 1; the H3 runner self-test runs first in Tier 1. Measured: zero existing suppressions are newly matched. Closed on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
 | Release and verification | M007 planning and documentation truthfulness hygiene | closed | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` | `plans/closure/release-verification/007-planning-and-documentation-hygiene.md`. All 2,267 unticked acceptance-criterion boxes under `plans/` are classified (760 met, 250 superseded, 1,257 deferred, 0 never applicable) with no plan file retaining unticked boxes under a completion record without a dated open-items section; `fuzz/Cargo.lock` is refreshed and the fuzz tree builds again; the compat profiles' machine-readable content is byte-identical after their comment log is removed; the two httpx replacement packages now ship one canonical source; every adapter and unowned-core lint suppression carries a `reason =`. Closed on `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
+| Release and verification | M008 0.3.0 compatibility renewal and coordinated publication | closed | `plans/httpx-parity-correction-status.md` | `plans/closure/release-verification/008-0-3-0-publication.md`. All six crates, 24 PyPI wheels plus sdist, and GitHub Release v0.3.0 are live. Release commit `9e0a7a909b146c19fe77d94ce2ce6e57b9e80cde`; executable qualification remains bound to `6093cc7aa0961194f096cbf2f92c3fc057671a34`. |
 | TLS, proxy, and protocols | M004 caller-owned H3 datagram routing | closed | `plans/implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `plans/closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md`. Closed on `42a9c96db5b25354843bd83bd458c71757e95651` with unconditional exact-SHA Stage C. Rust-only, additive API; no Quinn-type exposure and no Eggress dependency. |
 | Release and verification | M005 0.2.2 M007 publication | closed | `plans/implementation/release-verification/005-0-2-2-m007-publication.md` | `plans/closure/release-verification/005-0-2-2-m007-publication.md`. Published on candidate `015a56d7ec3edf186eec8ebccff01cbf5584274e`: six crates.io packages, signed `v0.2.2`, 19 PyPI files, GitHub Release `401746856`. |
 | Core transport and request policy | M007 native transport failure classification | closed | `plans/implementation/core-transport-policy/007-native-transport-failure-classification.md` | `plans/closure/core-transport-policy/007-native-transport-failure-classification.md`. Published as eggfetch 0.2.2 by release-verification M005; exact-pin downstream consumers may now begin their own adoption milestone. |
@@ -84,10 +85,12 @@ files.
 
 ## Current execution order and dependency gates
 
-**Release execution gate:** none active. M005 is closed; 0.2.2 is the current
-public version across all six crates, PyPI, the signed `v0.2.2` tag, and the
-GitHub Release. Historical v0.2.0/v0.2.1 public identities remain immutable.
-The next candidate is a fresh bounded corrective or feature plan through M003.
+**Release execution gate:** none active. M008 is closed; 0.3.0 is the current
+public version across all six crates, PyPI, the annotated `v0.3.0` tag, and the
+GitHub Release. The tag is unsigned because this environment had no signing
+identity associated with the authenticated GitHub account; see the M008
+closure. Historical release identities remain immutable. The next candidate
+is a fresh bounded corrective or feature plan through M003.
 
 **Executed in the current pass (2026-10-22), in the recorded order:** TLS M005,
 python-httpx-compat M004, python-httpx-compat M005, core M008, core M009,
