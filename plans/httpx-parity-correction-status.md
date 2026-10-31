@@ -4,16 +4,16 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed at the advisory-patch freeze (2026-10-28)
+## Release candidate qualification — 0.3.0 (2026-10-31)
 
-Recorded designation: **Stage C qualified (renewal)** for both documented
-facades, bound to executable freeze
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
+The release candidate executable tree is frozen at
+`e22dcf57def5e791fe7e51e866663ead693be417`. PR #26 CI passed on this exact
+SHA. Final Tier 2, package, live security, registry publication and release
+checks are in progress; the profiles continue to point at the last completed
+Stage C binding until those gates finish.
 
-The advisory-patch pass has now been qualified in its own right, so the live
-Stage C binding names that freeze. This is a compatibility binding only: it
-authorizes no release. H3 stays experimental, HTTPX 1.0 stays gated on the
-upstream trigger, and Node maturation stays a separately registered future.
+H3 stays experimental, HTTPX 1.0 stays gated on the upstream trigger, and
+Node maturation stays a separately registered future.
 
 ### What was qualified
 
@@ -44,19 +44,20 @@ tree. Those two tests are the regression net. The pin, its rationale and that
 net are recorded in `docs/architecture/dependency-policy.md`, so a later
 `cargo update` does not silently reintroduce 1.54.x.
 
-The qualification ran on `b74cf891…`, which is the executable freeze itself.
-The renewal commit that rebinds the two compat profiles and this ledger lands
-on top of it and changes no executable input, so it does not invalidate the
-binding.
+The last completed Stage C qualification remains bound to
+`b74cf891…` until the candidate gates below finish. This ledger update changes
+documentation only; candidate executable inputs remain frozen at `e22dcf57…`.
 
-### Qualification evidence
+### Candidate evidence collected so far
 
 | Gate | Result |
 |---|---|
-| Tier 1 | exit 0 — the H3 runner self-test, formatting, the lint-suppression guard self-test and its policy scan, adapter feature ownership, release version validation, clippy, **1772 Rust workspace tests** across 74 binaries, the stable public contract fixtures, the feature-isolated profile whole-suite compile, the native Python API manifest, the Python typing surface and typing fixture, **581 Python behaviour tests** and **134 HTTPX compatibility smoke tests**, and the downstream-artifact producer self-test. The Node JS surface skipped, which the policy defines as optional |
-| Tier 2 | exit 0 — the full pinned HTTPX compatibility suite **2073 passed / 0 failed**; the API manifest comparison at **74 symbols** for httpx 0.28.1 and **76 symbols** for httpx2 2.12.0, with 0 unexplained and 0 stale allowed differences; the Rust public-API oracle **passed in 8 profiles**; `cargo-semver-checks` 0.49.0 reported **"no semver update required"** against the planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`; the feature matrix and the 5 feature-gated combinations green; **5 MSRV checks** on the exact Rust 1.89.0 toolchain, all `--locked`; documentation and doctests; FFI; the resource regression check; the lifecycle and soak tests; the downstream behavioral-fixture portfolio **4/4 required packages** with `overall_pass: true`; lossless merge; Criterion micro-benchmarks. One optional check skipped: the Node JS surface |
-| Tier 3 | exit 0 — crate packaging, the release wheel build, the wheel smoke test, package content validation and the installed-wheel typing smoke |
-| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+| CI | exit 0 — PR #26 on the exact candidate SHA |
+| Rust, Python, API, feature, MSRV, docs, FFI checks | passed in the extended run; Python behavior suite **581 passed**, compatibility profiles and API oracle passed, 5 feature-gated suites and 5 MSRV checks passed |
+| Lifecycle, soak, downstream, merge | lifecycle tests passed; soak **11 passed**; downstream behavioral fixtures **4/4 required packages**, `overall_pass: true`; lossless merge **12 passed** |
+| Resource monitor | The full extended run once exceeded its 64 MiB delta limit (**81.22 MiB delta**, 84.58 MiB peak). A standalone rerun passed at **59.72 MiB delta**, 63.08 MiB peak. The full combined gate must be rerun before qualification is complete. |
+| Criterion benchmarks | Complete; timings were reported without a failing threshold. |
+| Package and live security gates | Pending. |
 
 ### Host accommodations
 
