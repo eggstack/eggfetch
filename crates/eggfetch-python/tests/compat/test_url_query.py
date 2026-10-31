@@ -138,6 +138,17 @@ class TestURLAbsoluteRelative:
 # ── copy_with / param helpers ──────────────────────────────────────────
 
 class TestURLCopyWith:
+    def test_copy_with_raw_path(self):
+        url = URL("https://api.example.com/v1")
+        new = url.copy_with(raw_path=url.raw_path + b"/")
+        assert str(new) == "https://api.example.com/v1/"
+
+    def test_raw_path_includes_query(self):
+        url = URL("https://api.example.com/v1?version=2")
+        assert url.raw_path == b"/v1?version=2"
+        new = url.copy_with(raw_path=b"/v1/?version=2")
+        assert str(new) == "https://api.example.com/v1/?version=2"
+
     def test_copy_with_params(self):
         url = URL("https://example.com/path")
         new = url.copy_with(params={"q": "1"})

@@ -54,12 +54,16 @@ Whole-request-path measurements over loopback TCP with `HttpVersionPolicy::Http1
 The fixture lives in `eggfetch-bench/src/bench_proxy.rs`. It parses each
 request head once, forwards absolute-form targets as origin-form path/query,
 strips proxy-only and hop-specific connection headers, and closes the upstream
-request explicitly. CONNECT and chunked request bodies receive deterministic
-`501 Not Implemented` responses — unsupported framing is reported explicitly
-rather than relying on read timeouts; fixed-length bodies are forwarded. Focused
-loopback correctness tests run with `cargo test -p eggfetch-bench --lib` and
-verify repeated requests, complete origin headers, and response bodies. This
-test fixture does not implement or qualify production proxy behavior.
+request explicitly. Its accept loop stays nonblocking for shutdown, then
+explicitly makes each accepted socket blocking before the handler's blocking
+I/O; this avoids platform-dependent inheritance of nonblocking mode. CONNECT
+and chunked request bodies receive deterministic `501 Not Implemented`
+responses — unsupported framing is reported explicitly rather than relying on
+read timeouts; fixed-length bodies are forwarded. Focused loopback correctness
+tests run with `cargo test -p eggfetch-bench --lib` and verify delayed
+request-head arrival, repeated requests, complete origin headers, and response
+bodies. This test fixture does not implement or qualify production proxy
+behavior.
 
 ### `resources` — allocation/throughput shape
 

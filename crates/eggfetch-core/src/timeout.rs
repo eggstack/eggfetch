@@ -13,9 +13,9 @@
 //! - **Write**: time for the request body producer to yield each chunk.
 //!   Only applies to streamed request bodies; buffered bodies complete
 //!   synchronously.
-//! - **Read**: time to wait for response headers and each response body
-//!   chunk. The deadline resets on every chunk arrival. The timer starts
-//!   when body consumption begins, not when response headers arrive.
+//! - **Read**: after the request body producer completes, time to wait for
+//!   response headers, then each response body chunk. The deadline resets on
+//!   each chunk. Early responses do not charge upload time to the read budget.
 //! - **Total**: absolute wall-clock deadline across the entire request
 //!   lifecycle, from logical request start through response-body EOF (or
 //!   terminal body error), including pool acquisition, transport setup,
@@ -39,10 +39,11 @@
 //! # Enforcement
 //!
 //! - **Pool** and **Total** are enforced with `tokio::time::timeout`.
-//! - **Read** is enforced by a per-chunk wrapper stream that fires
-//!   `Error::Timeout { phase: Read }` if no chunk arrives within the
-//!   configured duration. The deadline starts on first body poll and resets
-//!   on every chunk.
+//! - **Read** is enforced while waiting for response headers after request
+//!   body completion on Hyper and UDS routes, then by a per-chunk wrapper
+//!   stream. The body deadline starts on first body poll and resets on every
+//!   chunk. Experimental HTTP/3 currently applies this field to response-body
+//!   progress only; its header wait remains total-bounded.
 //! - **Total** is enforced in two stages: `tokio::time::timeout` bounds the
 //!   transport future up to response headers, and a crate-private absolute
 //!   response-body deadline (`ResponseDeadline`) bounds body streaming
@@ -112,9 +113,10 @@ impl std::fmt::Display for TimeoutPhase {
 /// # Enforcement
 ///
 /// - `pool`: enforced via `tokio::time::timeout` around the pool acquire.
-/// - `read`: enforced per chunk by a wrapper stream that fires
-///   `Error::Timeout { phase: Read }` when no data arrives within the
-///   configured duration. Resets on every chunk arrival.
+/// - `read`: on Hyper/UDS routes, response-header waiting is bounded after
+///   request-body completion; response-body progress is enforced per chunk by
+///   a wrapper stream and resets on each arrival. Experimental HTTP/3 currently
+///   applies this field to response-body chunks only.
 /// - `write`: enforced per chunk by a wrapper stream that fires
 ///   `Error::Timeout { phase: Write }` when the request body producer
 ///   does not yield a chunk within the configured duration. Resets on
@@ -161,7 +163,10 @@ pub struct Timeout {
     /// Applies to high-level streamed request bodies and the native
     /// `http_body::Body` execution surface.
     pub write: Option<Duration>,
-    /// Time allowed between response body chunks. Resets on every chunk.
+    /// Time allowed for response headers after request-body completion and
+    /// between response-body chunks. The body timer starts on first body poll
+    /// and resets on every chunk. Experimental HTTP/3 currently applies this
+    /// field to response-body progress only.
     pub read: Option<Duration>,
     /// Optional wall-clock cap across the entire request lifecycle.
     pub total: Option<Duration>,

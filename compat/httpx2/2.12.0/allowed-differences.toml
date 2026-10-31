@@ -1726,6 +1726,48 @@ tests = ["test_httpx2_origin_reachability.py"]
 non_expiring = true
 
 [[difference]]
+id = "H2X-CODES-001"
+category = "intentional-difference"
+classification = "intentional"
+symbol = "codes"
+difference-type = "parameter-name"
+member = "codes"
+reference = "['self', 'args', 'kwds']"
+candidate = "['self', 'args', 'kwargs']"
+behavior-case = "codes-constructor-differences"
+reference-behavior = "httpx2 2.12.0 codes exposes **kwds."
+eggfetch-behavior = "eggfetch codes exposes **kwargs."
+rationale = "The IntEnum metaclass exposes a version-specific variadic keyword name; constructor behavior is unchanged and the HTTPX 0.28.1 facade matches its own reference."
+compatibility-stage-impact = "baseline"
+security-improvement = "false"
+migration-impact = "None; internal introspection difference"
+owner = "eggfetch-team"
+review-milestone = "httpx2-baseline"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
+id = "H2X-CODES-002"
+category = "intentional-difference"
+classification = "intentional"
+symbol = "codes"
+difference-type = "parameter-kind"
+member = "self"
+reference = "POSITIONAL_OR_KEYWORD"
+candidate = "POSITIONAL_ONLY"
+behavior-case = "codes-constructor-differences"
+reference-behavior = "httpx2 2.12.0 codes self is POSITIONAL_OR_KEYWORD."
+eggfetch-behavior = "eggfetch codes self is POSITIONAL_ONLY."
+rationale = "The IntEnum metaclass exposes a version-specific self parameter kind; constructor behavior is unchanged and the HTTPX 0.28.1 facade matches its own reference."
+compatibility-stage-impact = "baseline"
+security-improvement = "false"
+migration-impact = "None; internal introspection difference"
+owner = "eggfetch-team"
+review-milestone = "httpx2-baseline"
+tests = ["test_config_objects.py"]
+non_expiring = true
+
+[[difference]]
 id = "H2X-NEW-017"
 category = "intentional-difference"
 classification = "intentional"

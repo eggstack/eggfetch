@@ -564,6 +564,8 @@ def _generate_self_signed_ca_cert(cert_dir: str) -> tuple[str, str]:
             "-days", "1", "-nodes",
             "-subj", "/CN=127.0.0.1",
             "-addext", "basicConstraints=critical,CA:TRUE",
+            "-addext", "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign,cRLSign",
+            "-addext", "extendedKeyUsage=serverAuth",
             "-addext", "subjectAltName=IP:127.0.0.1",
         ],
         check=True, capture_output=True,
@@ -602,6 +604,7 @@ def _generate_ca_signed_server_cert(
             "-days", "1", "-nodes",
             "-subj", "/CN=Test CA",
             "-addext", "basicConstraints=critical,CA:TRUE",
+            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
         ],
         check=True,
         capture_output=True,
@@ -613,7 +616,13 @@ def _generate_ca_signed_server_cert(
         f.write("req_extensions = v3_req\n")
         f.write("prompt = no\n\n")
         f.write("[req_dn]\nCN = 127.0.0.1\n\n")
-        f.write("[v3_req]\nsubjectAltName = IP:127.0.0.1\n")
+        f.write(
+            "[v3_req]\n"
+            "basicConstraints = critical,CA:FALSE\n"
+            "keyUsage = critical,digitalSignature,keyEncipherment\n"
+            "extendedKeyUsage = serverAuth\n"
+            "subjectAltName = IP:127.0.0.1\n"
+        )
 
     subprocess.run(
         [

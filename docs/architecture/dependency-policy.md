@@ -194,6 +194,17 @@ session but arriving transitively, unpinned):
 SSE itself has no extra dependency: `EventSource`/`ServerSentEvent` are
 pure-Python framing over normal streamed responses.
 
+## Optional HTTPX Transport Integration
+
+The `httpx-transport` Python extra requires `httpx>=0.28,<0.29` and provides
+`EggFetchTransport`, a synchronous `httpx.BaseTransport` adapter over the
+EggFetch engine. HTTPX remains an optional dependency; the base `eggfetch`
+installation and native Rust core do not depend on it. The bridge disables
+EggFetch retries so SDK/application retry policy remains authoritative. Async
+HTTPX transport support and HTTP/3 are outside this integration's contract.
+See [httpx-transport.md](../python/httpx-transport.md) for installation,
+configuration, lifecycle, and limitations.
+
 ## Selection Criteria
 
 When evaluating a new dependency:

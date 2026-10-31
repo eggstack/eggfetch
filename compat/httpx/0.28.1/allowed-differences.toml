@@ -1453,45 +1453,4 @@ review-milestone = "stage-d"
 tests = ["test_url_query.py"]
 non_expiring = true
 
-[[difference]]
-id = "CODES-CTOR-001"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "codes"
-difference-type = "parameter-name"
-member = "codes"
-reference = "['self', 'args', 'kwargs']"
-candidate = "['self', 'args', 'kwds']"
-behavior-case = "codes-constructor-differences"
-reference-behavior = "HTTPX codes constructor uses kwargs"
-eggfetch-behavior = "eggfetch codes constructor uses kwds"
-rationale = "eggfetch codes uses kwds instead of kwargs due to IntEnum metaclass."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; internal implementation detail"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
-
-[[difference]]
-id = "CODES-CTOR-001-2"
-category = "stage-bounded"
-classification = "intentional"
-symbol = "codes"
-difference-type = "parameter-kind"
-member = "self"
-reference = "POSITIONAL_ONLY"
-candidate = "POSITIONAL_OR_KEYWORD"
-behavior-case = "codes-constructor-differences"
-reference-behavior = "HTTPX codes self is POSITIONAL_ONLY"
-eggfetch-behavior = "eggfetch codes IntEnum self is POSITIONAL_OR_KEYWORD"
-rationale = "eggfetch codes IntEnum uses positional-or-keyword self."
-compatibility-stage-impact = "stage-c"
-security-improvement = "false"
-migration-impact = "None; internal implementation detail"
-owner = "eggfetch-team"
-review-milestone = "stage-d"
-tests = ["test_config_objects.py"]
-non_expiring = true
 

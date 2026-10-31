@@ -17,7 +17,7 @@ eggfetch implements phase-aware timeouts that map to specific segments of the re
 | `ProxyConnect` | Error-taxonomy classification for proxy TCP setup; budget aliases `Timeout.connect` (no separate field) |
 | `ProxyTls` | Error-taxonomy classification for TLS to an HTTPS proxy endpoint; budget aliases `Timeout.connect` (no separate field) |
 | `Write` | Sending streamed request-body chunks only (buffered bodies complete synchronously) |
-| `Read` | Inactivity between response body chunks from first body poll; proxy CONNECT-head reads also use the read budget; ordinary response headers are `Total`-bounded |
+| `Read` | Response-header wait after request-body completion on Hyper/UDS routes, then inactivity between response body chunks from first body poll; proxy CONNECT-head reads also use the read budget; experimental HTTP/3 currently applies it to response-body chunks only |
 | `Total` | Wall-clock cap across the entire request lifecycle |
 
 Physical admission (optional wait for a live Hyper-connection permit) is not a `TimeoutPhase`; it reports `Error::Pool`, not `Error::Timeout`, and is distinct from logical pool acquisition.
@@ -45,12 +45,16 @@ computation and the pool deadline.
 |-------|-------------|
 | Pool | `tokio::time::timeout` around pool acquisition using `min(pool, total)`; reports `Total` when the total budget is the smaller bound |
 | Total | `tokio::time::timeout` around the transport future up to response headers, plus a crate-private absolute response-body deadline (`ResponseDeadline`) through body EOF/trailers |
-| Read | Per-chunk wrapper (`BodyTimeoutStream` for `ResponseBody` streaming; `NativeResponseBody` implements the same contract for `execute_http_body`) — starts on first body poll, deadline resets on each body chunk/frame; direct Hyper/UDS/H3 header acquisition remains owned by the transport future |
+| Read | Hyper/UDS response-header wait races request-body completion against `Timeout.read`; response-body wrappers (`BodyTimeoutStream` / `NativeResponseBody`) start on first body poll and reset per chunk/frame. Experimental H3 currently applies read only to response-body progress; its header wait remains total-bounded |
 | Write | Per-chunk wrapper stream (`WriteTimeoutStream`) — deadline resets on each chunk delivery; H3 propagates `Write` without masking or evicting |
 | Connect | Enforced by the direct connector, by proxy TCP/TLS/origin-TLS setup, and by the H3 connector (DNS + QUIC + h3 init as one budget shared across address fallback with fair per-address shares) |
 
-Read timeout: inactivity timeout, starts when body consumption begins,
-resets after each successful chunk/frame.
+Read timeout: the Hyper/UDS response-header wait starts after request-body
+completion, while response-body inactivity starts when body consumption
+begins and resets after each successful chunk/frame. Early responses during
+upload are returned without charging upload time to the read budget. The
+experimental H3 path currently has body-read timeout only; response headers
+remain bounded by `Timeout.total` there.
 
 Total timeout: absolute request-lifecycle deadline, starts with the logical
 request, includes pool/transport/headers/body/trailers, never resets, and
@@ -63,13 +67,14 @@ both read and total are observably expired at the same poll boundary,
 `Total` is preferred as the outer cap. A ready chunk/frame at or after the
 absolute deadline never extends the request.
 
-The native `execute_http_body()` response wrapper uses the same contract:
-its read timer starts when the caller first polls the body and resets
-after each returned frame, while its total deadline starts with the request
+The native `execute_http_body()` response wrapper uses the same body contract:
+its read timer starts when the caller first polls the body and resets after
+each returned frame, while its total deadline starts with the request
 lifecycle and never resets on DATA/trailer frames. A delay between response
-headers and the first body poll therefore does not consume `Timeout.read`
-but can already exhaust `Timeout.total`; `TransportIoTimeout` remains
-the separate established-connection inactivity control.
+headers and the first body poll therefore does not consume the response-body
+portion of `Timeout.read` but can already exhaust `Timeout.total`;
+`TransportIoTimeout` remains the separate established-connection inactivity
+control.
 
 Native embedded consumers may additionally set `PhysicalConnectionPolicy` and
 `TransportIoTimeout`. The physical policy is applied by the common Hyper

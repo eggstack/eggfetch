@@ -52,12 +52,26 @@ def _toolchain_env() -> dict[str, str]:
     fail the gate for a reason unrelated to the change under test.  The pin
     must cover the semver half too, not just the snapshot half.
     """
-    return {
-        **os.environ,
-        "RUSTUP_TOOLCHAIN": os.environ.get(
-            "RUST_API_RUSTUP_TOOLCHAIN", "nightly-2026-05-07"
-        ),
-    }
+    toolchain = os.environ.get("RUST_API_RUSTUP_TOOLCHAIN", "nightly-2026-05-07")
+    env = {**os.environ, "RUSTUP_TOOLCHAIN": toolchain}
+    # Some hosts put standalone Homebrew/system Rust binaries before the
+    # rustup proxies on PATH. RUSTUP_TOOLCHAIN cannot select a compiler when
+    # those binaries are invoked directly, so resolve the pinned toolchain's
+    # executables and pass them explicitly to Cargo and the API tools.
+    for variable, binary in (("CARGO", "cargo"), ("RUSTC", "rustc"), ("RUSTDOC", "rustdoc")):
+        result = subprocess.run(
+            ["rustup", "which", "--toolchain", toolchain, binary],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+            raise SystemExit(
+                f"cannot resolve {binary} from required Rust toolchain {toolchain}: "
+                f"{result.stderr.strip()}"
+            )
+        env[variable] = result.stdout.strip()
+    return env
 
 
 def _run_public_api(tool: list[str], feature_args: tuple[str, ...]) -> str:

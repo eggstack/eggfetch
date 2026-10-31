@@ -613,6 +613,8 @@ async fn send_http_proxy_request(
             transport_hints,
             forward_client,
             ctx.failure_context,
+            ctx.read_timeout,
+            ctx.remaining_total,
         )
         .await;
     }
@@ -715,6 +717,8 @@ async fn send_http_proxy_request_hyper(
     transport_hints: &crate::transport_hints::TransportHints,
     client: &crate::transport::TimeoutForwardClient,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<std::time::Duration>,
+    remaining_total: Option<std::time::Duration>,
 ) -> Result<Response> {
     let absolute_uri = transport_hints
         .target
@@ -745,7 +749,9 @@ async fn send_http_proxy_request_hyper(
         request = request.header(name, value);
     }
     let request = request
-        .body(body.into_http_body())
+        .body(crate::transport::HyperRequestBody::new(
+            body.into_http_body(),
+        ))
         .map_err(|error| Error::RequestBuild(error.to_string()))?;
     crate::transport::direct::send_proxy_request(
         client,
@@ -753,6 +759,8 @@ async fn send_http_proxy_request_hyper(
         dest_url.clone(),
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     )
     .await
 }
@@ -1156,22 +1164,30 @@ async fn send_socks_request(
         .uri(uri)
         .version(version);
     let request = request
-        .body(body.into_http_body())
+        .body(crate::transport::HyperRequestBody::new(
+            body.into_http_body(),
+        ))
         .map_err(|e| Error::RequestBuild(e.to_string()))?;
     let mut request = request;
     *request.headers_mut() = headers.into_inner();
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async { client.request(request).await.map_err(map_socks_send_error) };
+    let send = super::direct::send_with_read_timeout(
+        send,
+        completion,
+        ctx.read_timeout,
+        ctx.remaining_total,
+    );
     let response = match ctx.remaining_total {
-        Some(duration) => tokio::time::timeout(duration, client.request(request))
-            .await
-            .map_err(|_| Error::Timeout {
-                phase: TimeoutPhase::Total,
-                elapsed: duration,
-            })?
-            .map_err(map_socks_send_error)?,
-        None => client
-            .request(request)
-            .await
-            .map_err(map_socks_send_error)?,
+        Some(duration) => {
+            tokio::time::timeout(duration, send)
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: TimeoutPhase::Total,
+                    elapsed: duration,
+                })??
+        }
+        None => send.await?,
     };
     let (response_parts, incoming) = response.into_parts();
     let trailers = crate::body::SharedTrailers::new();

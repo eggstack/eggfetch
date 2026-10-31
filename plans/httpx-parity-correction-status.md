@@ -4,16 +4,16 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Recorded state — Stage C renewed at the advisory-patch freeze (2026-10-28)
+## Release candidate qualification — 0.3.0 (2026-10-31)
 
-Recorded designation: **Stage C qualified (renewal)** for both documented
-facades, bound to executable freeze
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
+The release candidate executable tree is frozen at
+`6093cc7aa0961194f096cbf2f92c3fc057671a34`. Both documented facades are
+**Stage C qualified (renewal)** on this exact executable SHA. PR #26 CI, the
+extended gate, package gate, and live security preflight all passed. Registry
+publication and tagged release workflow remain in progress.
 
-The advisory-patch pass has now been qualified in its own right, so the live
-Stage C binding names that freeze. This is a compatibility binding only: it
-authorizes no release. H3 stays experimental, HTTPX 1.0 stays gated on the
-upstream trigger, and Node maturation stays a separately registered future.
+H3 stays experimental, HTTPX 1.0 stays gated on the upstream trigger, and
+Node maturation stays a separately registered future.
 
 ### What was qualified
 
@@ -44,19 +44,21 @@ tree. Those two tests are the regression net. The pin, its rationale and that
 net are recorded in `docs/architecture/dependency-policy.md`, so a later
 `cargo update` does not silently reintroduce 1.54.x.
 
-The qualification ran on `b74cf891…`, which is the executable freeze itself.
-The renewal commit that rebinds the two compat profiles and this ledger lands
-on top of it and changes no executable input, so it does not invalidate the
-binding.
+The previous Stage C binding was `b74cf891…`; this renewal is bound to the
+candidate executable freeze `6093cc7a…`. The profile and ledger edits after
+that freeze are documentation only and do not change executable inputs.
 
 ### Qualification evidence
 
 | Gate | Result |
 |---|---|
-| Tier 1 | exit 0 — the H3 runner self-test, formatting, the lint-suppression guard self-test and its policy scan, adapter feature ownership, release version validation, clippy, **1772 Rust workspace tests** across 74 binaries, the stable public contract fixtures, the feature-isolated profile whole-suite compile, the native Python API manifest, the Python typing surface and typing fixture, **581 Python behaviour tests** and **134 HTTPX compatibility smoke tests**, and the downstream-artifact producer self-test. The Node JS surface skipped, which the policy defines as optional |
-| Tier 2 | exit 0 — the full pinned HTTPX compatibility suite **2073 passed / 0 failed**; the API manifest comparison at **74 symbols** for httpx 0.28.1 and **76 symbols** for httpx2 2.12.0, with 0 unexplained and 0 stale allowed differences; the Rust public-API oracle **passed in 8 profiles**; `cargo-semver-checks` 0.49.0 reported **"no semver update required"** against the planning baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`; the feature matrix and the 5 feature-gated combinations green; **5 MSRV checks** on the exact Rust 1.89.0 toolchain, all `--locked`; documentation and doctests; FFI; the resource regression check; the lifecycle and soak tests; the downstream behavioral-fixture portfolio **4/4 required packages** with `overall_pass: true`; lossless merge; Criterion micro-benchmarks. One optional check skipped: the Node JS surface |
-| Tier 3 | exit 0 — crate packaging, the release wheel build, the wheel smoke test, package content validation and the installed-wheel typing smoke |
-| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+| CI | exit 0 — PR #26 on the exact candidate SHA |
+| Tier 1 and Tier 2 | `./scripts/check.sh extended` exit 0. Python behavior suite **581 passed**; both full compatibility profiles, API oracle, five feature profiles, five MSRV checks, docs/doctests/link checks, and FFI checks passed. Lifecycle **49 passed**; soak **11 passed**; downstream behavioral fixtures **4/4 required packages** with `overall_pass: true`; lossless merge and all required gates passed. |
+| Resource monitor | Passed in the full extended run: **52.37 MB peak / 49.01 MB delta** against 100 MB peak / 64 MB delta limits. |
+| Tier 3 package gate | `./scripts/check.sh package` exit 0. Release wheel built; wheel smoke, content validation, and installed-wheel typing smoke passed. Local wheel follows the shell's x86_64/Rosetta architecture; the release workflow's macOS matrix targets Apple Silicon arm64 only. |
+| Live security preflight | `./scripts/check_security.sh` exit 0 — `advisories ok, bans ok, licenses ok, sources ok`. The duplicate `getrandom` notice is informational and permitted by policy. |
+| Criterion | Completed. Timings span unrelated groups and include large architecture-sensitive shifts; this host ran the x86_64/Rosetta toolchain on Apple Silicon. Since microbenchmarks have no failure threshold and the executable change is test-fixture-only, these numbers are not a comparable performance qualification. |
+| Optional Node JS surface | Skipped by policy because the native Node artifact was not built. |
 
 ### Host accommodations
 

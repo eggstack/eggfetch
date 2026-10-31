@@ -276,6 +276,8 @@ class URL:
         path = self._parts.path
         if not path:
             path = "/"
+        if self._parts.query:
+            path = f"{path}?{self._parts.query}"
         return path.encode("utf-8")
 
     @property
@@ -317,27 +319,73 @@ class URL:
             return QueryParams(self._parts.query)
         return QueryParams()
 
-    def copy_with(self, url=None, params=None):
-        if url is not None:
-            new = URL(url)
-        else:
-            new = URL(self)
+    def copy_with(self, url=None, params=None, **kwargs):
+        """Return a copy of this URL with selected components replaced.
 
+        ``raw_path`` follows HTTPX's public convention and includes the query
+        component when present. The legacy ``url`` and ``params`` arguments
+        remain supported for callers of the earlier facade implementation.
+        """
+        new = URL(url) if url is not None else URL(self)
         if params is not None:
-            if isinstance(params, QueryParams):
-                query_str = str(params)
-            elif isinstance(params, dict):
-                query_str = urllib.parse.urlencode(params)
-            else:
-                query_str = urllib.parse.urlencode(params)
-            parts = _urlsplit(str(new))
-            new_parts = urllib.parse.SplitResult(
-                parts.scheme, parts.netloc, parts.path, query_str, parts.fragment
-            )
-            new = object.__new__(URL)
-            new._parts = new_parts
-            new._raw = urllib.parse.urlunsplit(new_parts)
-        return new
+            kwargs["params"] = params
+
+        if "params" in kwargs:
+            query_params = QueryParams(kwargs.pop("params"))
+            query = str(query_params)
+            kwargs["query"] = query.encode("ascii") if query else None
+
+        if "raw_path" in kwargs:
+            raw_path = kwargs.pop("raw_path")
+            if not isinstance(raw_path, bytes):
+                raise TypeError("Argument 'raw_path' must be bytes")
+            raw_value = raw_path.decode("utf-8")
+            path, separator, query = raw_value.partition("?")
+            kwargs["path"] = path
+            kwargs["query"] = query.encode("ascii") if separator else None
+
+        allowed_types = {
+            "scheme": str,
+            "netloc": bytes,
+            "path": str,
+            "query": bytes,
+            "fragment": str,
+        }
+        unknown = set(kwargs) - set(allowed_types)
+        if unknown:
+            name = sorted(unknown)[0]
+            raise TypeError(f"{name!r} is an invalid keyword argument for URL()")
+
+        values = {
+            "scheme": new._parts.scheme,
+            "netloc": new._parts.netloc,
+            "path": new._parts.path,
+            "query": new._parts.query,
+            "fragment": new._parts.fragment,
+        }
+        for name, value in kwargs.items():
+            expected_type = allowed_types[name]
+            if value is not None and not isinstance(value, expected_type):
+                raise TypeError(
+                    f"Argument {name!r} must be {expected_type.__name__} "
+                    f"but got {type(value).__name__}"
+                )
+            if isinstance(value, bytes):
+                value = value.decode("ascii")
+            if value is not None:
+                values[name] = value
+
+        parts = urllib.parse.SplitResult(
+            values["scheme"],
+            values["netloc"],
+            values["path"],
+            values["query"],
+            values["fragment"],
+        )
+        result = object.__new__(URL)
+        result._parts = parts
+        result._raw = urllib.parse.urlunsplit(parts)
+        return result
 
     def copy_set_param(self, key: str, value) -> "URL":
         params = self.params

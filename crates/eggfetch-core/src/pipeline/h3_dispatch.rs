@@ -237,8 +237,9 @@ pub(super) async fn send_h3_route(
     // inside the connector as one budget shared across address
     // fallback attempts. `remaining_total` stays the outer
     // deadline enforced here and is never restarted per address.
-    // Read/write phases are enforced by the body wrappers at the
-    // documented boundaries. Boxed so the QUIC handshake state
+    // H3 currently enforces read on response-body progress only; unlike
+    // Hyper/UDS routes, its response-header wait remains total-bounded.
+    // Write is enforced by the request-body wrapper. Boxed so the QUIC handshake state
     // does not bloat the shared dispatch future.
     let h3_alt_clone = h3_alt.clone();
     let connect_budget = hop_timeout.connect;
@@ -340,6 +341,7 @@ pub(super) async fn send_h3_route(
                     remaining_total,
                     transport_hints,
                     failure_context,
+                    hop_timeout.read,
                 )
                 .await
             } else {

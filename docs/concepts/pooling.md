@@ -74,8 +74,9 @@ Native Rust callers can additionally set `PhysicalConnectionPolicy` to cap
 live established Hyper connections. That cap is independent of logical
 in-flight limits and includes idle pooled connections; HTTP/2 streams sharing
 one connection consume one physical permit. Use `TransportIoTimeout` for
-established read/write inactivity guardrails, not `Timeout.write` or
-`Timeout.read` request-body/response-body timing.
+established read/write inactivity guardrails, not `Timeout.write` request-body
+production or `Timeout.read` response-header/response-body timing (H3 applies
+read to response-body progress only).
 
 ## Pool Metrics
 

@@ -88,6 +88,7 @@ async fn test_connect_timeout() {
     let client = Client::builder()
         .timeout(Timeout {
             connect: Some(Duration::from_millis(100)),
+            read: Some(Duration::from_millis(10)),
             ..Timeout::default()
         })
         .build();
@@ -102,7 +103,10 @@ async fn test_connect_timeout() {
     // on OS behavior with TEST-NET addresses.
     match &result {
         Err(
-            Error::Timeout { .. }
+            Error::Timeout {
+                phase: TimeoutPhase::Connect,
+                ..
+            }
             | Error::Connect(_)
             | Error::HyperClient(_)
             | Error::Hyper(_)
@@ -427,6 +431,119 @@ async fn test_read_timeout_on_chunked_response_stall() {
     server.shutdown();
 }
 
+/// Read timeout also bounds the wait for response headers after the request
+/// body has been sent; it does not consume the connect or upload budget.
+#[tokio::test]
+async fn test_read_timeout_on_delayed_response_headers() {
+    let mut server = TestServer::start(&TestServerConfig {
+        response_delay_ms: 350,
+        ..Default::default()
+    });
+    let url = server.url();
+
+    let client = Client::builder()
+        .timeout(Timeout {
+            connect: Some(Duration::from_secs(1)),
+            write: Some(Duration::from_secs(1)),
+            read: Some(Duration::from_millis(80)),
+            ..Timeout::default()
+        })
+        .build();
+
+    let started = tokio::time::Instant::now();
+    let result = client.post(&url).unwrap().body("request").send().await;
+    assert!(
+        matches!(
+            result,
+            Err(Error::Timeout {
+                phase: TimeoutPhase::Read,
+                ..
+            })
+        ),
+        "expected a response-header read timeout, got: {result:?}"
+    );
+    assert!(started.elapsed() < Duration::from_millis(250));
+
+    server.shutdown();
+}
+
+#[tokio::test]
+async fn test_early_response_during_request_body_is_not_a_read_timeout() {
+    // This fixture responds as soon as it receives request headers instead of
+    // waiting for the streamed upload. The response must win while the body
+    // producer is still pending; upload time is not response-read time.
+    let mut server = TestServer::start(&TestServerConfig {
+        consume_body: false,
+        ..Default::default()
+    });
+    let url = server.url();
+    let client = Client::builder()
+        .timeout(Timeout {
+            write: Some(Duration::from_secs(1)),
+            read: Some(Duration::from_millis(50)),
+            ..Timeout::default()
+        })
+        .build();
+    let producer = futures_util::stream::unfold(0_u8, |state| async move {
+        match state {
+            0 => Some((Ok(Bytes::from_static(b"first")), 1)),
+            1 => {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                Some((Ok(Bytes::from_static(b"second")), 2))
+            }
+            _ => None,
+        }
+    });
+
+    let response = tokio::time::timeout(
+        Duration::from_millis(250),
+        client
+            .post(&url)
+            .unwrap()
+            .body(RequestBody::Stream {
+                stream: Box::pin(producer),
+                length: None,
+            })
+            .send(),
+    )
+    .await
+    .expect("an early response should not wait for the stalled upload")
+    .expect("early response should succeed");
+    assert_eq!(response.status(), 200);
+    server.shutdown();
+}
+
+#[tokio::test]
+async fn test_total_timeout_wins_over_response_header_read_timeout() {
+    let mut server = TestServer::start(&TestServerConfig {
+        response_delay_ms: 350,
+        ..Default::default()
+    });
+    let url = server.url();
+    let client = Client::builder()
+        .timeout(Timeout {
+            connect: Some(Duration::from_secs(1)),
+            write: Some(Duration::from_secs(1)),
+            read: Some(Duration::from_millis(80)),
+            total: Some(Duration::from_millis(80)),
+            ..Timeout::default()
+        })
+        .build();
+
+    let result = client.post(&url).unwrap().body("request").send().await;
+    assert!(
+        matches!(
+            result,
+            Err(Error::Timeout {
+                phase: TimeoutPhase::Total,
+                ..
+            })
+        ),
+        "expected total timeout to win, got: {result:?}"
+    );
+    server.shutdown();
+}
+
 /// Write timeout fires when a streaming request body's producer stalls
 /// between chunks.
 #[tokio::test]
@@ -440,6 +557,9 @@ async fn test_write_timeout_on_request_body_stall() {
     let client = Client::builder()
         .timeout(Timeout {
             write: Some(Duration::from_millis(100)),
+            // The first body producer delay is longer than this read budget.
+            // It must stay classified as request-body Write inactivity.
+            read: Some(Duration::from_millis(20)),
             ..Timeout::default()
         })
         .build();

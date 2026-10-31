@@ -279,7 +279,19 @@ async fn test_pool_isolation_uds_vs_tcp() {
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     let mut buf = [0u8; 4096];
-                    let _ = stream.read(&mut buf).unwrap_or(0);
+                    let mut request = Vec::new();
+                    while !request.windows(4).any(|window| window == b"\r\n\r\n")
+                        && request.len() < 16 * 1024
+                    {
+                        let read = stream.read(&mut buf).unwrap_or(0);
+                        if read == 0 {
+                            break;
+                        }
+                        request.extend_from_slice(&buf[..read]);
+                    }
+                    if !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                        continue;
+                    }
                     let response = b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\nUDS-OK!";
                     let _ = stream.write_all(response);
                     let _ = stream.flush();

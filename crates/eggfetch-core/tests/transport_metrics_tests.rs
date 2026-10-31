@@ -233,25 +233,35 @@ async fn direct_connector_failure_counts_exactly() {
 #[cfg(unix)]
 #[tokio::test]
 async fn uds_success_counts_exactly() {
-    use std::io::{Read, Write};
+    use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixListener;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
-    let path = "/tmp/eggfetch_metrics_uds.sock";
-    let _ = std::fs::remove_file(path);
+    let path = format!("/tmp/eggfetch_metrics_uds_{}.sock", std::process::id());
+    let _ = std::fs::remove_file(&path);
     let shutdown = Arc::new(AtomicBool::new(false));
     let sd = shutdown.clone();
     // Bind on the test thread so the socket exists before the client
     // connects (see network_stream_tests.rs UDS upgrade fixture).
-    let listener = UnixListener::bind(path).unwrap();
+    let listener = UnixListener::bind(&path).unwrap();
     listener.set_nonblocking(true).unwrap();
     let handle = std::thread::spawn(move || {
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
-                Ok((mut stream, _)) => {
-                    let mut buf = [0u8; 4096];
-                    let _ = stream.read(&mut buf).unwrap_or(0);
+                Ok((stream, _)) => {
+                    stream.set_nonblocking(false).unwrap();
+                    let mut reader = BufReader::new(stream);
+                    let mut line = Vec::new();
+                    loop {
+                        line.clear();
+                        match reader.read_until(b'\n', &mut line) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) if line == b"\r\n" || line == b"\n" => break,
+                            Ok(_) => {}
+                        }
+                    }
+                    let stream = reader.get_mut();
                     let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
                     let _ = stream.flush();
                 }
@@ -262,7 +272,7 @@ async fn uds_success_counts_exactly() {
             }
         }
     });
-    let client = Client::builder().uds_path(path.to_owned()).build();
+    let client = Client::builder().uds_path(path.clone()).build();
     let before = client.transport_metrics().snapshot();
     let mut resp = client
         .get("http://localhost/")

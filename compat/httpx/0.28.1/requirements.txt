@@ -6,7 +6,9 @@ pytest-asyncio>=0.21.0
 pytest-timeout>=2.0.0
 
 # Downstream behavioral fixtures
-anthropic>=0.25.0
+# Keep the SDK integration check aligned with AInews's pinned dependency. Newer
+# Anthropic SDK major versions use the separately versioned httpx2 client.
+anthropic==0.87.0
 httpx-sse>=0.4.0
 respx>=0.21.0
 starlette>=0.27.0

@@ -53,7 +53,7 @@ The request line, headers, and body are written to the transport. For streaming 
 
 ### 10. Response Reading
 
-Response status, headers, and body are read. The body starts as a live stream. Calling `bytes()` or `text()` buffers the entire body; calling `bytes_stream()` returns an iterator over chunks. The read timeout applies per-chunk, resetting on every arrival.
+Response status, headers, and body are read. The body starts as a live stream. Calling `bytes()` or `text()` buffers the entire body; calling `bytes_stream()` returns an iterator over chunks. On Hyper and UDS routes, the read timeout covers response headers after request-body completion and then applies per body chunk, resetting on every arrival. Experimental HTTP/3 currently applies it to body chunks only.
 
 ### 11. Decompression (if enabled)
 

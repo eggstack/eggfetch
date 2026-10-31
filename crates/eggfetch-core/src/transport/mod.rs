@@ -5,6 +5,10 @@
 //! HTTP/3 transport over QUIC is available when the `http3` feature is enabled.
 
 use bytes::Bytes;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::task::{Context, Poll};
 
 /// Private connection-establishment evidence shared by transport seams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,9 +29,104 @@ pub(crate) type Connector = hyper_rustls::HttpsConnector<
 pub(crate) type Connector =
     hyper_util::client::legacy::connect::HttpConnector<standard_resolver::DefaultResolver>;
 
-/// HTTP request body type expected by the hyper client.
-pub(crate) type HyperRequestBody =
-    http_body_util::combinators::UnsyncBoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
+/// HTTP request body type expected by Hyper.
+///
+/// The completion channel marks when Hyper has consumed the request body
+/// producer. The high-level response-header read timeout starts at this
+/// boundary, so connection setup and a stalled upload remain owned by their
+/// connect/write budgets.
+pub(crate) struct HyperRequestBody {
+    inner: Pin<
+        Box<
+            http_body_util::combinators::UnsyncBoxBody<
+                Bytes,
+                Box<dyn std::error::Error + Send + Sync>,
+            >,
+        >,
+    >,
+    completion_tx: Mutex<Option<tokio::sync::oneshot::Sender<tokio::time::Instant>>>,
+    completion_rx: Option<tokio::sync::oneshot::Receiver<tokio::time::Instant>>,
+    complete: AtomicBool,
+}
+
+impl HyperRequestBody {
+    pub(crate) fn new(
+        inner: http_body_util::combinators::UnsyncBoxBody<
+            Bytes,
+            Box<dyn std::error::Error + Send + Sync>,
+        >,
+    ) -> Self {
+        let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+        Self {
+            inner: Box::pin(inner),
+            completion_tx: Mutex::new(Some(completion_tx)),
+            completion_rx: Some(completion_rx),
+            complete: AtomicBool::new(false),
+        }
+    }
+
+    pub(crate) fn take_completion_receiver(
+        &mut self,
+    ) -> Option<tokio::sync::oneshot::Receiver<tokio::time::Instant>> {
+        self.completion_rx.take()
+    }
+
+    fn mark_complete(&self) {
+        if !self.complete.swap(true, Ordering::AcqRel) {
+            if let Ok(mut sender) = self.completion_tx.lock() {
+                if let Some(sender) = sender.take() {
+                    let _ = sender.send(tokio::time::Instant::now());
+                }
+            }
+        }
+    }
+}
+
+impl http_body::Body for HyperRequestBody {
+    type Data = Bytes;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = self.as_mut().get_mut();
+        match this.inner.as_mut().poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if this.inner.as_ref().get_ref().is_end_stream() {
+                    this.mark_complete();
+                }
+                Poll::Ready(Some(Ok(frame)))
+            }
+            Poll::Ready(None) => {
+                this.mark_complete();
+                Poll::Ready(None)
+            }
+            Poll::Ready(Some(Err(error))) => {
+                if let Ok(mut sender) = this.completion_tx.lock() {
+                    sender.take();
+                }
+                Poll::Ready(Some(Err(error)))
+            }
+            other => other,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        // Preserve the wrapped body's framing signal exactly. Hyper may
+        // inspect an empty body without polling it, so publish completion
+        // when that signal is observed as well.
+        let is_end_stream = self.inner.as_ref().get_ref().is_end_stream();
+        if is_end_stream {
+            self.mark_complete();
+        }
+        is_end_stream
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.as_ref().get_ref().size_hint()
+    }
+}
 
 #[cfg(feature = "advanced-routing")]
 pub(crate) type CustomConnector = custom_connector::CustomConnector;

@@ -229,16 +229,28 @@ impl Service<Uri> for UdsConnector {
 #[cfg(feature = "high-level-url")]
 pub(crate) async fn send_request(
     client: &crate::transport::TimeoutUdsClient,
-    request: http::Request<crate::transport::HyperRequestBody>,
+    mut request: http::Request<crate::transport::HyperRequestBody>,
     url: url::Url,
     trace: Option<&dyn crate::trace::TraceObserver>,
+    read_timeout: Option<std::time::Duration>,
+    remaining_total: Option<std::time::Duration>,
 ) -> Result<Response> {
     crate::transport::direct::emit_send_start(trace, request.method().as_str(), request.uri())?;
 
-    let result = client
-        .request(request)
-        .await
-        .map_err(crate::transport::direct::map_send_error);
+    let completion = request.body_mut().take_completion_receiver();
+    let send = async {
+        client
+            .request(request)
+            .await
+            .map_err(crate::transport::direct::map_send_error)
+    };
+    let result = crate::transport::direct::send_with_read_timeout(
+        send,
+        completion,
+        read_timeout,
+        remaining_total,
+    )
+    .await;
 
     match result {
         Ok(mut response) => {

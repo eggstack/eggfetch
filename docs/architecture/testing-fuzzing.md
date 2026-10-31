@@ -37,6 +37,9 @@ python -m pytest crates/eggfetch-python/tests/ -q --ignore=crates/eggfetch-pytho
 pip install -r compat/httpx/0.28.1/requirements.txt
 pip install -r compat/httpx2/2.12.0/requirements.txt
 EGGFETCH_COMPAT_REQUIRED=1 python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
+# Run the same suite against the independent HTTPX2 facade as well.
+EGGFETCH_COMPAT_PROFILE=httpx2/2.12.0 EGGFETCH_COMPAT_REQUIRED=1 \
+  python -m pytest crates/eggfetch-python/tests/compat/ -v --strict-markers
 ```
 
 ## Native Python interop coverage
@@ -141,7 +144,8 @@ retry, typing-surface, downstream-portfolio, and upstream-derived cases
 alongside the rows above); the table names the load-bearing suites rather
 than enumerating every file. Tier 1 runs only the smoke kernel
 (`test_imports.py`, `test_client.py`, `test_exceptions.py`,
-`test_corrective_kernel.py`); Tier 2 runs the full suite.
+`test_corrective_kernel.py`); Tier 2 runs the full suite separately for both
+versioned profiles: `httpx/0.28.1` and `httpx2/2.12.0`.
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. Tier 2 (`tier2_full_compat`) enforces this.
 

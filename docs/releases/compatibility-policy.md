@@ -28,11 +28,13 @@ release is available, so the published wheel matrix does not change.
 
 | Tier | Platforms | CI Coverage | PyPI Wheels |
 |------|-----------|-------------|-------------|
-| Tier 1 | Linux x86_64, macOS arm64, Windows x86_64 | Wheel build + smoke test in the PyPI release workflow | Native wheels, smoke-tested |
-| Tier 2 | macOS x86_64, Linux aarch64 | Not built or tested in CI | None (build from source) |
+| Tier 1 | Linux x86_64, Linux aarch64, macOS arm64, Windows x86_64 | Native wheel build + smoke test in the PyPI release workflow | Native wheels, smoke-tested |
+| Tier 2 | macOS x86_64 | Not built or tested in CI | None (build from source) |
 | Tier 3 | FreeBSD, other Unix variants | Community-supported, not tested | No wheels |
 
-Routine CI runs on a single Ubuntu runner; platform breadth comes from the PyPI wheel matrix, not from routine CI.
+Routine CI runs on a single Ubuntu x86_64 runner; platform breadth comes from
+the PyPI release wheel matrix, including native Linux aarch64 builds, not from
+routine CI.
 
 ## CLI Machine-Output Schema Versioning
 

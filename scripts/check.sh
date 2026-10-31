@@ -269,7 +269,7 @@ run_tier1() {
 
 # ── Tier 2: Extended validation ──────────────────────────────────────────
 tier2_full_compat() {
-    info "Full HTTPX compatibility suite"
+    info "Full versioned HTTPX compatibility suites"
     # Verify compatibility dependencies are installed
     if ! "$PYTHON_BIN" -c "import httpx; assert httpx.__version__ == '0.28.1'" 2>/dev/null; then
         cat >&2 <<'SETUP_GUIDE'
@@ -293,12 +293,17 @@ SETUP_GUIDE
             fail "Required Python module not found: $mod. Install into the active venv: python -m pip install -r compat/httpx/0.28.1/requirements.txt"
         fi
     done
-    (
-        cd "$REPO_ROOT"
-        EGGFETCH_COMPAT_REQUIRED=1 "$PYTHON_BIN" -m pytest \
-            "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
-            -v --strict-markers
-    )
+    local profile
+    for profile in "httpx/0.28.1" "httpx2/2.12.0"; do
+        info "Full compatibility profile: ${profile}"
+        (
+            cd "$REPO_ROOT"
+            EGGFETCH_COMPAT_PROFILE="$profile" EGGFETCH_COMPAT_REQUIRED=1 \
+                "$PYTHON_BIN" -m pytest \
+                "$REPO_ROOT/crates/eggfetch-python/tests/compat/" \
+                -v --strict-markers
+        )
+    done
 }
 
 tier2_api_manifest() {
@@ -346,16 +351,19 @@ tier2_rust_public_api() {
     info "Rust public API oracle"
     require_command cargo-public-api
     require_command cargo-semver-checks
+    "$PYTHON_BIN" "$SCRIPT_DIR/test_rust_public_api_oracle.py"
     "$PYTHON_BIN" "$SCRIPT_DIR/check_rust_public_api.py"
 }
 
 tier2_feature_tests() {
     info "Feature-gated tests"
-    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip
-    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli
-    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd
-    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate
-    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy
+    # Pool and resource fixtures depend on loopback scheduling. Keep the
+    # feature profiles serialized just like the all-features workspace suite.
+    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-gzip -- --test-threads=1
+    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-brotli -- --test-threads=1
+    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-zstd -- --test-threads=1
+    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,compression-deflate -- --test-threads=1
+    cargo test -p eggfetch-core --no-default-features --features http1,tls-rustls,proxy -- --test-threads=1
 }
 
 tier2_msrv() {

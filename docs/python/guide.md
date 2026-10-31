@@ -511,6 +511,9 @@ evidence live in `compat/httpx/0.28.1/profile.toml`,
 `compat/httpx2/2.12.0/profile.toml`, and
 `plans/httpx-parity-correction-status.md`.
 
+For SDKs that require a genuine `httpx.Client` while using EggFetch for
+network I/O, see the optional [HTTPX transport integration](httpx-transport.md).
+
 ## Error Handling
 
 eggfetch provides a rich exception hierarchy:

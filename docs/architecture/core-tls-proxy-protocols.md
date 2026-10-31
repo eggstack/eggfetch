@@ -830,8 +830,10 @@ All-address failure preserves the `Connect` (DNS) / `H3Connect`
 - `Timeout.write` applies to streamed request-body progress via the
   pre-transport wrapper; stalls surface as `Write`, never as H3 protocol
   errors, and never evict the shared connection.
-- `Timeout.read` applies to response-body progress at the documented
-  post-transport boundary (phase `Read`).
+- `Timeout.read` applies to response-header waiting after request-body
+  completion on Hyper/UDS routes, then response-body progress at the
+  documented post-transport boundary (phase `Read`). Experimental H3
+  currently applies it to response-body progress only.
 
 ### Idle Lifetime
 

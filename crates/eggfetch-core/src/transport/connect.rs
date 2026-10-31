@@ -280,6 +280,8 @@ pub(crate) async fn send_https_connect_request(
             transport_hints,
             client,
             ctx.failure_context,
+            ctx.read_timeout,
+            ctx.remaining_total,
         )
         .await;
     }
@@ -344,6 +346,8 @@ async fn send_https_connect_request_hyper(
     transport_hints: &crate::transport_hints::TransportHints,
     client: &crate::transport::TimeoutConnectClient,
     failure_context: Option<&crate::error::RequestFailureContext>,
+    read_timeout: Option<std::time::Duration>,
+    remaining_total: Option<std::time::Duration>,
 ) -> Result<Response> {
     let target = if let Some(target) = transport_hints.target.as_deref() {
         crate::pipeline::validate_target(target)?;
@@ -380,7 +384,9 @@ async fn send_https_connect_request_hyper(
         request = request.header(name, value);
     }
     let request = request
-        .body(body.into_http_body())
+        .body(crate::transport::HyperRequestBody::new(
+            body.into_http_body(),
+        ))
         .map_err(|error| Error::RequestBuild(error.to_string()))?;
     crate::transport::direct::send_request(
         client,
@@ -388,6 +394,8 @@ async fn send_https_connect_request_hyper(
         dest_url.clone(),
         transport_hints.trace.as_deref(),
         failure_context,
+        read_timeout,
+        remaining_total,
     )
     .await
 }

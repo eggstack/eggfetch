@@ -150,7 +150,11 @@ class TestH2OnlyEnforcement:
                 http1=False, http2=True, verify=cert_path,
                 trust_env=False, timeout=5,
             ) as client:
-                with pytest.raises(httpx.RemoteProtocolError):
+                # HTTPX/httpcore can classify the abrupt H1-only close as
+                # either a protocol error or a read error across supported
+                # Python/OpenSSL socket stacks. Both are transport failures;
+                # silent HTTP/1 downgrade is the behavior under test.
+                with pytest.raises(httpx.TransportError):
                     client.get(f"https://{host}:{port}/health")
         finally:
             httpd.shutdown()
