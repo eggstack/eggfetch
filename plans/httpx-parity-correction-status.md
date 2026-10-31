@@ -6,11 +6,14 @@ and referenced plans; counts below are only from the runs named here.
 
 ## Release candidate qualification — 0.3.0 (2026-10-31)
 
-The release candidate executable tree is frozen at
+The release executable tree is frozen at
 `6093cc7aa0961194f096cbf2f92c3fc057671a34`. Both documented facades are
 **Stage C qualified (renewal)** on this exact executable SHA. PR #26 CI, the
-extended gate, package gate, and live security preflight all passed. Registry
-publication and tagged release workflow remain in progress.
+extended gate, package gate, and live security preflight all passed. EggFetch
+0.3.0 is now published on all six crates.io packages and PyPI; the tagged
+workflow and GitHub Release completed successfully. Full release evidence and
+the one signing-process deviation are in
+`plans/closure/release-verification/008-0-3-0-publication.md`.
 
 H3 stays experimental, HTTPX 1.0 stays gated on the upstream trigger, and
 Node maturation stays a separately registered future.
