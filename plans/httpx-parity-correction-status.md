@@ -7,10 +7,10 @@ and referenced plans; counts below are only from the runs named here.
 ## Release candidate qualification — 0.3.0 (2026-10-31)
 
 The release candidate executable tree is frozen at
-`e22dcf57def5e791fe7e51e866663ead693be417`. PR #26 CI passed on this exact
-SHA. Final Tier 2, package, live security, registry publication and release
-checks are in progress; the profiles continue to point at the last completed
-Stage C binding until those gates finish.
+`6093cc7aa0961194f096cbf2f92c3fc057671a34`. Both documented facades are
+**Stage C qualified (renewal)** on this exact executable SHA. PR #26 CI, the
+extended gate, package gate, and live security preflight all passed. Registry
+publication and tagged release workflow remain in progress.
 
 H3 stays experimental, HTTPX 1.0 stays gated on the upstream trigger, and
 Node maturation stays a separately registered future.
@@ -44,20 +44,21 @@ tree. Those two tests are the regression net. The pin, its rationale and that
 net are recorded in `docs/architecture/dependency-policy.md`, so a later
 `cargo update` does not silently reintroduce 1.54.x.
 
-The last completed Stage C qualification remains bound to
-`b74cf891…` until the candidate gates below finish. This ledger update changes
-documentation only; candidate executable inputs remain frozen at `e22dcf57…`.
+The previous Stage C binding was `b74cf891…`; this renewal is bound to the
+candidate executable freeze `6093cc7a…`. The profile and ledger edits after
+that freeze are documentation only and do not change executable inputs.
 
-### Candidate evidence collected so far
+### Qualification evidence
 
 | Gate | Result |
 |---|---|
 | CI | exit 0 — PR #26 on the exact candidate SHA |
-| Rust, Python, API, feature, MSRV, docs, FFI checks | passed in the extended run; Python behavior suite **581 passed**, compatibility profiles and API oracle passed, 5 feature-gated suites and 5 MSRV checks passed |
-| Lifecycle, soak, downstream, merge | lifecycle tests passed; soak **11 passed**; downstream behavioral fixtures **4/4 required packages**, `overall_pass: true`; lossless merge **12 passed** |
-| Resource monitor | The full extended run once exceeded its 64 MiB delta limit (**81.22 MiB delta**, 84.58 MiB peak). A standalone rerun passed at **59.72 MiB delta**, 63.08 MiB peak. The full combined gate must be rerun before qualification is complete. |
-| Criterion benchmarks | Complete; timings were reported without a failing threshold. |
-| Package and live security gates | Pending. |
+| Tier 1 and Tier 2 | `./scripts/check.sh extended` exit 0. Python behavior suite **581 passed**; both full compatibility profiles, API oracle, five feature profiles, five MSRV checks, docs/doctests/link checks, and FFI checks passed. Lifecycle **49 passed**; soak **11 passed**; downstream behavioral fixtures **4/4 required packages** with `overall_pass: true`; lossless merge and all required gates passed. |
+| Resource monitor | Passed in the full extended run: **52.37 MB peak / 49.01 MB delta** against 100 MB peak / 64 MB delta limits. |
+| Tier 3 package gate | `./scripts/check.sh package` exit 0. Release wheel built; wheel smoke, content validation, and installed-wheel typing smoke passed. Local wheel follows the shell's x86_64/Rosetta architecture; the release workflow's macOS matrix targets Apple Silicon arm64 only. |
+| Live security preflight | `./scripts/check_security.sh` exit 0 — `advisories ok, bans ok, licenses ok, sources ok`. The duplicate `getrandom` notice is informational and permitted by policy. |
+| Criterion | Completed. Timings span unrelated groups and include large architecture-sensitive shifts; this host ran the x86_64/Rosetta toolchain on Apple Silicon. Since microbenchmarks have no failure threshold and the executable change is test-fixture-only, these numbers are not a comparable performance qualification. |
+| Optional Node JS surface | Skipped by policy because the native Node artifact was not built. |
 
 ### Host accommodations
 

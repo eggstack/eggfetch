@@ -1,23 +1,14 @@
 # Compatibility Stage Decision
 
 **Current decision — Stage C qualified on frozen executable SHA
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`**
+`6093cc7aa0961194f096cbf2f92c3fc057671a34` (2026-10-31)**
 
 The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
-documented httpx2 2.12.0 sibling surface are qualified on executable SHA
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f` (2026-10-28, renewal after the
-advisory-patch pass — two newly published RustSec advisories were cleared from
-the dependency tree, RUSTSEC-2026-0386 in `tokio` and RUSTSEC-2026-0391 in
-`zstd`. `tokio` is pinned to 1.53.3 rather than the newer 1.54.x because
-1.54.0 regresses the HTTP/1 client path, `zstd` was raised to 0.14.3 and
-`brotli` to 9.1.1, and both `Cargo.lock` and `fuzz/Cargo.lock` carry the same
-pins).
-The prior `822b7246bab79cca7c54c32aaf403c1366472c57` binding is historical,
-and the binding before it, `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, is
-historical too. The anchor binding `42a9c96db5b25354843bd83bd458c71757e95651`
-and every binding before it are historical as well. The full history of every
-binding, renewal and supersession is in
-`plans/httpx-parity-correction-status.md`.
+documented httpx2 2.12.0 sibling surface passed the full compatibility,
+extended, package, and live security gates on that frozen executable tree.
+The previous binding `b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f` and all
+earlier bindings are historical. The full binding history and qualification
+evidence are in `plans/httpx-parity-correction-status.md`.
 The `015a56d7...` binding (the coordinated 0.2.2 candidate) is historical. The
 `3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
 `bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical; earlier
