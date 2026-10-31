@@ -1833,7 +1833,7 @@ async fn hyper_connect_proxy_does_not_reuse_short_total_on_reconnect() {
 }
 
 #[tokio::test]
-async fn hyper_connect_proxy_reconnect_honors_short_current_total() {
+async fn hyper_connect_proxy_fresh_client_honors_short_total() {
     let ca = CertAuthority::new();
     let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
     let proxy_server = HttpProxyServer::start(HttpProxyConfig {
@@ -1870,6 +1870,20 @@ async fn hyper_connect_proxy_reconnect_honors_short_current_total() {
     proxy_server.close_tunnels();
     proxy_server.wait_for_closed_tunnels(1).await;
 
+    // The preceding test covers recovery through the same pooled client. Use
+    // a fresh client here so the short budget is measured against a known new
+    // CONNECT, rather than racing a stale TLS EOF from the closed tunnel.
+    drop(client);
+    let client = Client::builder()
+        .proxy(Proxy::all(&proxy_server.url()).unwrap())
+        .tls_config(
+            TlsConfig::builder()
+                .ca_certificate_pem(&ca.cert_pem())
+                .unwrap()
+                .build(),
+        )
+        .build();
+
     let error = client
         .get(&origin_url)
         .unwrap()
@@ -1882,13 +1896,16 @@ async fn hyper_connect_proxy_reconnect_honors_short_current_total() {
         .send()
         .await
         .expect_err("the current short total budget must cancel reconnect setup");
-    assert!(matches!(
-        error,
-        Error::Timeout {
-            phase: TimeoutPhase::Total,
-            ..
-        }
-    ));
+    assert!(
+        matches!(
+            &error,
+            Error::Timeout {
+                phase: TimeoutPhase::Total,
+                ..
+            }
+        ),
+        "expected the current request's total timeout, got: {error:?}"
+    );
     assert_eq!(proxy_server.connection_count(), 2);
     assert_eq!(proxy_server.connect_targets().len(), 2);
 
