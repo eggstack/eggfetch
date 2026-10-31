@@ -1777,7 +1777,7 @@ async fn hyper_connect_proxy_reuses_keep_alive_tunnel() {
 #[tokio::test]
 async fn hyper_connect_proxy_does_not_reuse_short_total_on_reconnect() {
     let ca = CertAuthority::new();
-    let origin = TlsTestServer::start(&ca, &["origin.invalid"]).await;
+    let origin = TlsTestServer::start(&ca, &["origin.invalid", "second-origin.invalid"]).await;
     let proxy_server = HttpProxyServer::start(HttpProxyConfig {
         connect_delay: Some((2, Duration::from_millis(700))),
         ..Default::default()
@@ -1793,6 +1793,7 @@ async fn hyper_connect_proxy_does_not_reuse_short_total_on_reconnect() {
         )
         .build();
     let origin_url = format!("https://origin.invalid:{}/", origin.port());
+    let second_origin_url = format!("https://second-origin.invalid:{}/", origin.port());
     let target = format!("127.0.0.1:{}", origin.port()).parse().unwrap();
 
     let mut first = client
@@ -1809,11 +1810,12 @@ async fn hyper_connect_proxy_does_not_reuse_short_total_on_reconnect() {
         .unwrap();
     assert_eq!(first.text().await.unwrap(), "OK");
 
-    proxy_server.close_tunnels();
-    proxy_server.wait_for_closed_tunnels(1).await;
-
     let mut second = client
-        .get(&origin_url)
+        // A different origin forces a fresh CONNECT through the same client
+        // without relying on a request racing a TLS tunnel that the fixture
+        // has just torn down. The proxy delays this second connection, so a
+        // deadline accidentally retained from the first request would fail.
+        .get(&second_origin_url)
         .unwrap()
         .proxy_target_addresses([target])
         .timeout(Timeout {
