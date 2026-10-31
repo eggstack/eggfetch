@@ -52,9 +52,11 @@ Qualification record:
 1. The `v0.3.0` tag is annotated but unsigned. No signing key associated with
    the authenticated GitHub account was available in the release environment;
    the locally present GPG keys belonged to unrelated identities. The tag was
-   not replaced or retargeted. Signed version tags remain the release-process
-   requirement for future releases; provision the repository's intended
-   signing identity before the next release.
+   not replaced or retargeted. The annotation inherited the environment's
+   configured tagger metadata, `CI Test <ci@test.example.com>`. Signed version
+   tags remain the release-process requirement for future releases; provision
+   the repository's intended signing identity and tagger configuration before
+   the next release.
 2. The first `publish=false` run on the pre-correction branch passed but did
    not execute the `publish=true` file-count guard. PR #27 corrected that guard
    from 19 to 25. The corrected build-only run and the final publishing run
