@@ -698,17 +698,14 @@ pub fn should_retry(
     error: Option<&Error>,
     status: Option<u16>,
 ) -> Option<RetryCause> {
-    // Check method eligibility
     if !policy.is_method_retryable(method) {
         return None;
     }
 
-    // Check body replayability
     if !body.is_replayable() {
         return None;
     }
 
-    // Check error-based retry
     if let Some(err) = error {
         if RetryPolicy::is_error_retryable(err) {
             return Some(RetryCause::TransportError(err.to_string()));
@@ -716,7 +713,6 @@ pub fn should_retry(
         return None;
     }
 
-    // Check status-based retry
     if let Some(status) = status {
         if policy.is_status_retryable(status) {
             return Some(RetryCause::Status(status));

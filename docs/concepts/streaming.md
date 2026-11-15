@@ -86,7 +86,7 @@ with client.stream("GET", url) as resp:
     # or: resp.iter_text(), resp.iter_lines(), resp.read(), resp.text
 ```
 
-Async variant (`stream()` is a coroutine — await it first):
+The async variant returns a coroutine from `stream()`. Await it first:
 
 ```python
 resp = await client.stream("GET", url)

@@ -116,23 +116,19 @@ pub fn parse_auth(auth: Option<&Bound<'_, PyAny>>) -> PyResult<AuthOverride> {
             if val.is_none() {
                 return Ok(AuthOverride::Inherit);
             }
-            // Check for the NOAUTH sentinel.
             if val.is_instance_of::<PyNoAuth>() {
                 return Ok(AuthOverride::Disable);
             }
-            // Check for BasicAuth
             if let Ok(basic) = val.extract::<PyBasicAuth>() {
                 return Ok(AuthOverride::Override(eggfetch_core::AuthScheme::Basic(
                     basic.inner,
                 )));
             }
-            // Check for BearerAuth
             if let Ok(bearer) = val.extract::<PyBearerAuth>() {
                 return Ok(AuthOverride::Override(eggfetch_core::AuthScheme::Bearer(
                     bearer.inner,
                 )));
             }
-            // Check for (username, password) tuple
             if let Ok(tuple) = val.cast::<PyTuple>() {
                 if tuple.len() == 2 {
                     let username: String = tuple.get_item(0)?.extract()?;

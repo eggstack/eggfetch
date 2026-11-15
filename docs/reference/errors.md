@@ -13,11 +13,11 @@ classification can use `RequestBuilder::send_detailed()` or
 `Client::send_detailed()`. These return a `RequestFailure` wrapper whose
 `error()`/`into_error()` expose the unchanged original `Error`, plus:
 
-- `network_failure_kind()` — `Dns`, `ConnectionRefused`, or generic `Connect`
+- `network_failure_kind()`: `Dns`, `ConnectionRefused`, or generic `Connect`
   only when the selected route supplies typed evidence;
-- `is_timeout()` — true for ordinary request-phase timeouts and established
+- `is_timeout()`: true for ordinary request-phase timeouts and established
   transport inactivity timeouts;
-- `timeout_phase()` — the existing `TimeoutPhase`, or `None` for transport-I/O
+- `timeout_phase()`: the existing `TimeoutPhase`, or `None` for transport-I/O
   inactivity and other error families.
 
 This surface never searches error text. The standard Hyper connector preserves
@@ -55,16 +55,16 @@ which returns `Option<TransportFailureKind>` (`Connect`, `Tls`, `Protocol`,
 The `Error` enum itself is unchanged and remains exhaustively matchable;
 `TransportFailureKind` is non-exhaustive from birth.
 
-- `Connect` — typed evidence proves connection establishment failed and no
+- `Connect`: typed evidence proves connection establishment failed and no
   more specific category applies (explicit `Connect`/`H3Connect`, dialer
   `Connection`, Hyper-util `is_connect`, or I/O refusal in the chain).
-- `Tls` — TLS configuration/handshake/verification or nested rustls
+- `Tls`: TLS configuration/handshake/verification or nested rustls
   processing failed. Takes precedence over generic connect.
-- `Protocol` — typed HTTP framing/protocol failure (explicit protocol
+- `Protocol`: typed HTTP framing/protocol failure (explicit protocol
   variants, Hyper parse/incomplete-message evidence, or premature-body/
   malformed-framing I/O observed at the `NativeResponseBody` polling
   boundary). A bare I/O `UnexpectedEof` outside that boundary stays unknown.
-- `Cancelled` — typed evidence says the transport/request was cancelled
+- `Cancelled`: typed evidence says the transport/request was cancelled
   before normal completion (Hyper `is_canceled`).
 
 The classifier is diagnostic only and does not imply retryability:

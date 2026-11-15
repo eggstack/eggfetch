@@ -34,11 +34,11 @@ A command-line binary that wraps eggfetch-core. It handles argument parsing, ter
 
 ### eggfetch-ffi
 
-C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque handle patterns and `extern "C"` functions. This crate uses `unsafe_code = "allow"` — one of two workspace exceptions (the other is `eggfetch-node`) for checked FFI/N-API boundaries.
+C ABI bindings exposing eggfetch-core over a stable C interface. Uses opaque handle patterns and `extern "C"` functions. This crate uses `unsafe_code = "allow"`, one of two workspace exceptions (the other is `eggfetch-node`) for checked FFI/N-API boundaries.
 
 ### eggfetch-node
 
-Node.js N-API binding prototype. Wraps the blocking `eggfetch-ffi` surface via napi-rs (`spawn_blocking`). Also uses `unsafe_code = "allow"`. Experimental only — not a supported binding.
+Node.js N-API binding prototype. Wraps the blocking `eggfetch-ffi` surface via napi-rs (`spawn_blocking`). Also uses `unsafe_code = "allow"`. It is experimental and not a supported binding.
 
 ### eggfetch-bench
 

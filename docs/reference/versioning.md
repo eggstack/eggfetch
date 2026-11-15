@@ -20,9 +20,9 @@ not coordinated with the public crates.
 eggfetch adheres to [Semantic Versioning 2.0.0](https://semver.org/). Given a
 version number `MAJOR.MINOR.PATCH`:
 
-- **MAJOR** — incompatible API changes
-- **MINOR** — new functionality in a backward-compatible manner
-- **PATCH** — backward-compatible bug fixes
+- **MAJOR**: incompatible API changes
+- **MINOR**: new functionality in a backward-compatible manner
+- **PATCH**: backward-compatible bug fixes
 
 ### Pre-1.0 stability expectations
 

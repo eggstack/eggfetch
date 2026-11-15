@@ -14,7 +14,7 @@ The escape hatches exist for local development and testing only:
 - **Python**: `Client(verify=False)` or `AsyncClient(verify=False)`
 - **Rust**: `TlsConfig::builder().danger_accept_invalid_certs(true)`
 
-When verification is disabled, the client skips certificate chain validation, hostname verification, and SNI checks. Any active network attacker can intercept traffic. The Python `Client.__repr__` prints a `[UNSAFE: TLS verification disabled]` warning when `verify=False` is set.
+When verification is disabled, the client skips certificate-chain and hostname verification. This setting does not disable SNI. An active network attacker can intercept traffic. The Python `Client.__repr__` prints a `[UNSAFE: TLS verification disabled]` warning when `verify=False` is set.
 
 ### Custom CA bundles
 
@@ -70,8 +70,8 @@ authenticated HTTPS (verified TLS per policy, never
 `danger_accept_invalid_certs`), no proxy route, and a hop-local origin.
 Only `https` origins learn and only `h3` protocol IDs are recorded;
 plaintext, proxy, and cross-origin inputs are rejected before parsing.
-The alternative affects only UDP routing — `Host`, cookies, auth, and
-TLS verification always use the logical origin, and QUIC SNI stays the
+The alternative affects only UDP routing. `Host`, cookies, auth, and TLS
+verification always use the logical origin, and QUIC SNI stays the
 origin host (never the alternative). Oversized/malformed values fail
 closed with bounded parsing. H3 fallback replays only pre-commit
 replayable bodies; one-shot bodies never duplicate and `Http3Only`
@@ -133,7 +133,7 @@ The cookie subsystem enforces standard security attributes:
 
 ## Client Certificates
 
-Client certificates (mTLS) are supported via `TlsConfig::builder().client_certificate_pem(cert_path, key_path)`. The private key is parsed and held in memory only; it is not logged or included in error messages beyond the key-label identifier. The CLI accepts client certificates via `--client-cert` and `--client-key` flags.
+Client certificates (mTLS) are supported with `TlsConfig::builder().client_cert_path(cert_path, key_path)?` in Rust. In the CLI, use `--cert <path>` and `--key <path>`. The private key is parsed and held in memory only; it is not logged or included in error messages beyond the key-label identifier.
 
 ## Dependency Audit
 

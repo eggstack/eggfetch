@@ -274,7 +274,6 @@ pub(crate) fn resolve_request_auth(
     client_auth: Option<&AuthScheme>,
     request_headers: &crate::headers::Headers,
 ) -> Result<Option<AuthScheme>> {
-    // Check for conflicting Authorization header + auth config.
     if request_headers.contains("authorization") {
         if request_auth.is_some() || client_auth.is_some() {
             return Err(Error::ConflictingAuth(
@@ -283,24 +282,21 @@ pub(crate) fn resolve_request_auth(
                     .into(),
             ));
         }
-        // User set a raw Authorization header with no auth config — that's fine.
+        // A raw Authorization header without configured auth is allowed.
         return Ok(None);
     }
 
-    // Request-level explicit auth overrides everything.
     if let Some(auth) = request_auth {
         return Ok(Some(auth.clone()));
     }
 
-    // Request-level auth disabled.
     if request_auth_disabled {
         return Ok(None);
     }
 
-    // Client-level auth.
     if let Some(auth) = client_auth {
         return Ok(Some(auth.clone()));
-    } // No auth.
+    }
     Ok(None)
 }
 

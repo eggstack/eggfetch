@@ -474,7 +474,7 @@ Enable HTTP/2 or HTTP/3 on the client:
 client = eggfetch.Client(http2=True)
 response = client.get("https://example.com")
 
-# HTTP/2 only — refuses to fall back to HTTP/1.1. Fails with a
+# HTTP/2 only. Refuses to fall back to HTTP/1.1 and fails with a
 # ConnectError / RequestError if the server does not negotiate h2.
 # Over cleartext TCP, sends the H2 client preface directly (h2c prior
 # knowledge) when the server accepts it.

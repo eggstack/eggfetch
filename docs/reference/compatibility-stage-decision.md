@@ -1,104 +1,21 @@
 # Compatibility Stage Decision
 
-**Current decision — Stage C qualified on frozen executable SHA
-`6093cc7aa0961194f096cbf2f92c3fc057671a34` (2026-10-31)**
+## Current decision
 
-The documented Python 3.10+ asyncio-supported HTTPX 0.28.1 surface and the
-documented httpx2 2.12.0 sibling surface passed the full compatibility,
-extended, package, and live security gates on that frozen executable tree.
-The previous binding `b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f` and all
-earlier bindings are historical. The full binding history and qualification
-evidence are in `plans/httpx-parity-correction-status.md`.
-The `015a56d7...` binding (the coordinated 0.2.2 candidate) is historical. The
-`3fc58fbd99ecb496749b833ee7b27436fe3b412d` (M007) and
-`bb6e07320f61736702e37f335fd1d48c7c3dfbaf` bindings are historical; earlier
-maintenance freezes remain historical implementation evidence. The final
-executable tree passed
-the full compatibility suite and repository validation tiers; earlier
-three-run evidence remains recorded on historical predecessor freezes.
-HTTP/3 remains separately experimental; its graduation blockers do not alter
-either compatibility claim. See
-`compat/httpx/0.28.1/profile.toml`, `compat/httpx2/2.12.0/profile.toml`, and
-`plans/httpx-parity-correction-status.md`.
+The documented asyncio-supported public surfaces for `eggfetch.compat.httpx`
+(HTTPX 0.28.1) and `eggfetch.compat.httpx2` (HTTPX2 2.12.0) passed Stage C
+qualification on frozen executable SHA
+`6093cc7aa0961194f096cbf2f92c3fc057671a34` (2026-10-31). The full
+compatibility, extended, package, and live security gates passed on that
+freeze. Earlier bindings are historical. Current evidence and binding history
+are in `plans/httpx-parity-correction-status.md`; the exact facade scopes are
+in `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.
 
-**Historical corrective closure — Verification, Substitution, and Lifecycle Pass (superseded)**
+Stage C is not an unrestricted HTTPX replacement. eggfetch does not provide
+the top-level `httpx` distribution, Trio or AnyIO support, Python 3.8 or 3.9
+support, or private HTTPX modules. SSL context state that cannot be represented
+safely by the native TLS backend is rejected. HTTP/3 remains experimental and
+is not part of this compatibility decision.
 
-> The sections below record the 2026-07-24 Stage C *candidate* evaluation and
-> its remaining blockers. They are historical: all listed blockers were closed
-> by the corrective passes now bound to the current Stage C qualification
-> above. Do not treat the blocker list as current work.
-
-> **Correction Notice**: This document previously claimed "Stage C released" based on
-> incomplete evidence. The corrective pass
-> (`plans/httpx-drop-in-verification-substitution-and-lifecycle-corrective-closure.md`)
-> identified defects in API oracle verification, controlled substitution, downstream
-> execution, auth flows, streaming lifecycle, data preservation, timeout handling,
-> Python matrix coverage, exact-SHA qualification, and evidence generation. The
-> compatibility claim has been downgraded to **Stage C candidate** pending completion
-> of all acceptance criteria in the corrective closure plan.
-
-| Field | Value |
-|-------|-------|
-| Date | 2026-07-24 |
-| Stage Evaluated | Stage C (asyncio drop-in) |
-| Decision | **Stage C candidate (historical; superseded)** |
-| Evidence | Corrective closure plan, compat tests, API manifest comparison, typed difference records, schema v3 identity, lossless merge, native lifecycle fixtures |
-
-## Decision Rationale
-
-Stage C candidate status is supported by the following evidence:
-
-1. **API Surface**: The httpx 0.28.1 compatibility layer provides full Client/AsyncClient constructors, all HTTP methods, request/response objects, streaming, and transport abstraction.
-2. **Typed Difference Records**: The API oracle (`scripts/compare_httpx_api_manifest.py --validate`) produces structured difference records. `allowed-differences.toml` gates CI enforcement with exact difference matching.
-3. **API Surface Coverage**: Direct tests verify Client/AsyncClient constructors, all HTTP methods, request/response objects, streaming, and transport abstraction.
-4. **Lossless Merge Semantics**: Header and query parameter merge preserves order and duplicates across all transport paths (`test_merge_lossless.py`).
-5. **Separate Sync/Async Auth Drivers**: The `Auth` base class dispatches to independent sync and async implementations, eliminating shared mutable state.
-6. **Behavioral Downstream Fixtures**: `compat/downstream/behavioral_fixtures/` exercises real consumer patterns with pinned sources and enforced minimum counts.
-7. **Native Lifecycle Proof Fixtures**: Timeout classification (`test_native_timeout_classification.py`), soak (`test_soak.py`), and lifecycle tests validate engine behavior under load.
-8. **Direct Test Execution**: Compatibility behavior is validated through direct test execution without qualification artifacts.
-
-### Remaining blockers for Stage C released
-
-The following must be resolved before restoring a release claim:
-
-1. API oracle must fail-closed in CI (currently informational)
-2. Controlled replacement artifact (`httpx` wheel) must satisfy downstream `Requires-Dist: httpx`
-3. Downstream suites must use pinned sources, exact commands, and enforced minimum counts
-4. Auth must work through all transport paths (mounted, custom, mock, ASGI, WSGI)
-5. Async streaming context must await `aclose()` instead of calling sync `close()`
-6. Repeated query parameters and duplicate headers must survive all transport paths
-7. Explicit per-request `timeout=None` must be distinguishable from client default
-8. Python 3.10 required compatibility suite must run without skips
-9. Direct compatibility tests must pass against pinned HTTPX version
-10. Behavioral correctness must be validated through direct test execution
-
-## Blockers to Stage D
-
-Stage D (full supported drop-in) requires:
-
-1. **Trio/AnyIO Backend**: eggfetch uses asyncio only (tokio-based). Trio support is architecturally deferred.
-2. **Top-level httpx Distribution**: A separate distribution providing `import httpx` is not yet built.
-3. **Dependency Resolution**: A differently-named package cannot satisfy `httpx>=0.27` dependencies without a shim distribution.
-
-## Allowed Differences
-
-The following differences are reviewed and accepted:
-
-| ID | Category | Impact |
-|----|----------|--------|
-| REDIRECT-DEFAULT-001 | intentional | Security-first default |
-| TIMEOUT-TUPLE-001 | intentional | Compatible API |
-| EXCEPTION-NAMES-001 | intentional | Different base name |
-| RAISE-FOR-STATUS-001 | intentional | Compatible behavior |
-| PROXY-ENV-001 | resolved | Implemented in Phase 1 |
-| EVENT-HOOKS-001 | resolved | Implemented in Phase 4 |
-| TRANSPORTS-001 | resolved | Implemented in Phase 4 |
-| MOUNTS-001 | resolved | Implemented in Phase 4 |
-| TRIO-ANYIO-001 | not-applicable | Architectural difference |
-
-## Recommendations
-
-1. Proceed with Stage C documentation and migration guide updates.
-2. Begin Stage D planning for top-level distribution feasibility study.
-3. Continue expanding downstream portfolio with real-world SDK integration tests.
-4. Monitor upstream httpx releases for public API changes.
+See [the compatibility matrix](compatibility.md) for supported features and
+known differences.

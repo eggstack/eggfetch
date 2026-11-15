@@ -106,8 +106,8 @@ and parity case `H2-009`.
 The engine jar and the HTTPX 0.28.1 facade jar consume the same `Set-Cookie`
 stream, so ADR-0009 rule 3 requires them to reach the same accept/reject
 verdict and to contribute the same `Cookie` header. The facade jar is
-`http.cookiejar` — the jar HTTPX 0.28.1 itself uses — so its verdict is the
-HTTPX-defined one and is unchanged. The engine was aligned to it.
+`http.cookiejar`, the jar used by HTTPX 0.28.1, defines the facade's
+verdict, which remains unchanged. The engine was aligned to it.
 
 Before the alignment the engine rejected every `Set-Cookie` whose explicit
 `Domain` attribute named an IP address, so `Domain=127.0.0.1` served by
@@ -267,7 +267,7 @@ residuals:
 - Eggfetch retains the whole QUIC/TLS stack: the seam carries datagrams only,
   and SNI and certificate validation stay bound to the logical origin even when
   the route's physical peer is a relay. No MASQUE/CONNECT-UDP protocol is
-  implemented — a future provider may implement this generic contract without
+  implemented. A future provider may implement this generic contract without
   moving MASQUE policy into eggfetch.
 - `H3RouteKind` still describes discovery (`Explicit`/`AltSvc`), not physical
   routing, so no public enum changed. Route identity is observable only through

@@ -309,11 +309,9 @@ fn build_redirect_request_with_method(
 
     check_https_downgrade(original.url(), &new_url, downgrade)?;
 
-    // Build new headers.
     let mut new_headers = original.headers().clone();
     strip_headers_for_redirect(&mut new_headers, original.url(), &new_url, drop_body);
 
-    // Handle body for the redirect.
     let new_body = if drop_body {
         RequestBody::Empty
     } else {
@@ -387,7 +385,6 @@ fn strip_headers_for_redirect(
         }
     }
 
-    // Remove body-specific headers when body is dropped.
     if drop_body {
         for name in BODY_HEADERS {
             headers.remove(name);

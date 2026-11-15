@@ -218,7 +218,6 @@ impl PyResponse {
         // cloning every header/value pair.
         let headers = PyHeaders::from_header_map(std::mem::take(response.headers_mut()));
 
-        // Extract network stream from core response if present.
         // For buffered responses, the connection has been returned to the
         // pool, so the network_stream is only meaningful for upgrade
         // responses or streaming responses.

@@ -51,7 +51,7 @@ The primary decompression path wraps the response body stream in a decoder chain
   and skips empty source chunks without early EOF. HTTP/1.1 chunked framing is
   removed by Hyper before decoding, so chunked vs `Content-Length` delivery of
   identical bytes decodes identically. Decoded stream chunk sizes are not a
-  stable contract — compare ordered bytes, not chunk counts.
+  stable contract. Compare ordered bytes, not chunk counts.
 
 The decoder chain is built lazily: the first poll triggers decoding of the first chunk.
 

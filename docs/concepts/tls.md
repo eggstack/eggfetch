@@ -5,8 +5,8 @@ eggfetch uses rustls for TLS, providing memory-safe HTTPS with configurable trus
 ## Crypto Providers
 
 Rustls crypto selection is local to each `TlsConfig`. A native Rust application
-can construct any compatible `Arc<rustls::crypto::CryptoProvider>`—including a
-provider supplied by a separately selected Rustls feature—and pass it through
+can construct any compatible `Arc<rustls::crypto::CryptoProvider>`, including a
+provider supplied by a separately selected Rustls feature, and pass it through
 `TlsConfigBuilder::crypto_provider`:
 
 ```rust

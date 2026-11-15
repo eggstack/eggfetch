@@ -15,12 +15,12 @@ and any language that can call C-compatible functions.
 
 All complex types are represented as opaque pointers:
 
-- `ClientHandle` — thread-safe, may be shared across threads
-- `ClientBuilderHandle` — single-thread, consumed by build or freed
-- `RequestHandle` — single-thread, consumed by `send()` or freed
-- `ResponseHandle` — single-thread, freed after body is read
-- `StreamingResponseHandle` — single-thread, body read via `stream_next`
-- `ErrorHandle` — single-thread, freed after inspection
+- `ClientHandle`: thread-safe, may be shared across threads
+- `ClientBuilderHandle`: single-thread, consumed by build or freed
+- `RequestHandle`: single-thread, consumed by `send()` or freed
+- `ResponseHandle`: single-thread, freed after body is read
+- `StreamingResponseHandle`: single-thread, body read via `stream_next`
+- `ErrorHandle`: single-thread, freed after inspection
 
 ### Blocking API
 
@@ -109,7 +109,7 @@ Errors are returned via output parameters:
 eggfetch_error *err = NULL;
 eggfetch_response *resp = eggfetch_client_send(client, req, &err);
 if (resp == NULL) {
-    // err is set — inspect with eggfetch_error_kind/message
+    // err is set: inspect with eggfetch_error_kind/message
     char *kind = eggfetch_error_kind(err);
     char *msg = eggfetch_error_message(err);
     // ... use kind and msg ...
@@ -126,7 +126,7 @@ Cargo features:
 
 ```toml
 [dependencies]
-eggfetch-ffi = { version = "0.2", features = ["http2", "cookies", "proxy"] }
+eggfetch-ffi = { version = "0.3", features = ["http2", "cookies", "proxy"] }
 ```
 
 ## Node.js Binding

@@ -1,102 +1,26 @@
 # eggfetch Planning System
 
-> **Current execution gate:** eight milestones were implemented and are
-> **closed** on 2026-10-22 — TLS M005,
-> python-httpx-compat M004/M005, core M008/M009/M010, and
-> release-verification M006/M007. They were executed as one coordinated
-> program and committed as the executable freeze
-> `d6c41adf4cf8f62ef990cccedf2f86512858fa0b`. Each changes executable inputs,
-> so each invalidated the live Stage C binding; the rebinding and the
-> frozen-SHA Tier 1/2/3 run have since been completed on
-> `26fa619299fb8d447f25cbcb5eb713a1f537a30c`, where Tier 1, Tier 2, Tier 3
-> and the live security preflight are green, so the binding then named that
-> SHA. It was renewed on 2026-10-23 at the lint-justification cleanup freeze
-> `822b7246bab79cca7c54c32aaf403c1366472c57`; that binding was invalidated
-> on 2026-10-27 by the Batch A decision-closure freeze
-> `5519ad996857f7879668190f92e3b06419ec98ab`, and that binding was superseded
-> on 2026-10-28 by the advisory-patch freeze
-> `b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`, where Tier 1, Tier 2, Tier 3 and
-> the live security preflight are green. **No registered milestone remains open** — the four previously
-> queued milestones have all been executed, and the next unit of work needs its
-> own plan. The publication decisions remain with the maintainer: the rebinding
-> is a compatibility binding and authorizes no release.
-> ADR-0008 and ADR-0009 were accepted on 2026-10-22.
-> Core-transport M007, release-verification M005, and TLS/protocol M004 remain
-> closed and published; coordinated **0.2.2** remains the current public
-> version. TLS/protocol M004 is closed on
-> `42a9c96db5b25354843bd83bd458c71757e95651` with an **unconditional** exact-SHA
-> Stage C binding. It was a Rust-only feature handoff, not an H3-graduation or
-> release task, and it authorized no publication. H3 stays experimental and H3
-> graduation, HTTPX 1.0, and Node maturation remain separate gated futures.
-> The execution order and the pending actions are recorded in
-> `plans/registry.md`.
-> **Live status for agents:** the exact-SHA Stage C binding is `plans/httpx-parity-correction-status.md` (+ `compat/*/profile.toml`). Completed sections and legacy plan files are historical records, not current gates (verification-policy principle 9). Validation tiers: `.skills/verification-qualification.md`.
+> **Current status:** No registered implementation milestone remains open. The
+> current release, roadmap statuses, and maintainer actions are tracked in
+> `plans/registry.md`. The live Stage C binding is recorded in
+> `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`. Closed
+> plans are historical records, not active gates. Validation tiers are in
+> `.skills/verification-qualification.md`.
 
 ## Pending maintainer actions
 
 These stay visible until they are done. The same list, with owners, is in
 `plans/registry.md`.
 
-1. **Decide CLI adapter ownership** — whether the CLI gets its own subsystem
-   roadmap or is admitted under an existing one. The CLI's `run()` — 586 lines
-   at `crates/eggfetch-cli/src/main.rs:28-613`, 509 of them non-blank and
-   non-comment — is deferred until this is decided.
-2. **Decide whether the IPv6 pool-key divergence gets its own milestone** —
-   the high-level path keys `http://[::1]:8080` as `[::1]` and the native path
-   as `::1`, so the same IPv6 endpoint gets two different pool keys depending
-   on the entry path, and the per-origin concurrency limit is not shared
-   between the two entry paths. It is recorded in
-   `docs/residual-differences.md`; closing it changes pool keying and needs
-   its own plan.
+1. **Decide CLI adapter ownership:** choose whether CLI work gets its own
+   roadmap or belongs to an existing subsystem before registering more work.
+2. **Decide whether the IPv6 pool-key divergence needs its own milestone:**
+   the high-level and native paths produce different keys for the same IPv6
+   origin. Resolving it changes pool keying and needs a separate plan; see
+   `docs/residual-differences.md`.
 
-Two actions remain open. They carry the numbers they held before the
-2026-10-27 pass, which resolved the four actions that were open alongside
-them.
-
-**Resolved 2026-10-27 — the Batch A decision-closure pass closed four
-actions.** The FFI now publishes a strict HTTP/3 policy value (ABI value 4 is
-`Http3Only`); the `tracing` feature is **enabled in an adapter with a test**
-rather than retired, because the native-root trust-store fallback it reports
-is otherwise silent; the CLI's `--http2` negotiation-success path is asserted
-end to end against a real HTTP/2 ALPN fixture; and the downstream artifact
-manifest now has an in-repository producer,
-`scripts/build_downstream_artifact.py`. The pass was committed as the
-executable freeze `5519ad996857f7879668190f92e3b06419ec98ab` and invalidated
-the Stage C binding at `822b7246…`.
-
-**Renewed 2026-10-28 — the advisory-patch freeze is the live binding.** The
-live security preflight at the Batch A freeze failed on two newly published
-RustSec advisories, RUSTSEC-2026-0386 in `tokio` and RUSTSEC-2026-0391 in
-`zstd`, so the tree was patched and re-frozen as
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`: `tokio` is pinned to 1.53.3
-rather than the newer 1.54.x because 1.54.0 regresses the HTTP/1 client path,
-`zstd` was raised to 0.14.3 and `brotli` to 9.1.1, and both `Cargo.lock` and
-`fuzz/Cargo.lock` carry the same pins. Tier 1, Tier 2, Tier 3 and the live
-security preflight are all green at that freeze, and the binding names it. The
-pin and the regression net that holds it are recorded in
-`docs/architecture/dependency-policy.md`.
-
-**Resolved 2026-10-27 — the former item 7 needs no HTTPX-ledger entry.** The
-SHA `639bf186a71c054e11278d1b160ffe7a6f172c02` is an HTTP/3 qualification
-binding; its canonical home is the H3 ledger
-(`plans/http3-public-origin-spot-check-ledger.json:5`), the HTTPX ledger
-cross-references it and states that it does not belong in the HTTPX binding
-history (`plans/httpx-parity-correction-status.md:3068-3077`), and its
-provenance is recorded in `docs/architecture/overview.md:266`. Recording it in
-the HTTPX binding history would re-introduce the categorisation error M007
-corrected.
-
-ADR-0008 and ADR-0009 were accepted on 2026-10-22 and are no longer pending.
-The former item 6 — the fate of four stale lint suppressions and two dead
-items — was resolved on 2026-10-23 by the lint-justification cleanup pass:
-every one of the six was a narrowing, and every `allow`/`expect` attribute in
-`crates/*/src` now carries a `reason =`. That pass changed executable inputs
-and therefore invalidated the Stage C binding at `26fa6192…`; it was qualified
-in its own right the same day, and the binding it established at
-`822b7246bab79cca7c54c32aaf403c1366472c57` was itself invalidated by the
-2026-10-27 Batch A pass and is now historical; the live binding is the
-2026-10-28 advisory-patch freeze
-`b74cf8919fb691e6bbbd3b6f7b90be29206b2e0f`.
+The current list above is the short view for maintainers. `plans/registry.md`
+tracks current status and resolution history.
 
 This directory separates durable architectural direction from temporary
 execution planning. Since the 2026-09-25 migration it follows the

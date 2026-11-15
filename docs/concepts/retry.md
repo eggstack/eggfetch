@@ -54,7 +54,7 @@ Use `.retry_status(code)` to add custom codes. The first call replaces the defau
 
 ## Body Replayability
 
-A request is only retried if the body is replayable. `Empty` and `Bytes` bodies are replayable. `Stream` bodies are not, unless a replay factory is provided (not yet implemented). If the body is not replayable, the retry is skipped.
+A request is retried only when its body is replayable. `Empty` and `Bytes` bodies can be replayed. `Stream` bodies are one-shot and cannot be retried. If the body is not replayable, the retry is skipped.
 
 ## Exponential Backoff with Jitter
 

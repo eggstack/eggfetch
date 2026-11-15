@@ -50,7 +50,7 @@ Version numbers follow [Semantic Versioning](https://semver.org/). Until 1.0, mi
 
 ## crates.io Publication
 
-Publish manually in dependency order. Before publishing a dependent crate, verify the preceding crate/version is visible to crates.io resolution. Do not encode fixed sleeps as policy — inspect actual registry availability.
+Publish manually in dependency order. Before publishing a dependent crate, verify the preceding crate/version is visible to crates.io resolution. Do not encode fixed sleeps as policy; inspect actual registry availability.
 
 ```sh
 cargo publish -p eggfetch-http-connect

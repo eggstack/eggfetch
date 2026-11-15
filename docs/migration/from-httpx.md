@@ -104,7 +104,7 @@ eggfetch streaming responses provide `iter_bytes()`, `iter_text()`,
 iteration is available in both the native API and the HTTPX compatibility
 facade, but the two differ: the native streaming path yields decoded bytes
 by default (automatic decompression), while the facade preserves HTTPX raw
-semantics — a streaming response selects either exact encoded raw bytes or
+semantics: a streaming response selects either exact encoded raw bytes or
 the decoded path on first body consumption (see
 `docs/reference/compatibility.md` and `docs/residual-differences.md`). Use
 `iter_bytes()` for decoded chunks; consult the compatibility reference when

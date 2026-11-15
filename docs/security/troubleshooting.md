@@ -78,7 +78,7 @@ The redirect chain exceeds `max_redirects` (default: 20). This usually means a r
 
 **Error**: `invalid proxy URL: ...`
 
-The proxy URL scheme is not `http://` or `http+CONNECT://`. Ensure the proxy URL uses a supported scheme.
+The proxy URL must use one of these schemes: `http://`, `https://`, `socks5://`, or `socks5h://`.
 
 ### Proxy authentication required
 
@@ -87,7 +87,10 @@ The proxy URL scheme is not `http://` or `http+CONNECT://`. Ensure the proxy URL
 The proxy requires credentials. Provide them in the proxy URL or via `ProxyAuth`:
 
 ```rust
-Proxy::http("http://proxy:8080")?.auth("user", "password")
+use eggfetch_core::{Proxy, ProxyAuth};
+
+let auth = ProxyAuth::basic("user", "password")?;
+let proxy = Proxy::http("http://proxy:8080")?.auth(auth);
 ```
 
 ### NO_PROXY bypass

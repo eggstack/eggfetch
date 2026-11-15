@@ -30,7 +30,7 @@ cargo install eggfetch-cli                  # CLI
 
 ```toml
 [dependencies]
-eggfetch-core = "0.2"                       # Rust (MSRV 1.89)
+eggfetch-core = "0.3"                       # Rust (MSRV 1.89)
 ```
 
 See [installation](docs/getting-started/installation.md) for wheels, feature recipes, and platform support.
@@ -104,15 +104,15 @@ eggfetch --output file.bin https://httpbin.org/stream-bytes/10000
 
 Runnable starting points (each takes an optional base URL, default `https://httpbin.org`):
 
-- `cargo run -p eggfetch-core --example quickstart` — configured GET/POST, timeout override, auth, streaming
-- `python examples/python_sync.py` — sync client, JSON POST, streaming download
-- `python examples/python_async.py` — async client with concurrent requests
+- `cargo run -p eggfetch-core --example quickstart`: configured GET/POST, timeout override, auth, streaming
+- `python examples/python_sync.py`: sync client, JSON POST, streaming download
+- `python examples/python_async.py`: async client with concurrent requests
 
 More patterns are in [`docs/cookbook/`](docs/cookbook/).
 
 ## Documentation
 
-- [Getting started](docs/getting-started/quickstart.md) — installation and first requests
+- [Getting started](docs/getting-started/quickstart.md): installation and first requests
 - [Rust guide](docs/rust/guide.md) · [Python guide](docs/python/guide.md) · [CLI guide](docs/cli/guide.md)
 - [Migration](docs/migration/from-httpx.md) from HTTPX/requests · [Compatibility](docs/reference/compatibility.md) · [C ABI / FFI](docs/ffi/)
 
