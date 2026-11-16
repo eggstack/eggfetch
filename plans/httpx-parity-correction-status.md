@@ -4,6 +4,55 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Stage C renewed for M006–M010 H3 harness + Quinn RustSec patch (2026-11-16)
+
+Both documented facades are **Stage C qualified (renewal)** on executable
+freeze `6b571028767dde4b0a78f36e6ecef525c6d68482`. The preceding live binding
+`6093cc7aa0961194f096cbf2f92c3fc057671a34` is historical because executable
+inputs changed: M006–M010 added H3 qualification harnesses (corpus, impairment
+coordinator, soak/platform table, upstream-risk ledger, graduation decision
+with experimental retained) on `8d599e8402929f5388ed9e1d970833d8f942a52b`, and
+the live security preflight then failed on newly published Quinn advisories, so
+the tree was re-frozen at `6b571028…` with quinn **0.11.12**, quinn-proto
+**0.11.19**, and quinn-udp **0.5.16** (RUSTSEC-2026-0523 / 0524 / 0538). The
+M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged. Profile and
+ledger edits after this freeze are documentation only.
+
+H3 stays experimental. This renewal is not an H3 graduation claim.
+
+### Qualification evidence
+
+| Gate | Result |
+|---|---|
+| Tier 1 | `./scripts/check.sh` exit 0 on the freeze (Python behavior **581 passed**; H3 focused suites green after the Quinn bump). |
+| Tier 2 | Full extended gates exit 0 under Rosetta x86_64 / Python 3.14.2. Both compatibility profiles **2082 passed, 1 skipped** (optional `google.genai` construction fixture left uninstalled: current SDK uses `SyncHttpx2Client`, so the `httpx.Client` isinstance check fails; skip-audit text prints FAIL but does not change pytest's exit status). API oracle clean for both facades (0 unexplained). Lifecycle **49 passed**; soak **11 passed**; downstream **4/4 required packages** with `overall_pass: true`. |
+| Resource monitor | **50.05 MB peak / 46.74 MB delta** against 100 MB peak / 64 MB delta limits. |
+| Tier 3 package gate | `./scripts/check.sh package` exit 0. Release wheel built; wheel smoke, content validation, and installed-wheel typing smoke passed (local wheel is x86_64/Rosetta). |
+| Live security preflight | `./scripts/check_security.sh` exit 0 — `advisories ok, bans ok, licenses ok, sources ok`. The `rustix` unsound warning (RUSTSEC-2026-0486) is allowed/informational. |
+| Criterion | Completed. 8 "regressed", 4 "improved", 26 "no change" among compared measurements on this shared host; no failure threshold. |
+
+### Host accommodations
+
+- Qualification used `.venv-qual` on healthy Python **3.14.2** x86_64. The
+  project `.venv`'s python.org 3.11.9 base lacks `int.is_integer`, which
+  falsely fails the HTTPX `codes` API-oracle comparison against the frozen
+  reference manifest.
+- Shell and build are Rosetta `x86_64` (`RUSTUP_TOOLCHAIN=stable-x86_64-apple-darwin`,
+  `CARGO_BUILD_JOBS=6`, `CARGO_INCREMENTAL=0`). `CARGO_TARGET_DIR` must be
+  unset so `./target/release/resource_monitor` matches `check.sh`.
+- `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` / `CURL_CA_BUNDLE` pointed at certifi
+  because the macOS trust store on this host is empty for the python.org
+  builds.
+- Downstream artifact produced via `scripts/build_downstream_artifact.py`.
+- Optional SDK construction: `openai` and `ollama` installed and passed;
+  `google-genai` omitted (API drift). Anthropic stays pinned at `0.87.0`.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding and
+requires a fresh exact-SHA qualification, with the downstream artifact
+manifest re-supplied for that run.
+
 ## Release candidate qualification — 0.3.0 (2026-10-31)
 
 The release executable tree is frozen at

@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Milestone 009 — H3 Resource Soak and Platform Scope
 
-Status: conditionally closed
+Status: closed
 
 Repository baseline: `f11a46b28df88f43e923d5211f82985784daaf40`
 

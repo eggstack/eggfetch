@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: active — M005 closed. M006–M009 harness/audit/soak closed or conditionally closed (Stage C pending for M006/M007/M009). M010 closed with experimental retained. H3 remains experimental.
+Status: active — M005–M010 closed (H3 experimental retained). Stage C renewed on `6b571028767dde4b0a78f36e6ecef525c6d68482`.
 
 Long-term references:
 
@@ -98,10 +98,10 @@ M001 proxy Hyper pooling + upstream reuse (hard predecessor for M002)
               `--> M004 caller-owned H3 datagram routing
                     (hard: M003; interface: ADR-0007 + Quinn 0.11.11 abstract socket)
 
-M006 server-controlled corpus (conditionally closed; Stage C pending)
-M007 impairment runner       (conditionally closed; Stage C pending; Linux netem operational)
+M006 server-controlled corpus (closed; Stage C rebound)
+M007 impairment runner       (closed; Stage C rebound; Linux netem operational for graduation)
 M008 upstream risk re-audit  (closed; #338 remains graduation blocker)
-M009 resource soak + platform table (conditionally closed; Stage C pending)
+M009 resource soak + platform table (closed; Stage C rebound; Darwin row only)
     |
     `--> M010 ordinary H3 graduation decision
            (closed 2026-11-16: experimental retained)
@@ -113,10 +113,10 @@ every Tier 2 gate pass, including the full pinned HTTPX compatibility suite and
 the API-manifest comparison, which are green on `ubuntu-latest` / Python 3.12.14 at
 run `37511735210` (1934 passed / 0 failed; both facades 0 unexplained, 0 stale).
 H3 graduation was not an M004 exit condition. The M006–M010 sequence has
-closure records: M006/M007/M009 conditionally closed pending Stage C, M008
-closed on the no-upgrade path, and M010 closed with experimental retained.
-Ordinary HTTP/3 remains experimental until a later decision fills the open
-operational and upstream rows.
+closure records: all closed, with Stage C rebound on
+`6b571028767dde4b0a78f36e6ecef525c6d68482`; M008 retains the no-upgrade/#338
+path and M010 retains experimental. Ordinary HTTP/3 remains experimental
+until a later decision fills the open operational and upstream rows.
 
 ## 7. Milestones
 
@@ -452,11 +452,11 @@ publication, and the maintainer decision on a strict-HTTP/3 FFI policy value
 remains open.
 
 The ordinary-H3 graduation sequence registered on 2026-11-16 now has closure
-records. M006–M009 landed harness, audit, soak, and platform-table work
-(M006/M007/M009 conditionally closed pending Stage C; M008 closed with #338
-still a blocker). M010 closed with experimental retained. A future support
-decision still needs independent servers, privileged impairment, public
-origins, and a published fix for h3 #338.
+records. M006–M010 are closed; Stage C is rebound on
+`6b571028767dde4b0a78f36e6ecef525c6d68482`. M008 retains the #338 blocker and
+M010 retains experimental. A future support decision still needs independent
+servers, privileged impairment, public origins, and a published fix for h3
+#338.
 
 ## 12. Milestone status
 
@@ -467,8 +467,8 @@ origins, and a published fix for h3 #338.
 | M003 H3 retained-experimental | closed | legacy program §7 | legacy + evidence ledger | Graduation evidence (gated future) |
 | M004 caller-owned H3 datagram routing | closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/2/3 green including full compat suite (1934 passed) + API manifests on `ubuntu-latest`/3.12.14, run `37511735210`; H3 stays experimental |
 | M005 uncompiled-protocol fail-closed | closed | `implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | `closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | ADR-0008 accepted; closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there; maintainer decision on a strict-HTTP/3 FFI policy value |
-| M006 server-controlled H3 corpus | conditionally closed | `implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | `closure/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | Stage C renewal required on freeze |
-| M007 H3 impairment runner | conditionally closed | `implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | `closure/tls-proxy-protocols/007-h3-impairment-runner.md` | Privileged Linux matrix still operational for graduation |
+| M006 server-controlled H3 corpus | closed | `implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | `closure/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | Stage C rebound on `6b571028…` |
+| M007 H3 impairment runner | closed | `implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | `closure/tls-proxy-protocols/007-h3-impairment-runner.md` | Privileged Linux matrix still operational for graduation |
 | M008 H3 upstream risk re-audit | closed | `implementation/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | `closure/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | No-upgrade; #338 blocker |
-| M009 H3 resource soak and platform scope | conditionally closed | `implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | `closure/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | Darwin row only; Stage C pending |
+| M009 H3 resource soak and platform scope | closed | `implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | `closure/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | Darwin row only; Stage C rebound |
 | M010 ordinary H3 graduation decision | closed (experimental retained) | `implementation/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | `closure/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | Gate failed on independent servers, impairment, public origins, #338 |

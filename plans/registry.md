@@ -44,7 +44,7 @@ normative policy is `docs/verification-policy.md`.
 |---|---|---|---|
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | No implementation milestone is registered. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M009 harness/audit/soak landed (M006/M007/M009 conditionally closed pending Stage C; M008 closed). M010 closed with experimental retained. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M010 closed (H3 experimental retained). Stage C renewed on `6b571028767dde4b0a78f36e6ecef525c6d68482`. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
@@ -58,9 +58,9 @@ None. M006–M010 have closure records.
 
 | Plan | Status | Condition |
 |---|---|---|
-| `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | conditionally closed | Exact-SHA Stage C renewal on the freeze that commits the harness |
-| `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | conditionally closed | Exact-SHA Stage C renewal; privileged Linux matrix is operational evidence for graduation, not for this harness close |
-| `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | conditionally closed | Exact-SHA Stage C renewal on the freeze that commits the soak tests |
+| `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | closed | Stage C rebound on `6b571028767dde4b0a78f36e6ecef525c6d68482` |
+| `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | closed | Stage C rebound; privileged Linux matrix remains operational evidence for graduation |
+| `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | closed | Stage C rebound; Darwin row only in the platform table |
 
 ## Recently closed implementation plans
 
@@ -90,7 +90,6 @@ None of these is unblocked by the closed milestones.
 |---|---|---|---|
 | 2 | Decide whether CLI work gets its own subsystem roadmap or belongs under an existing roadmap. | Project maintainers | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` §5 |
 | 6 | Decide whether the IPv6 pool-key divergence needs its own milestone. The high-level and native paths currently produce different keys for the same IPv6 origin. | Project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
-| H3 | Renew exact-SHA Stage C on the freeze that commits M006/M007/M009 executable inputs. | Project maintainers | M006/M007/M009 closures |
 | H3 | Supply two non-Quinn servers, a privileged Linux impairment pass, and three public-origin checks before any future support decision. | Project maintainers | M010 closure |
 
 ## Operational blockers
@@ -98,7 +97,7 @@ None of these is unblocked by the closed milestones.
 | Area | Blocker |
 |---|---|
 | HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. |
-| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. Stage C renewal pending for M006/M007/M009 executable inputs. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. Stage C rebound on `6b571028767dde4b0a78f36e6ecef525c6d68482`. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live

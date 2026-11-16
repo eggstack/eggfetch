@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Milestone 006 — Server-Controlled H3 Corpus
 
-Status: conditionally closed
+Status: closed
 
 Repository baseline: `f11a46b28df88f43e923d5211f82985784daaf40`
 

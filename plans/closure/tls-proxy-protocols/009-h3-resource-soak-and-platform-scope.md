@@ -1,6 +1,6 @@
 # TLS, Proxy and Protocols Milestone 009 — Closure Status
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -20,12 +20,12 @@ Implementation commits:
 
 ## 1. Executive finding
 
-M009 is **conditionally closed**. Deterministic soak counts (1 000 reuse,
-50 fail/reconnect, 50+30 cancel/partial-drop, 100 client drop) are
-enforced in-tree. Darwin arm64 filled one platform-table row as local
-developer evidence only — not product support. Linux RSS/fd envelope is
-implemented and skipped on macOS. Stage C renewal is required on the
-freeze that commits these tests. HTTP/3 remains experimental.
+M009 is **closed**. Deterministic soak counts (1 000 reuse, 50
+fail/reconnect, 50+30 cancel/partial-drop, 100 client drop) are enforced
+in-tree. Darwin arm64 filled one platform-table row as local developer
+evidence only — not product support. Linux RSS/fd envelope is implemented
+and skipped on macOS. Exact-SHA Stage C is rebound to
+`6b571028767dde4b0a78f36e6ecef525c6d68482`. HTTP/3 remains experimental.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -37,7 +37,7 @@ freeze that commits these tests. HTTP/3 remains experimental.
 | Construction/drop loop | `hundred_client_construction_drop_loops_do_not_leak_soak` | pass | 100 |
 | Diagnostics ≤ 64, redacted | `assert_h3_diagnostics_bounded_and_redacted` | pass | |
 | Platform table | architecture doc | pass | Darwin filled; Linux/Windows not executed |
-| Stage C | — | **conditional** | New Rust tests |
+| Stage C | ledger | **pass** | Rebound to `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 
 ## 3. Production implementation evidence
 
@@ -70,7 +70,7 @@ different origin.
 
 ## 7. Compatibility and feature-profile review (incl. exact-SHA binding)
 
-Tests behind `http3` only. Stage C required on freeze.
+Tests behind `http3` only. Stage C rebound.
 
 ## 8. Security review
 
@@ -85,7 +85,7 @@ Scope. Graduation section not rewritten by this milestone.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| medium | Stage C unbound | Publication | Freeze + Tier 2/3 + HTTPX |
+| — | Stage C rebound | Closed | Exact-SHA binding `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 | info | Only Darwin row filled | Support wording limits | M010 may add rows when executed |
 
 ## 11. Roadmap disposition
@@ -95,4 +95,4 @@ operational evidence.
 
 ## 12. Registry updates
 
-M009 → conditionally closed.
+M009 → closed.

@@ -1,6 +1,6 @@
 # TLS, Proxy and Protocols Milestone 007 — Closure Status
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -21,12 +21,11 @@ Implementation commits:
 
 ## 1. Executive finding
 
-M007 is **conditionally closed**. The coordinator now has a real Linux
-netem runner and a Rust scenario target for all 14 matrix ids. On Darwin
-arm64 (planning host) privileged execution is unavailable; the runner
-records `unsupported` rather than pass. That is honest and does **not**
-satisfy M010's impairment row. Stage C renewal is required on the freeze
-that commits the new test target.
+M007 is **closed**. The coordinator now has a real Linux netem runner and a
+Rust scenario target for all 14 matrix ids. On Darwin arm64 (planning host)
+privileged execution is unavailable; the runner records `unsupported` rather
+than pass. That is honest and does **not** satisfy M010's impairment row.
+Exact-SHA Stage C is rebound to `6b571028767dde4b0a78f36e6ecef525c6d68482`.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -37,7 +36,7 @@ that commits the new test target.
 | Contract self-test socket-free | `test_h3_qualification.py` | pass | Wired into Tier 1 path |
 | Privileged Linux full matrix | not executed | **not executed** | Host: Darwin arm64; missing netns/tc privileges |
 | Quinn peer impairment ≠ independent interop | this record | pass | Explicit |
-| Stage C | — | **conditional** | New Rust test target |
+| Stage C | ledger | **pass** | Rebound to `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 
 ## 3. Production implementation evidence
 
@@ -72,8 +71,8 @@ Cancellation uses existing drop/abort paths.
 
 ## 7. Compatibility and feature-profile review (incl. exact-SHA binding)
 
-`http3`-gated test only. Stage C required on freeze. macOS `unsupported`
-is not a client failure.
+`http3`-gated test only. Stage C rebound. macOS `unsupported` is not a
+client failure.
 
 ## 8. Security review
 
@@ -90,7 +89,7 @@ rates, and that `unsupported` ≠ graduation evidence.
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
 | high (for M010) | Privileged Linux matrix not run | M010 impairment row open | Operator Linux netem run |
-| medium | Stage C unbound | Publication | Freeze + Tier 2/3 + HTTPX |
+| — | Stage C rebound | Closed | Exact-SHA binding `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 
 ## 11. Roadmap disposition
 
@@ -98,4 +97,4 @@ Harness landed. M010 impairment evidence still open until Linux pass.
 
 ## 12. Registry updates
 
-M007 → conditionally closed. Note Darwin unsupported vs Linux pending.
+M007 → closed. Note Darwin unsupported vs Linux pending for graduation.

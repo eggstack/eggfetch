@@ -1,6 +1,6 @@
 # TLS, Proxy and Protocols Milestone 006 — Closure Status
 
-Status: conditionally closed
+Status: closed
 
 Source implementation plan:
 
@@ -14,21 +14,19 @@ Repository baseline reviewed: `f11a46b28df88f43e923d5211f82985784daaf40`
 
 Implementation commits:
 
-- _(uncommitted at closure drafting)_ — harness and runner changes under
+- `8d599e8402929f5388ed9e1d970833d8f942a52b` — harness and runner changes under
   `crates/eggfetch-core/tests/h3_interop_qualification.rs`,
   `scripts/h3_qualification.py`, `scripts/test_h3_qualification.py`,
   `qualification/http3/servers.example.json`, and architecture docs.
 
 ## 1. Executive finding
 
-M006 is **conditionally closed**. Every corpus id now has a local Quinn/h3
-fixture mapped through `known_local`, the external path executes
-client-driven cancellation and optional `controls` URLs, and the Tier 1
-runner self-test covers the new manifest rules. HTTP/3 remains experimental.
-Independent non-Quinn evidence is still owned by M010. Exact-SHA Stage C
-renewal for HTTPX 0.28.1 and HTTPX2 2.12.0 is required on the freeze that
-commits these executable inputs before this milestone may be marked
-unconditionally closed.
+M006 is **closed**. Every corpus id now has a local Quinn/h3 fixture mapped
+through `known_local`, the external path executes client-driven cancellation
+and optional `controls` URLs, and the Tier 1 runner self-test covers the new
+manifest rules. HTTP/3 remains experimental. Independent non-Quinn evidence
+is still owned by M010. Exact-SHA Stage C is rebound to
+`6b571028767dde4b0a78f36e6ecef525c6d68482`.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -59,7 +57,7 @@ unconditionally closed.
 | Unknown control key rejected | same | pass | ManifestError |
 | Control URL hygiene | same | pass | No credentials/query/fragment |
 | Experimental label retained | architecture doc | pass | No promotion |
-| Stage C renewal | ledger | **conditional** | Required on freeze commit |
+| Stage C renewal | ledger | **pass** | Rebound to `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 
 ## 3. Production implementation evidence
 
@@ -105,8 +103,9 @@ observes `h3_reconnected` / drain metrics without string-matching errors.
 ## 7. Compatibility and feature-profile review (incl. exact-SHA binding)
 
 `http3` feature gate unchanged. Lean/CLI/FFI/Node profiles unchanged.
-Executable inputs changed → Stage C must be renewed on the freeze SHA.
-Do not cite September H3 freeze `639bf186…`.
+Executable inputs changed; Stage C renewed on
+`6b571028767dde4b0a78f36e6ecef525c6d68482`. Do not cite September H3 freeze
+`639bf186…`.
 
 ## 8. Security review
 
@@ -122,7 +121,7 @@ Architecture interop paragraph updated. Historical evidence ledgers under
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| medium | Stage C not yet rebound | Cannot publish citing this tree | Freeze commit + Tier 2/3 + both HTTPX profiles |
+| — | Stage C rebound | Closed | Exact-SHA binding `6b571028767dde4b0a78f36e6ecef525c6d68482` |
 | info | No independent-server run | Expected | M010 operational evidence |
 
 ## 11. Roadmap disposition
@@ -132,6 +131,6 @@ graduation; this closure does not unblock promotion.
 
 ## 12. Registry updates
 
-Move M006 from ready → conditionally closed. Keep H3 experimental gated
+M006 → closed on Stage C binding `6b571028767dde4b0a78f36e6ecef525c6d68482` (harness freeze `8d599e8402929f5388ed9e1d970833d8f942a52b`). Keep H3 experimental gated
 future. State that M010 cannot treat local Quinn corpus as independent
 interop.
