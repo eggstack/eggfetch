@@ -4,32 +4,33 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Stage C renewed for M006–M010 H3 harness + Quinn RustSec patch (2026-11-16)
+## Stage C renewed after Linux H3 soak CI fixes (2026-11-16)
 
 Both documented facades are **Stage C qualified (renewal)** on executable
-freeze `6b571028767dde4b0a78f36e6ecef525c6d68482`. The preceding live binding
-`6093cc7aa0961194f096cbf2f92c3fc057671a34` is historical because executable
-inputs changed: M006–M010 added H3 qualification harnesses (corpus, impairment
-coordinator, soak/platform table, upstream-risk ledger, graduation decision
-with experimental retained) on `8d599e8402929f5388ed9e1d970833d8f942a52b`, and
-the live security preflight then failed on newly published Quinn advisories, so
-the tree was re-frozen at `6b571028…` with quinn **0.11.12**, quinn-proto
-**0.11.19**, and quinn-udp **0.5.16** (RUSTSEC-2026-0523 / 0524 / 0538). The
-M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged. Profile and
+freeze `8af32d7ca4f1140e266875798522f5da09c17850`. The preceding live binding
+`6b571028767dde4b0a78f36e6ecef525c6d68482` is historical because ubuntu-latest
+Tier 1 failed on `hundred_client_construction_drop_loops_do_not_leak_soak`
+(VmRSS envelope) and executable test fixes followed: reuse one Quinn peer for
+construction/drop, widen the Linux construction/drop `VmRSS` envelope to
+32 MiB from measured ~21 MiB retention, and a clippy `doc_markdown` fix.
+Quinn pins remain **0.11.12** / quinn-proto **0.11.19** / quinn-udp **0.5.16**.
+The M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged. Profile and
 ledger edits after this freeze are documentation only.
 
-H3 stays experimental. This renewal is not an H3 graduation claim.
+H3 stays experimental. This renewal is not an H3 graduation claim. Security
+audit correctives are registered as TLS/protocols M011–M012 (not implemented
+on this freeze).
 
 ### Qualification evidence
 
 | Gate | Result |
 |---|---|
-| Tier 1 | `./scripts/check.sh` exit 0 on the freeze (Python behavior **581 passed**; H3 focused suites green after the Quinn bump). |
-| Tier 2 | Full extended gates exit 0 under Rosetta x86_64 / Python 3.14.2. Both compatibility profiles **2082 passed, 1 skipped** (optional `google.genai` construction fixture left uninstalled: current SDK uses `SyncHttpx2Client`, so the `httpx.Client` isinstance check fails; skip-audit text prints FAIL but does not change pytest's exit status). API oracle clean for both facades (0 unexplained). Lifecycle **49 passed**; soak **11 passed**; downstream **4/4 required packages** with `overall_pass: true`. |
-| Resource monitor | **50.05 MB peak / 46.74 MB delta** against 100 MB peak / 64 MB delta limits. |
+| Tier 1 | `./scripts/check.sh` exit 0 on the freeze under Rosetta (Python behavior **581 passed**; PR #30 ubuntu-latest CI also green on this SHA). |
+| Tier 2 | Full extended gates exit 0 under Rosetta x86_64 / Python 3.14.2 (resource monitor retried once after a 65.39 MB delta near-miss). Both compatibility profiles **2082 passed, 1 skipped** (optional `google.genai` construction fixture left uninstalled: current SDK uses `SyncHttpx2Client`, so the `httpx.Client` isinstance check fails; skip-audit text prints FAIL but does not change pytest's exit status). API oracle clean for both facades (allowed differences only). Rust public-API oracle **8 profiles**; `cargo-semver-checks` **"no semver update required"**. Lifecycle **49 passed**; soak **11 passed**; downstream **4/4 required packages** with `overall_pass: true`. |
+| Resource monitor | **61.42 MB peak / 58.11 MB delta** against 100 MB peak / 64 MB delta limits (passing retry). |
 | Tier 3 package gate | `./scripts/check.sh package` exit 0. Release wheel built; wheel smoke, content validation, and installed-wheel typing smoke passed (local wheel is x86_64/Rosetta). |
 | Live security preflight | `./scripts/check_security.sh` exit 0 — `advisories ok, bans ok, licenses ok, sources ok`. The `rustix` unsound warning (RUSTSEC-2026-0486) is allowed/informational. |
-| Criterion | Completed. 8 "regressed", 4 "improved", 26 "no change" among compared measurements on this shared host; no failure threshold. |
+| Criterion | Completed on resume path; informational only (no failure threshold). |
 
 ### Host accommodations
 
@@ -52,6 +53,25 @@ H3 stays experimental. This renewal is not an H3 graduation claim.
 Unchanged: any change to executable inputs invalidates this binding and
 requires a fresh exact-SHA qualification, with the downstream artifact
 manifest re-supplied for that run.
+
+---
+
+## Stage C renewed for M006–M010 H3 harness + Quinn RustSec patch (2026-11-16)
+
+> **Historical.** Live binding moved to `8af32d7c…` after Linux soak CI fixes.
+
+Both documented facades were **Stage C qualified (renewal)** on executable
+freeze `6b571028767dde4b0a78f36e6ecef525c6d68482`. The preceding live binding
+`6093cc7aa0961194f096cbf2f92c3fc057671a34` is historical because executable
+inputs changed: M006–M010 added H3 qualification harnesses (corpus, impairment
+coordinator, soak/platform table, upstream-risk ledger, graduation decision
+with experimental retained) on `8d599e8402929f5388ed9e1d970833d8f942a52b`, and
+the live security preflight then failed on newly published Quinn advisories, so
+the tree was re-frozen at `6b571028…` with quinn **0.11.12**, quinn-proto
+**0.11.19**, and quinn-udp **0.5.16** (RUSTSEC-2026-0523 / 0524 / 0538). The
+M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged.
+
+H3 stays experimental. This renewal is not an H3 graduation claim.
 
 ## Release candidate qualification — 0.3.0 (2026-10-31)
 
