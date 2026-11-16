@@ -4,6 +4,12 @@ Manual, bounded downstream-size qualification for `eggfetch-core`.
 Not a CI gate. Run at release/architecture review points; copy headline
 numbers into `docs/architecture/embedded-footprint.md`.
 
+**Security scanning:** each fixture has its own `[workspace]` and
+`Cargo.lock`. `scripts/check_security.sh` scans the **repository root**
+lock only. Nested embed locks are separate evidence trees — refresh them
+when citing advisory reachability for an embed run (M012), and do not treat
+a root preflight as covering these graphs.
+
 ## Fixtures
 
 Tiny downstream-style binaries under this directory. Each has its own

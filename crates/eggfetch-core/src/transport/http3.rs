@@ -450,18 +450,26 @@ fn build_route_endpoint(socket: Arc<RouteUdpSocket>) -> std::io::Result<quinn::E
     quinn::Endpoint::new_with_abstract_socket(endpoint_config, None, socket, runtime)
 }
 
+/// Fixed connect-class text for caller-route [`DialErrorKind::Connection`].
+///
+/// Provider `DialError::message()` must never appear in [`Error::H3Connect`];
+/// terminal route I/O already rebuilds with fixed Quinn-facing text, and the
+/// connect path must match that redaction rule.
+const H3_ROUTE_CONNECT_TEXT: &str = "QUIC handshake failed";
+
 /// Maps a typed caller dial error onto Eggfetch's error taxonomy.
 ///
 /// The mapping preserves the caller's broad kind instead of collapsing it:
 /// connect-class for transport failures so `Auto` fallback and Alt-Svc
 /// suppression remain safe pre-commit, timeout class for provider-observed
 /// timeouts, and the verbatim typed error for explicit rejection and
-/// authentication so that evidence is never discarded.
+/// authentication so that embedder evidence is never discarded. Connection
+/// messages are replaced with [`H3_ROUTE_CONNECT_TEXT`]; Authentication /
+/// Rejected / Other stay on [`Error::CustomTransport`] with provider text,
+/// matching the stream [`crate::Dialer`] path.
 fn route_dial_error(failure: DialError) -> Error {
     match failure.kind() {
-        DialErrorKind::Connection => {
-            Error::H3Connect(format!("QUIC handshake failed: {}", failure.message()))
-        }
+        DialErrorKind::Connection => Error::H3Connect(H3_ROUTE_CONNECT_TEXT.into()),
         DialErrorKind::Timeout => Error::Timeout {
             phase: TimeoutPhase::Connect,
             elapsed: Duration::ZERO,
@@ -974,9 +982,7 @@ impl H3Connector {
             return fallback;
         };
         match failure.kind() {
-            DialErrorKind::Connection => {
-                Error::H3Connect(format!("QUIC handshake failed: {}", failure.message()))
-            }
+            DialErrorKind::Connection => Error::H3Connect(H3_ROUTE_CONNECT_TEXT.into()),
             DialErrorKind::Timeout => Error::Timeout {
                 phase: TimeoutPhase::Connect,
                 elapsed: Duration::ZERO,
@@ -984,7 +990,9 @@ impl H3Connector {
             // Rejection and authentication evidence is preserved verbatim as a
             // custom-transport error rather than being reclassified, because
             // Eggfetch has no evidence of its own about why the provider
-            // refused. The kind survives in the typed source chain.
+            // refused. The kind survives in the typed source chain. Provider
+            // message text is intentional on this evidence path (same as the
+            // stream Dialer); Connection-kind text is never re-exposed above.
             DialErrorKind::Authentication | DialErrorKind::Rejected | DialErrorKind::Other => {
                 Error::CustomTransport(Arc::new(failure))
             }

@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: active — M005 closed. H3 graduation remains separately gated
+Status: active — M005–M012 closed (H3 experimental retained). Stage C renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` after M011–M012.
 
 Long-term references:
 
@@ -53,9 +53,11 @@ semantics, publication, a parallel connection pool, downstream route policy.
 
 ## 3. Non-goals
 
-- H3 graduation (gated); 0-RTT, WebTransport, H3 application datagrams,
-  MASQUE, QUIC migration; automatic H3-by-default; environment-proxy
-  activation; upstream proxy helpers where eggfetch contracts would regress.
+- Removing the experimental label except by the M010 decision after the
+  full evidence gate. 0-RTT, WebTransport, H3 application datagrams,
+  MASQUE, QUIC migration, and automatic H3-by-default stay out of M006–M010.
+  Environment-proxy activation and upstream proxy helpers where eggfetch
+  contracts would regress stay out of this roadmap.
 - M004 permits only fixed-target transport datagrams beneath origin QUIC; it
   does not expose QUIC DATAGRAM or an application datagram API.
 
@@ -71,13 +73,15 @@ reopened narrowly by ADR-0007/M004 so embedders can supply a fixed-target
 physical datagram route without becoming QUIC/H3 owners. That seam is now
 implemented and closed: `ClientBuilder::datagram_dialer` routes every H3
 generation over one caller-owned fixed-target route, with direct H3 unchanged
-when unset.
+when unset. Ordinary H3 graduation is registered as M006–M010 and has not
+started.
 
 ## 5. Target architecture
 
-Invariants permanent. H3 graduates only through the gated program with fresh
-executable freeze + full requalification; until then every H3 change keeps
-the experimental label and must not convert missing evidence into a pass.
+Invariants permanent. H3 graduates only through M010, on a fresh executable
+freeze, after M006–M009 have landed and the external evidence rows are
+actually pass. Until that decision, every H3 change keeps the experimental
+label and must not convert missing evidence into a pass.
 M004 adds one client-scoped datagram-routing contract below QUIC while keeping
 origin QUIC/TLS/H3 in Eggfetch and preserving the direct-H3 path when unset.
 
@@ -93,14 +97,26 @@ M001 proxy Hyper pooling + upstream reuse (hard predecessor for M002)
               |
               `--> M004 caller-owned H3 datagram routing
                     (hard: M003; interface: ADR-0007 + Quinn 0.11.11 abstract socket)
+
+M006 server-controlled corpus (closed; Stage C rebound)
+M007 impairment runner       (closed; Stage C rebound; Linux netem operational for graduation)
+M008 upstream risk re-audit  (closed; #338 remains graduation blocker)
+M009 resource soak + platform table (closed; Stage C rebound; Darwin row only)
+    |
+    `--> M010 ordinary H3 graduation decision
+           (closed 2026-11-16: experimental retained)
+           (open rows: independent servers, public origins, privileged Linux impairment, #338)
 ```
 
 M001–M003 are closed. M004 is closed under accepted ADR-0007: implementation and
 every Tier 2 gate pass, including the full pinned HTTPX compatibility suite and
 the API-manifest comparison, which are green on `ubuntu-latest` / Python 3.12.14 at
 run `37511735210` (1934 passed / 0 failed; both facades 0 unexplained, 0 stale).
-H3 graduation remains a separate gated future and was
-not an M004 exit condition.
+H3 graduation was not an M004 exit condition. The M006–M010 sequence has
+closure records: all closed, with Stage C rebound on
+`6b571028767dde4b0a78f36e6ecef525c6d68482`; M008 retains the no-upgrade/#338
+path and M010 retains experimental. Ordinary HTTP/3 remains experimental
+until a later decision fills the open operational and upstream rows.
 
 ## 7. Milestones
 
@@ -224,9 +240,202 @@ native-caller downgrade contract unchanged; the default CLI feature set
 unchanged and the new features opt-in; public API oracle unchanged; Tier
 1/2/3 green with renewed exact-SHA Stage C binding for both profiles.
 
-Deferred: H3 graduation, which remains separately gated; enabling `http2` or
+Deferred: H3 graduation, which is M010 and remains blocked; enabling `http2` or
 `http3` in the CLI by default, which is a separate capability decision; the
 FFI's missing non-protocol capabilities.
+
+### Milestone 6 — Server-controlled H3 corpus
+
+Class: infrastructure. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md`.
+
+Objective: make every ordinary-client corpus case executable locally, and
+make server-controlled cases executable against an optional external
+manifest, with unsupported kept distinct from pass.
+
+Dependencies:
+
+- hard: none;
+- soft: M008, because a later dependency bump requires the new tests to be
+  re-run before M010 cites them.
+
+Deliverable boundary: local Quinn fixtures and the qualification coordinator
+cover the corpus ids that the client or the in-process server can induce.
+External control URLs exist for reset, graceful close, GOAWAY reconnect, and
+alternative-port discovery. No independent server is claimed.
+
+User or operator value: a later qualification run can exercise GOAWAY, reset,
+and cancellation instead of recording those cases unsupported by construction.
+
+Exit conditions: local coordinator maps each inducible corpus id to a named
+passing test; manifest hygiene tests reject credentials and do not count a
+missing control URL as a pass; Tier 1 is green; Stage C is renewed because
+Rust tests and a Tier 1 script change; HTTP/3 stays experimental.
+
+Deferred: running ngtcp2, quiche, or quic-go; the impairment matrix; the
+experimental-label decision.
+
+### Milestone 7 — H3 impairment runner
+
+Class: infrastructure. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md`.
+
+Objective: supply the Linux namespace/netem runner that
+`scripts/h3_impairment.py` already calls, so each matrix scenario is pass,
+fail, or unsupported for a real reason.
+
+Dependencies:
+
+- hard: none;
+- soft: M008, same re-run rule as M006;
+- operational: a privileged Linux namespace, which is required for a pass
+  of the matrix and is not required to land the runner.
+
+Deliverable boundary: one opt-in runner and one `http3` scenario test
+target. Tier 1 does not impair the network. An unprivileged host records
+unsupported and does not satisfy M010.
+
+User or operator value: loss, reordering, jitter, duplication, MTU, and
+address-family failures can be executed without adding them to CI.
+
+Exit conditions: the existing coordinator accepts the runner's JSON; the
+unprivileged contract self-test passes; Stage C is renewed because a Rust
+test target is added; HTTP/3 stays experimental.
+
+Deferred: independent-server impairment; a CI job for netem.
+
+### Milestone 8 — H3 upstream risk re-audit
+
+Class: invariant. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md`.
+
+Objective: write a current Quinn/h3 risk ledger and upgrade only if a
+published release closes the buffered-data-on-close defect.
+
+Dependencies:
+
+- hard: none;
+- this milestone is a hard predecessor of any evidence M010 cites.
+
+Deliverable boundary: `qualification/http3/upstream-risk-ledger.json` plus
+either an unchanged lockfile with #338 still blocking, or a published
+upgrade, drain tests, and a renewed Stage C binding. No fork and no vendored
+patch.
+
+User or operator value: graduation cannot proceed on a stale September 2026
+dependency story, and it cannot proceed by forking h3.
+
+Exit conditions: every audited issue has one disposition; the architecture
+dependency section matches the ledger; the experimental label remains.
+
+Deferred: clearing the experimental label; fixing #361 inside eggfetch when
+the published crates still defer STOP_SENDING.
+
+### Milestone 9 — H3 resource soak and platform scope
+
+Class: infrastructure. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md`.
+
+Objective: add a bounded H3 reuse and churn soak, and a platform table that
+records only executions that happened.
+
+Dependencies:
+
+- hard: none;
+- soft: M008, so the soak that M010 quotes is the post-audit one.
+
+Deliverable boundary: longer loopback cycles with an envelope rather than an
+exact RSS figure, plus one filled platform row for the host that ran them.
+Other operating systems stay "not executed".
+
+User or operator value: resource growth and the support boundary are
+visible before anyone writes a support claim.
+
+Exit conditions: cache and diagnostic caps still hold; the table does not
+infer runtime support from a package build; Stage C is renewed; HTTP/3 stays
+experimental.
+
+Deferred: multi-OS execution, which M010 may attach when those hosts are
+actually run.
+
+### Milestone 10 — Ordinary H3 graduation decision
+
+Class: capability. Status: blocked.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md`.
+
+Objective: run the existing graduation gate on the post-audit tree and
+either describe ordinary request/response HTTP/3 as supported or retain the
+experimental label with the open rows named.
+
+Dependencies:
+
+- hard: M006, M007, M008, and M009 closed;
+- operational: two pinned non-Quinn servers, one independent drain source,
+  three public origins, and a privileged Linux impairment run.
+
+Deliverable boundary: a new dated decision section and redacted evidence.
+The supported scope, if the gate passes, is ordinary client operation only.
+Discovery stays off by default. Datagram routing and advanced QUIC features
+stay experimental. Long-term specification files are not edited here.
+
+User or operator value: the experimental label matches current evidence
+instead of the September 2026 freeze.
+
+Exit conditions: every gate row is pass on one SHA, or the decision records
+the failing rows and leaves the label in place. A product defect stops the
+milestone and opens a corrective plan.
+
+Deferred: H3-by-default, CLI/FFI default `http3`, 0-RTT, WebTransport,
+MASQUE, migration, and graduating the datagram dialer.
+
+### Milestone 11 — H3 dial-error sanitization and datagram recv trust
+
+Class: invariant. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md`.
+
+Objective: close the post-M010 audit High/Medium gaps on the experimental
+datagram path — stop embedding provider `DialError` text into
+`Error::H3Connect`, and enforce fixed-peer recv checks in the private Quinn
+bridge — without changing public dialer shapes or graduating H3.
+
+Dependencies: M004 closed; audit findings recorded.
+
+Deliverable boundary: core transport + tests + threat-model alignment.
+Upstream h3 #338 is out of scope (remains a graduation blocker).
+
+Exit conditions: both findings closed with tests; Stage C rebound after the
+executable change; H3 still experimental.
+
+### Milestone 12 — H3 qualification security hygiene
+
+Class: infrastructure. Status: ready.
+
+Implementation:
+`plans/implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md`.
+
+Objective: refresh the upstream-risk ledger and embedded qualification
+lockfiles to the post-advisory Quinn pins, harden netem `scenario_id`
+handling, and reinforce opt-in cert-bypass / operator-URL boundaries.
+
+Dependencies: M008 ledger exists; Quinn advisory bump on the workspace lock.
+
+Deliverable boundary: `qualification/`, H3 scripts, docs. No H3 graduation.
+No new CI job.
+
+Exit conditions: ledger/locks not stale vs workspace authority; shell and
+cert-bypass hygiene accepted; Tier 1 runner self-test green.
 
 ## 8. Cross-cutting requirements
 
@@ -237,13 +446,19 @@ boundary; `crypto_provider()` per-config.
 ## 9. Verification strategy
 
 Proxy/TLS/route matrices; H3 deterministic loopback controls in the normal
-suite; independent-server/impairment/public-origin evidence manual and
-opt-in, never routine gates; Tier 2 + oracles on any executable change.
+suite; independent-server, impairment, and public-origin evidence manual and
+opt-in, never routine gates. M006 and M007 add harness code only. M010 is
+the evidence run. Tier 2 and the HTTPX oracles renew on any milestone that
+changes executable inputs. No new CI job or matrix.
 
 ## 10. Risks and decision points
 
-Risk: silent H3 capability growth. Control: graduation gate + experimental
-label rule; any promotion attempt is a new gated milestone, not a corrective.
+Risk: silent H3 capability growth. Control: M006–M009 keep the experimental
+label, and M010 is the only milestone allowed to change it, and only when
+every gate row is pass. A failed row is a recorded blocker, not a waiver.
+
+Risk: citing the September 2026 freeze after the lockfile moved. Control:
+M008 writes a new ledger, and M010 cites only the post-audit SHA.
 
 ## 11. Completion definition
 
@@ -275,6 +490,13 @@ to `closed` there. The closure authorizes neither H3 graduation nor
 publication, and the maintainer decision on a strict-HTTP/3 FFI policy value
 remains open.
 
+The ordinary-H3 graduation sequence registered on 2026-11-16 now has closure
+records. M006–M010 are closed; Stage C is rebound on
+`6b571028767dde4b0a78f36e6ecef525c6d68482`. M008 retains the #338 blocker and
+M010 retains experimental. A future support decision still needs independent
+servers, privileged impairment, public origins, and a published fix for h3
+#338.
+
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
@@ -284,3 +506,10 @@ remains open.
 | M003 H3 retained-experimental | closed | legacy program §7 | legacy + evidence ledger | Graduation evidence (gated future) |
 | M004 caller-owned H3 datagram routing | closed | `implementation/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | `closure/tls-proxy-protocols/004-caller-owned-h3-datagram-routing.md` | ADR-0007 accepted; Tier 1/2/3 green including full compat suite (1934 passed) + API manifests on `ubuntu-latest`/3.12.14, run `37511735210`; H3 stays experimental |
 | M005 uncompiled-protocol fail-closed | closed | `implementation/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | `closure/tls-proxy-protocols/005-uncompiled-protocol-fail-closed.md` | ADR-0008 accepted; closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there; maintainer decision on a strict-HTTP/3 FFI policy value |
+| M006 server-controlled H3 corpus | closed | `implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | `closure/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | Stage C rebound on `6b571028…` |
+| M007 H3 impairment runner | closed | `implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | `closure/tls-proxy-protocols/007-h3-impairment-runner.md` | Privileged Linux matrix still operational for graduation |
+| M008 H3 upstream risk re-audit | closed | `implementation/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | `closure/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | No-upgrade; #338 blocker |
+| M009 H3 resource soak and platform scope | closed | `implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | `closure/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | Darwin row only; Stage C rebound |
+| M010 ordinary H3 graduation decision | closed (experimental retained) | `implementation/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | `closure/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | Gate failed on independent servers, impairment, public origins, #338 |
+| M011 dial-error sanitization + datagram recv trust | closed | `implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | `closure/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | Fixed-text H3Connect; recv source check; Stage C on `cef0e7aa…` |
+| M012 H3 qualification security hygiene | closed | `implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | `closure/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | Ledger/embed Quinn pins; netem charset; Stage C on `cef0e7aa…` |

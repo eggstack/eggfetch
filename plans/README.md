@@ -1,11 +1,13 @@
 # eggfetch Planning System
 
-> **Current status:** No registered implementation milestone remains open. The
-> current release, roadmap statuses, and maintainer actions are tracked in
-> `plans/registry.md`. The live Stage C binding is recorded in
-> `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`. Closed
-> plans are historical records, not active gates. Validation tiers are in
-> `.skills/verification-qualification.md`.
+> **Current status:** TLS/protocols M006–M012 closed (H3 **experimental
+> retained**). M011–M012 security correctives closed with exact-SHA Stage C
+> renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. The current release,
+> roadmap statuses, and maintainer actions are tracked in `plans/registry.md`.
+> The live Stage C binding is recorded in
+> `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`.
+> Closed plans are historical records, not active gates. Validation tiers
+> are in `.skills/verification-qualification.md`.
 
 ## Pending maintainer actions
 

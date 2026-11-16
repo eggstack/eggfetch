@@ -44,20 +44,48 @@ normative policy is `docs/verification-policy.md`.
 |---|---|---|---|
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | No implementation milestone is registered. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | No implementation milestone is registered. H3 graduation remains separately gated. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). Stage C renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
-No implementation plan is ready or active. Register new work in this file and
-its subsystem roadmap before handing off a plan. Closed plans are historical
-evidence, not active requirements or release gates.
+Closed plans are historical evidence, not active requirements or release gates.
+
+## Dependency-ready implementation plans
+
+| Plan | Status | Notes |
+|---|---|---|
+| _(none)_ | — | No ready plans in this subsystem |
+
+No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M010).
+
+## Conditionally closed implementation plans
+
+| Plan | Status | Condition |
+|---|---|---|
+| `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | closed | Stage C rebound on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` |
+| `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | closed | Stage C rebound; privileged Linux matrix remains operational evidence for graduation |
+| `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | closed | Stage C rebound; Darwin + ubuntu-latest CI Linux soak rows recorded |
+
+## Recently closed implementation plans
+
+| Plan | Status | Closure |
+|---|---|---|
+| `plans/implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | closed | `plans/closure/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` |
+| `plans/implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | closed | `plans/closure/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` |
+| `plans/implementation/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | closed | `plans/closure/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` |
+| `plans/implementation/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | closed (experimental retained) | `plans/closure/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` |
+
+## Blocked implementation plans
+
+None.
 
 ## Gated futures
 
 - **HTTPX 1.0:** wait for an upstream release candidate or stable release with a
   frozen API, then perform a fresh delta review.
-- **H3 graduation:** requires independent interoperability, drain, impairment,
-  public-origin, and upstream-risk evidence. H3 remains experimental.
+- **H3 graduation:** M010 closed with experimental retained. Ordinary HTTP/3
+  stays experimental until a later decision fills independent-server,
+  impairment, public-origin, and upstream (#338) rows on one post-audit SHA.
 - **Node.js maturation:** requires an explicit scope decision.
 
 None of these is unblocked by the closed milestones.
@@ -68,17 +96,18 @@ None of these is unblocked by the closed milestones.
 |---|---|---|---|
 | 2 | Decide whether CLI work gets its own subsystem roadmap or belongs under an existing roadmap. | Project maintainers | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` §5 |
 | 6 | Decide whether the IPv6 pool-key divergence needs its own milestone. The high-level and native paths currently produce different keys for the same IPv6 origin. | Project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
+| H3 | Supply two non-Quinn servers, a privileged Linux impairment pass, and three public-origin checks before any future support decision. | Project maintainers | M010 closure |
 
 ## Operational blockers
 
 | Area | Blocker |
 |---|---|
 | HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. |
-| H3 | Graduation evidence is independent of the existing H3 qualification and remains outstanding. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. M011–M012 closed. Stage C rebound on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live
 binding is recorded in the ledger, profiles, and canonical compatibility pages:
 `docs/residual-differences.md`, `docs/reference/compatibility.md`, and
 `docs/reference/compatibility-stage-decision.md`. Other planning documents
-should link to these records rather than duplicate SHA values.
+must not invent a second live SHA.

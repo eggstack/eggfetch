@@ -5,7 +5,7 @@
 The documented asyncio-supported public surfaces for `eggfetch.compat.httpx`
 (HTTPX 0.28.1) and `eggfetch.compat.httpx2` (HTTPX2 2.12.0) passed Stage C
 qualification on frozen executable SHA
-`6093cc7aa0961194f096cbf2f92c3fc057671a34` (2026-10-31). The full
+`cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16). The full
 compatibility, extended, package, and live security gates passed on that
 freeze. Earlier bindings are historical. Current evidence and binding history
 are in `plans/httpx-parity-correction-status.md`; the exact facade scopes are

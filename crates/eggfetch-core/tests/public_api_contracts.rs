@@ -131,7 +131,8 @@ fn caller_owned_h3_datagram_route_contracts_compile() {
         }
 
         fn recv<'a>(&'a self, _buffer: &'a mut [u8]) -> DatagramRecvFuture<'a> {
-            Box::pin(async { Ok(0) })
+            let peer = self.peer;
+            Box::pin(async move { Ok((0, peer)) })
         }
 
         fn local_addr(&self) -> SocketAddr {

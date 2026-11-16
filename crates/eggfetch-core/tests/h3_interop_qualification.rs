@@ -26,8 +26,11 @@
 
 //! HTTP/3 interoperability and production-graduation evidence.
 //!
-//! Parent program: `plans/http3-production-qualification-program.md`
-//! Plan: `plans/http3-independent-interop-and-impairment-qualification.md`
+//! Active harness plan:
+//! `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md`
+//!
+//! Historical program: `plans/http3-production-qualification-program.md`
+//! Historical plan: `plans/http3-independent-interop-and-impairment-qualification.md`
 //!
 //! This suite is deterministic and local-only for Tier 1. External
 //! interoperability servers (ngtcp2/nghttp3, quiche, …) are exercised only
@@ -43,14 +46,26 @@
 //! valid successful outcome per the graduation plan.
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
 use eggfetch_core::{Client, HttpVersionPolicy, RequestBody, Timeout, TlsConfig};
+use futures_util::stream;
 use futures_util::StreamExt;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use tokio::sync::watch;
+
+#[cfg(feature = "tls-rustls")]
+mod tls_fixtures;
+
+#[cfg(feature = "tls-rustls")]
+use tls_fixtures::CertAuthority;
+#[cfg(feature = "tls-rustls")]
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(feature = "tls-rustls")]
+use tokio::net::TcpListener;
 
 // ---------------------------------------------------------------------------
 // Fixtures (loopback QUIC+H3, same shape as h3_hardening.rs)
@@ -295,9 +310,347 @@ impl QuicTestServer {
         Self { addr, shutdown: tx }
     }
 
+    /// Complete one response on a connection, then GOAWAY via `shutdown(0)`.
+    /// The QUIC endpoint keeps accepting new connections on the same port.
+    #[allow(unknown_lints, clippy::unused_async, clippy::unused_async_trait_impl)]
+    async fn start_shutdown_after_one_response(body: Vec<u8>) -> Self {
+        let cert_key =
+            rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
+        let cert_der = CertificateDer::from(cert_key.cert.der().to_vec());
+        let key_der =
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert_key.key_pair.serialize_der()));
+        let mut server_tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS13")
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+        server_tls.alpn_protocols = vec![b"h3".to_vec()];
+        let quic_crypto =
+            quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).expect("server crypto");
+        let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_crypto));
+        let mut transport = quinn::TransportConfig::default();
+        transport.max_concurrent_bidi_streams(100u32.into());
+        transport.max_concurrent_uni_streams(100u32.into());
+        server_config.transport_config(Arc::new(transport));
+        let endpoint = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap())
+            .expect("bind server");
+        let addr = endpoint.local_addr().expect("addr");
+        let body = Bytes::from(body);
+        let goaway_once = Arc::new(AtomicBool::new(false));
+        let (tx, mut rx) = watch::channel(false);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break };
+                        let body = body.clone();
+                        let goaway_once = goaway_once.clone();
+                        tokio::spawn(async move {
+                            let Ok(conn) = incoming.await else { return };
+                            let h3_conn = h3_quinn::Connection::new(conn);
+                            let Ok(mut server) =
+                                h3::server::Connection::<_, Bytes>::new(h3_conn).await
+                            else {
+                                return;
+                            };
+                            let send_goaway = !goaway_once.swap(true, Ordering::SeqCst);
+                            loop {
+                                let Ok(Some(resolver)) = server.accept().await else { break };
+                                let body = body.clone();
+                                let Ok((req, mut stream)) = resolver.resolve_request().await
+                                else {
+                                    continue;
+                                };
+                                while stream.recv_data().await.ok().flatten().is_some() {}
+                                let resp = http::Response::builder()
+                                    .status(200)
+                                    .header("content-type", "text/plain")
+                                    .body(())
+                                    .unwrap();
+                                if stream.send_response(resp).await.is_err() {
+                                    break;
+                                }
+                                if req.method() != http::Method::HEAD {
+                                    let _ = stream.send_data(body.clone()).await;
+                                }
+                                let _ = stream.finish().await;
+                                if send_goaway {
+                                    tokio::time::sleep(Duration::from_millis(150)).await;
+                                    let _ = server.shutdown(0).await;
+                                    break;
+                                }
+                            }
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self { addr, shutdown: tx }
+    }
+
+    /// Consumes request bodies slowly so client-side upload cancellation can
+    /// win a short timeout race.
+    #[allow(unknown_lints, clippy::unused_async, clippy::unused_async_trait_impl)]
+    async fn start_slow_upload_consumer(body: Vec<u8>) -> Self {
+        let cert_key =
+            rcgen::generate_simple_self_signed(vec!["localhost".into()]).expect("rcgen cert");
+        let cert_der = CertificateDer::from(cert_key.cert.der().to_vec());
+        let key_der =
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert_key.key_pair.serialize_der()));
+        let mut server_tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS13")
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+        server_tls.alpn_protocols = vec![b"h3".to_vec()];
+        let quic_crypto =
+            quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).expect("server crypto");
+        let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_crypto));
+        let mut transport = quinn::TransportConfig::default();
+        transport.max_concurrent_bidi_streams(100u32.into());
+        transport.max_concurrent_uni_streams(100u32.into());
+        server_config.transport_config(Arc::new(transport));
+        let endpoint = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap())
+            .expect("bind server");
+        let addr = endpoint.local_addr().expect("addr");
+        let body = Bytes::from(body);
+        let (tx, mut rx) = watch::channel(false);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break };
+                        let body = body.clone();
+                        tokio::spawn(async move {
+                            let Ok(conn) = incoming.await else { return };
+                            let h3_conn = h3_quinn::Connection::new(conn);
+                            let Ok(mut server) =
+                                h3::server::Connection::<_, Bytes>::new(h3_conn).await
+                            else {
+                                return;
+                            };
+                            loop {
+                                let Ok(Some(resolver)) = server.accept().await else { break };
+                                let body = body.clone();
+                                let Ok((_req, mut stream)) = resolver.resolve_request().await
+                                else {
+                                    continue;
+                                };
+                                loop {
+                                    match stream.recv_data().await {
+                                        Ok(Some(_)) => {
+                                            tokio::time::sleep(Duration::from_millis(25)).await;
+                                        }
+                                        Ok(None) => break,
+                                        Err(_) => break,
+                                    }
+                                }
+                                let resp = http::Response::builder()
+                                    .status(200)
+                                    .header("content-type", "text/plain")
+                                    .body(())
+                                    .unwrap();
+                                if stream.send_response(resp).await.is_err() {
+                                    break;
+                                }
+                                let _ = stream.send_data(body).await;
+                                let _ = stream.finish().await;
+                            }
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self { addr, shutdown: tx }
+    }
+
     fn url(&self) -> String {
         format!("https://127.0.0.1:{}/", self.addr.port())
     }
+}
+
+#[cfg(feature = "tls-rustls")]
+struct HttpsAltSvcServer {
+    port: u16,
+    shutdown_tx: watch::Sender<bool>,
+}
+
+#[cfg(feature = "tls-rustls")]
+impl HttpsAltSvcServer {
+    async fn start(
+        ca: &CertAuthority,
+        hostnames: &[&str],
+        alt_svc: Option<String>,
+        body: Vec<u8>,
+    ) -> Self {
+        let (cert_der, key_der) = ca.generate_server_cert(hostnames);
+        let server_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .expect("cert");
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let port = listener.local_addr().expect("port").port();
+        let (tx, mut rx) = watch::channel(false);
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(server_config));
+        let alt_svc = alt_svc.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        let Ok((tcp, _)) = result else { break };
+                        let acceptor = acceptor.clone();
+                        let alt_svc = alt_svc.clone();
+                        let body = body.clone();
+                        tokio::spawn(async move {
+                            let Ok(tls) = acceptor.accept(tcp).await else { return };
+                            let mut reader = BufReader::new(tls);
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).await.is_err() || line.trim().is_empty() {
+                                return;
+                            }
+                            loop {
+                                let mut h = String::new();
+                                if reader.read_line(&mut h).await.is_err() || h.trim().is_empty() {
+                                    break;
+                                }
+                            }
+                            let alt_header = alt_svc
+                                .as_ref()
+                                .map(|v| format!("Alt-Svc: {v}\r\n"))
+                                .unwrap_or_default();
+                            let resp = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n",
+                                body.len(),
+                                alt_header,
+                            );
+                            let mut stream = reader.into_inner();
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                            let _ = stream.write_all(&body).await;
+                            let _ = stream.flush().await;
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self {
+            port,
+            shutdown_tx: tx,
+        }
+    }
+
+    fn url(&self) -> String {
+        format!("https://localhost:{}/", self.port)
+    }
+}
+
+#[cfg(feature = "tls-rustls")]
+impl Drop for HttpsAltSvcServer {
+    fn drop(&mut self) {
+        let _ = self.shutdown_tx.send(true);
+    }
+}
+
+#[cfg(feature = "tls-rustls")]
+struct VerifiedH3Server {
+    addr: SocketAddr,
+    shutdown: watch::Sender<bool>,
+}
+
+#[cfg(feature = "tls-rustls")]
+impl VerifiedH3Server {
+    async fn start(
+        cert_der: CertificateDer<'static>,
+        key_der: PrivateKeyDer<'static>,
+        body: Vec<u8>,
+    ) -> Self {
+        tokio::task::yield_now().await;
+        let mut server_tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .expect("TLS13")
+        .with_no_client_auth()
+        .with_single_cert(vec![cert_der], key_der)
+        .expect("cert");
+        server_tls.alpn_protocols = vec![b"h3".to_vec()];
+        let quic_crypto =
+            quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).expect("crypto");
+        let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_crypto));
+        let mut transport = quinn::TransportConfig::default();
+        transport.max_concurrent_bidi_streams(100u32.into());
+        transport.max_concurrent_uni_streams(100u32.into());
+        server_config.transport_config(Arc::new(transport));
+        let endpoint =
+            quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).expect("bind");
+        let addr = endpoint.local_addr().expect("addr");
+        let body = Bytes::from(body);
+        let (tx, mut rx) = watch::channel(false);
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break };
+                        let body = body.clone();
+                        tokio::spawn(async move {
+                            let Ok(conn) = incoming.await else { return };
+                            let h3_conn = h3_quinn::Connection::new(conn);
+                            let Ok(mut server) =
+                                h3::server::Connection::<_, Bytes>::new(h3_conn).await
+                            else {
+                                return;
+                            };
+                            loop {
+                                let Ok(Some(resolver)) = server.accept().await else { break };
+                                let body = body.clone();
+                                let Ok((_req, mut stream)) = resolver.resolve_request().await
+                                else {
+                                    continue;
+                                };
+                                while stream.recv_data().await.ok().flatten().is_some() {}
+                                let resp = http::Response::builder().status(200).body(()).unwrap();
+                                if stream.send_response(resp).await.is_err() {
+                                    break;
+                                }
+                                let _ = stream.send_data(body).await;
+                                let _ = stream.finish().await;
+                            }
+                        });
+                    }
+                    _ = rx.changed() => break,
+                }
+            }
+        });
+        Self { addr, shutdown: tx }
+    }
+}
+
+#[cfg(feature = "tls-rustls")]
+impl Drop for VerifiedH3Server {
+    fn drop(&mut self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+#[cfg(feature = "tls-rustls")]
+fn auto_client_with_ca(ca: &CertAuthority) -> Client {
+    let tls = TlsConfig::builder()
+        .ca_certificate_pem(&ca.cert_pem())
+        .expect("ca")
+        .build();
+    Client::builder()
+        .http_version_policy(HttpVersionPolicy::Auto { allow_http3: true })
+        .tls_config(tls)
+        .automatic_decompression(false)
+        .build()
 }
 
 impl Drop for QuicTestServer {
@@ -361,6 +714,30 @@ fn external_h3_client() -> Client {
         );
     }
     builder.build()
+}
+
+fn external_h3_auto_client() -> Client {
+    let mut builder =
+        Client::builder().http_version_policy(HttpVersionPolicy::Auto { allow_http3: true });
+    if std::env::var_os("EGGFETCH_H3_INTEROP_DANGER_ACCEPT_INVALID_CERTS").is_some() {
+        builder = builder.tls_config(
+            TlsConfig::builder()
+                .danger_accept_invalid_certs(true)
+                .build(),
+        );
+    }
+    builder.build()
+}
+
+fn external_control_url(case: &str) -> Option<String> {
+    let key = match case {
+        "stream_reset" => "EGGFETCH_H3_INTEROP_CONTROL_STREAM_RESET",
+        "graceful_connection_close" => "EGGFETCH_H3_INTEROP_CONTROL_GRACEFUL_CONNECTION_CLOSE",
+        "goaway_reconnect" => "EGGFETCH_H3_INTEROP_CONTROL_GOAWAY_RECONNECT",
+        "alternative_port" => "EGGFETCH_H3_INTEROP_CONTROL_ALTERNATIVE_PORT",
+        _ => return None,
+    };
+    std::env::var(key).ok().filter(|value| !value.is_empty())
 }
 
 fn external_case_enabled(case: &str) -> bool {
@@ -550,12 +927,202 @@ async fn external_h3_interop_servers_if_configured() {
             }
             eprintln!("H3_CORPUS_CASE connection_reuse=pass endpoint={url}");
         }
+        if external_case_enabled("cancellation_before_headers") {
+            let stalled = client.get(url).unwrap().send();
+            let aborted = tokio::time::timeout(Duration::from_millis(500), stalled).await;
+            assert!(aborted.is_err(), "must abort before response headers");
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client usable after cancel-before-headers");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            eprintln!("H3_CORPUS_CASE cancellation_before_headers=pass endpoint={url}");
+        }
+        if external_case_enabled("cancellation_during_upload") {
+            let chunks = (0..256)
+                .map(|_| Ok(Bytes::from(vec![0x44; 4096])))
+                .collect::<Vec<_>>();
+            let body = RequestBody::from_stream(stream::iter(chunks), None);
+            let stalled = client.post(url).unwrap().body(body).send();
+            let aborted = tokio::time::timeout(Duration::from_millis(500), stalled).await;
+            assert!(aborted.is_err(), "must abort during upload");
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client usable after upload cancel");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            eprintln!("H3_CORPUS_CASE cancellation_during_upload=pass endpoint={url}");
+        }
+        if external_case_enabled("cancellation_during_download") {
+            let mut response = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("download for cancel");
+            let mut body_stream = response.bytes_stream().expect("download stream");
+            if let Some(chunk) = body_stream.next().await {
+                let _ = chunk.expect("first chunk");
+            }
+            drop(body_stream);
+            drop(response);
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client usable after download cancel");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            eprintln!("H3_CORPUS_CASE cancellation_during_download=pass endpoint={url}");
+        }
+        if external_case_enabled("stream_reset") {
+            let control = external_control_url("stream_reset")
+                .expect("stream_reset requires EGGFETCH_H3_INTEROP_CONTROL_STREAM_RESET");
+            let outcome = tokio::time::timeout(
+                Duration::from_secs(15),
+                client.get(&control).unwrap().send(),
+            )
+            .await;
+            if let Ok(Ok(mut resp)) = outcome {
+                let _ = tokio::time::timeout(Duration::from_secs(5), resp.text()).await;
+            }
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client usable after stream reset");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            eprintln!("H3_CORPUS_CASE stream_reset=pass endpoint={url}");
+        }
+        if external_case_enabled("graceful_connection_close") {
+            let control = external_control_url("graceful_connection_close").expect(
+                "graceful_connection_close requires EGGFETCH_H3_INTEROP_CONTROL_GRACEFUL_CONNECTION_CLOSE",
+            );
+            let mut control_resp = client
+                .get(&control)
+                .unwrap()
+                .send()
+                .await
+                .expect("graceful control request");
+            let _ = control_resp.text().await;
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client reconnects after graceful close");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            eprintln!("H3_CORPUS_CASE graceful_connection_close=pass endpoint={url}");
+        }
+        if external_case_enabled("goaway_reconnect") {
+            let control = external_control_url("goaway_reconnect")
+                .expect("goaway_reconnect requires EGGFETCH_H3_INTEROP_CONTROL_GOAWAY_RECONNECT");
+            let before = client.transport_metrics().snapshot();
+            let mut control_resp = client
+                .get(&control)
+                .unwrap()
+                .send()
+                .await
+                .expect("goaway control request");
+            let _ = control_resp.text().await;
+            let mut recovery = client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("client reconnects after GOAWAY");
+            assert!(
+                (200..400).contains(&recovery.status().as_u16()),
+                "recovery status"
+            );
+            let _ = recovery.text().await.expect("recovery body");
+            let after = client.transport_metrics().snapshot();
+            assert!(
+                after.h3_reconnected > before.h3_reconnected,
+                "expected h3_reconnected to increase: before={before:?} after={after:?}"
+            );
+            eprintln!("H3_CORPUS_CASE goaway_reconnect=pass endpoint={url}");
+        }
+        if external_case_enabled("alternative_port") {
+            let discovery = external_control_url("alternative_port")
+                .expect("alternative_port requires EGGFETCH_H3_INTEROP_CONTROL_ALTERNATIVE_PORT");
+            let auto_client = external_h3_auto_client();
+            let mut learn = auto_client
+                .get(&discovery)
+                .unwrap()
+                .send()
+                .await
+                .expect("Alt-Svc discovery");
+            assert!(
+                (200..400).contains(&learn.status().as_u16()),
+                "discovery status"
+            );
+            let _ = learn.text().await.expect("discovery body");
+            let mut h3 = auto_client
+                .get(url)
+                .unwrap()
+                .send()
+                .await
+                .expect("H3 on alternative port");
+            assert!(
+                (200..400).contains(&h3.status().as_u16()),
+                "alternative port status"
+            );
+            let _ = h3.text().await.expect("alternative port body");
+            eprintln!("H3_CORPUS_CASE alternative_port=pass endpoint={url}");
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
 // §2 continued: request/response corpus (local, deterministic)
 // ---------------------------------------------------------------------------
+
+/// Streaming upload succeeds over H3 (corpus `streaming_upload`).
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_streaming_upload_succeeds() {
+    let server = QuicTestServer::start(b"stream-up".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let chunks = (0..32)
+        .map(|_| Ok(Bytes::from(vec![0x33; 1024])))
+        .collect::<Vec<_>>();
+    let body = RequestBody::from_stream(stream::iter(chunks), Some(32 * 1024));
+    let mut resp = client
+        .post(&url)
+        .unwrap()
+        .body(body)
+        .send()
+        .await
+        .expect("h3 streaming post");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(resp.text().await.expect("body"), "stream-up");
+}
 
 /// POST with a buffered body succeeds over H3 (upload path).
 #[tokio::test(flavor = "multi_thread")]
@@ -768,9 +1335,262 @@ async fn h3_early_close_terminates_and_client_recovers() {
     assert_eq!(resp.text().await.expect("body"), "recovered");
 }
 
+/// Upload cancellation returns promptly and the client stays usable.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_cancellation_during_upload_is_prompt() {
+    let slow = QuicTestServer::start_slow_upload_consumer(b"unused".to_vec()).await;
+    let slow_url = slow.url();
+    let good = QuicTestServer::start(b"after-upload-cancel".to_vec()).await;
+    let good_url = good.url();
+    let client = h3_client();
+    let chunks = (0..512)
+        .map(|_| Ok(Bytes::from(vec![0x22; 4096])))
+        .collect::<Vec<_>>();
+    let body = RequestBody::from_stream(stream::iter(chunks), None);
+    let stalled = client.post(&slow_url).unwrap().body(body).send();
+    let aborted = tokio::time::timeout(Duration::from_millis(75), stalled).await;
+    assert!(aborted.is_err(), "upload cancel must be prompt");
+    drop(aborted);
+    let mut recovery = client
+        .get(&good_url)
+        .unwrap()
+        .send()
+        .await
+        .expect("usable after upload cancel");
+    assert_eq!(recovery.status().as_u16(), 200);
+    assert_eq!(recovery.text().await.expect("body"), "after-upload-cancel");
+}
+
+/// Download cancellation releases the stream and the client stays usable.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_cancellation_during_download_is_prompt() {
+    let payload = vec![0xCD_u8; 512 * 1024];
+    let server = QuicTestServer::start(payload).await;
+    let url = server.url();
+    let client = h3_client();
+    let mut resp = client.get(&url).unwrap().send().await.expect("download");
+    let mut body_stream = resp.bytes_stream().expect("stream");
+    let first = body_stream
+        .next()
+        .await
+        .expect("first chunk")
+        .expect("chunk");
+    assert!(!first.is_empty());
+    drop(body_stream);
+    drop(resp);
+    let mut recovery = client
+        .get(&url)
+        .unwrap()
+        .send()
+        .await
+        .expect("usable after download cancel");
+    assert_eq!(recovery.status().as_u16(), 200);
+    assert_eq!(recovery.bytes().await.expect("body").len(), 512 * 1024);
+}
+
+/// GOAWAY after one response drains the generation; the next request reconnects.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_graceful_connection_close_reconnects() {
+    let server = QuicTestServer::start_shutdown_after_one_response(b"graceful-one".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let mut first = client.get(&url).unwrap().send().await.expect("first");
+    assert_eq!(first.text().await.expect("body"), "graceful-one");
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let mut second = client.get(&url).unwrap().send().await.expect("second");
+    assert_eq!(second.text().await.expect("body"), "graceful-one");
+}
+
+/// GOAWAY reconnect is observable via `h3_reconnected` and optional drain metrics.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_goaway_reconnect_observes_metrics() {
+    let server = QuicTestServer::start_shutdown_after_one_response(b"goaway-one".to_vec()).await;
+    let url = server.url();
+    let client = h3_client();
+    let before = client.transport_metrics().snapshot();
+    let mut first = client.get(&url).unwrap().send().await.expect("first");
+    assert_eq!(first.text().await.expect("body"), "goaway-one");
+    let mid = client.transport_metrics().snapshot();
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let mut second = client.get(&url).unwrap().send().await.expect("reconnect");
+    assert_eq!(second.text().await.expect("body"), "goaway-one");
+    let after = client.transport_metrics().snapshot();
+    assert!(
+        after.h3_reconnected > before.h3_reconnected,
+        "h3_reconnected before={before:?} after={after:?}"
+    );
+    if mid.h3_drain_observed > before.h3_drain_observed {
+        assert!(
+            after.h3_drain_observed >= mid.h3_drain_observed,
+            "drain metric should remain observed"
+        );
+    }
+}
+
+/// Explicit IPv4 loopback GET succeeds.
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_ipv4_loopback_get_succeeds() {
+    let server = QuicTestServer::start(b"ipv4-ok".to_vec()).await;
+    let client = h3_client();
+    let mut resp = client
+        .get(&server.url())
+        .unwrap()
+        .send()
+        .await
+        .expect("ipv4 get");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(resp.text().await.expect("body"), "ipv4-ok");
+}
+
+/// Authenticated Alt-Svc on an alternative port is selected by `Auto`.
+#[cfg(feature = "tls-rustls")]
+#[tokio::test(flavor = "multi_thread")]
+async fn h3_alternative_port_via_altsvc() {
+    let ca = CertAuthority::new();
+    let (h3_cert, h3_key) = ca.generate_server_cert(&["localhost", "127.0.0.1"]);
+    let h3 = VerifiedH3Server::start(h3_cert, h3_key, b"alt-h3-body".to_vec()).await;
+    let h1 = HttpsAltSvcServer::start(
+        &ca,
+        &["localhost"],
+        Some(format!("h3=\":{}\"; ma=60", h3.addr.port())),
+        b"discover-h1".to_vec(),
+    )
+    .await;
+    let client = auto_client_with_ca(&ca);
+    let mut learn = client.get(&h1.url()).unwrap().send().await.expect("learn");
+    assert_eq!(learn.text().await.expect("h1 body"), "discover-h1");
+    let mut h3_resp = client
+        .get(&h1.url())
+        .unwrap()
+        .send()
+        .await
+        .expect("h3 route");
+    assert_eq!(h3_resp.text().await.expect("h3 body"), "alt-h3-body");
+    let metrics = client.transport_metrics().snapshot();
+    assert!(
+        metrics.h3_route_attempted > 0,
+        "must attempt H3: {metrics:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // §5: Resource and soak evidence (bounded, deterministic)
 // ---------------------------------------------------------------------------
+
+/// Soak counts (M009); short controls above keep smaller loops for fast Tier 1.
+const SOAK_SEQUENTIAL_REUSE: u32 = 1_000;
+const SOAK_FAIL_RECONNECT_CYCLES: u32 = 50;
+const SOAK_CANCELLATION_STORM: u32 = 50;
+const SOAK_PARTIAL_BODY_DROP: u32 = 30;
+const SOAK_CLIENT_CONSTRUCTION_DROP: u32 = 100;
+
+/// Measure current RSS in bytes. Returns 0 on unsupported platforms.
+fn current_rss_bytes() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| {
+                    l.split_whitespace()
+                        .nth(1)
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .map(|kb| kb * 1024)
+                })
+            })
+            .unwrap_or(0)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
+    }
+}
+
+/// Open file-descriptor count. Returns 0 on unsupported platforms.
+fn current_open_fd_count() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_dir("/proc/self/fd")
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        0
+    }
+}
+
+/// Shared reuse/fail/cancel soaks stay under a tight Linux `VmRSS` step.
+const RESOURCE_RSS_ENVELOPE_BYTES: usize = 4 * 1024 * 1024;
+/// Construction/drop builds a full H3 client + QUIC handshake each cycle.
+/// ubuntu-latest measured ~21 MiB `VmRSS` step across 100 cycles with one
+/// reused peer (glibc retention); keep a hard cap with headroom, not exact
+/// equality. Open-fd growth stays on the shared tight envelope.
+const CLIENT_DROP_RSS_ENVELOPE_BYTES: usize = 32 * 1024 * 1024;
+const RESOURCE_FD_ENVELOPE: usize = 64;
+
+fn assert_resource_envelope(
+    rss_before: usize,
+    rss_after: usize,
+    fd_before: usize,
+    fd_after: usize,
+    context: &str,
+) {
+    assert_resource_envelope_with_limits(
+        rss_before,
+        rss_after,
+        fd_before,
+        fd_after,
+        RESOURCE_RSS_ENVELOPE_BYTES,
+        RESOURCE_FD_ENVELOPE,
+        context,
+    );
+}
+
+fn assert_resource_envelope_with_limits(
+    rss_before: usize,
+    rss_after: usize,
+    fd_before: usize,
+    fd_after: usize,
+    max_rss_delta: usize,
+    max_fd_delta: usize,
+    context: &str,
+) {
+    if rss_before > 0 && rss_after > 0 {
+        let delta = rss_after.abs_diff(rss_before);
+        assert!(
+            delta < max_rss_delta,
+            "{context}: VmRSS grew by {delta} bytes (before={rss_before}, after={rss_after})"
+        );
+    }
+    if fd_before > 0 && fd_after > 0 {
+        let delta = fd_after.abs_diff(fd_before);
+        assert!(
+            delta < max_fd_delta,
+            "{context}: open fd count grew by {delta} (before={fd_before}, after={fd_after})"
+        );
+    }
+}
+
+fn assert_h3_diagnostics_bounded_and_redacted(client: &Client) {
+    let diagnostics = client.transport_metrics().h3_diagnostics();
+    assert!(
+        diagnostics.len() <= 64,
+        "h3_diagnostics must stay capped: {}",
+        diagnostics.len()
+    );
+    for diagnostic in &diagnostics {
+        let debug = format!("{diagnostic:?}");
+        assert!(!debug.contains("localhost"), "hostname leaked: {debug}");
+        assert!(!debug.contains("authorization"), "header leaked: {debug}");
+        assert!(!debug.contains("cookie"), "cookie leaked: {debug}");
+        assert!(!debug.contains("set-cookie"), "header leaked: {debug}");
+        assert!(
+            !debug.contains("peer reason"),
+            "close reason leaked: {debug}"
+        );
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn hundred_sequential_requests_on_reused_h3_connection() {
@@ -870,14 +1690,201 @@ async fn cancellation_storm_leaves_client_usable() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn client_construction_drop_loops_do_not_leak() {
+    let server = QuicTestServer::start(b"drop-ok".to_vec()).await;
+    let url = server.url();
     for _ in 0..20u32 {
-        let server = QuicTestServer::start(b"drop-ok".to_vec()).await;
-        let url = server.url();
         let client = h3_client();
         let mut resp = client.get(&url).unwrap().send().await.expect("req");
         assert_eq!(resp.status().as_u16(), 200);
+        let _ = resp.text().await.expect("body");
         drop(client);
     }
+}
+
+/// M009 soak: 1 000 sequential GETs on one reused H3 connection.
+#[tokio::test(flavor = "multi_thread")]
+async fn thousand_sequential_requests_on_reused_h3_connection() {
+    let server = QuicTestServer::start(b"x".repeat(64)).await;
+    let url = server.url();
+    let client = h3_client();
+    for i in 0..10u32 {
+        let mut resp = client
+            .get(&url)
+            .unwrap()
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("warmup {i}: {e:?}"));
+        assert_eq!(resp.status().as_u16(), 200);
+        let _ = resp.text().await.expect("warmup body");
+    }
+    let rss_before = current_rss_bytes();
+    let fd_before = current_open_fd_count();
+    for i in 0..SOAK_SEQUENTIAL_REUSE {
+        let mut resp = client
+            .get(&url)
+            .unwrap()
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("request {i} failed: {e:?}"));
+        assert_eq!(resp.status().as_u16(), 200);
+        let body = resp.text().await.expect("body");
+        assert_eq!(body.len(), 64, "request {i}");
+    }
+    let m = client.transport_metrics().snapshot();
+    assert!(
+        m.h3_connections_created < 10,
+        "connection churn too high after {SOAK_SEQUENTIAL_REUSE} reuse: {}",
+        m.h3_connections_created
+    );
+    assert_h3_diagnostics_bounded_and_redacted(&client);
+    assert_resource_envelope(
+        rss_before,
+        current_rss_bytes(),
+        fd_before,
+        current_open_fd_count(),
+        "thousand sequential H3 reuse",
+    );
+}
+
+/// M009 soak: fail/reconnect beyond the 10-cycle short control.
+#[tokio::test(flavor = "multi_thread")]
+async fn fifty_repeated_fail_reconnect_cycles_do_not_grow_state_soak() {
+    let good = QuicTestServer::start(b"ok".to_vec()).await;
+    let good_url = good.url();
+    let client = h3_client_with_connect_timeout(Duration::from_millis(200));
+    for _ in 0..5u32 {
+        let hole = Blackhole::bind();
+        let _ = client.get(&hole.url()).unwrap().send().await;
+    }
+    let warm = client.transport_metrics().snapshot();
+    let rss_before = current_rss_bytes();
+    let fd_before = current_open_fd_count();
+    for cycle in 0..SOAK_FAIL_RECONNECT_CYCLES {
+        let hole = Blackhole::bind();
+        let _ = client.get(&hole.url()).unwrap().send().await;
+        let mut resp = client
+            .get(&good_url)
+            .unwrap()
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("good after cycle {cycle}: {e:?}"));
+        assert_eq!(resp.status().as_u16(), 200);
+        let _ = resp.text().await.expect("body");
+    }
+    let m = client.transport_metrics().snapshot();
+    assert!(
+        m.h3_connections_created < 64,
+        "fail/reconnect soak must stay within cache scale: {}",
+        m.h3_connections_created
+    );
+    let growth = m
+        .h3_connections_created
+        .saturating_sub(warm.h3_connections_created);
+    assert!(
+        growth < SOAK_FAIL_RECONNECT_CYCLES as usize / 2,
+        "must not grow ~one live generation per failure: warm={} after={}",
+        warm.h3_connections_created,
+        m.h3_connections_created
+    );
+    assert_h3_diagnostics_bounded_and_redacted(&client);
+    assert_resource_envelope(
+        rss_before,
+        current_rss_bytes(),
+        fd_before,
+        current_open_fd_count(),
+        "fifty fail/reconnect cycles",
+    );
+}
+
+/// M009 soak: cancellation storm plus partial-body-drop loop, then recovery.
+#[tokio::test(flavor = "multi_thread")]
+async fn extended_cancellation_and_partial_drop_storm_leaves_client_usable() {
+    let payload = vec![0x42_u8; 256 * 1024];
+    let server = QuicTestServer::start(payload.clone()).await;
+    let url = server.url();
+    let client = h3_client_with_connect_timeout(Duration::from_secs(5));
+    for _ in 0..5u32 {
+        let mut resp = client.get(&url).unwrap().send().await.expect("warmup");
+        let _ = resp.text().await.expect("warmup body");
+    }
+    let rss_before = current_rss_bytes();
+    let fd_before = current_open_fd_count();
+    for _ in 0..SOAK_CANCELLATION_STORM {
+        let fut = client.get(&url).unwrap().send();
+        let _ = tokio::time::timeout(Duration::from_millis(50), fut).await;
+    }
+    for _ in 0..SOAK_PARTIAL_BODY_DROP {
+        let mut resp = client
+            .get(&url)
+            .unwrap()
+            .send()
+            .await
+            .expect("partial send");
+        let mut stream = resp.bytes_stream().expect("stream");
+        if let Some(chunk) = stream.next().await {
+            let _ = chunk.expect("chunk");
+        }
+        drop(stream);
+        drop(resp);
+    }
+    let mut recovery = client
+        .get(&url)
+        .unwrap()
+        .send()
+        .await
+        .expect("usable after storm");
+    assert_eq!(recovery.status().as_u16(), 200);
+    assert_eq!(recovery.bytes().await.expect("body").len(), payload.len());
+    assert_h3_diagnostics_bounded_and_redacted(&client);
+    assert_resource_envelope(
+        rss_before,
+        current_rss_bytes(),
+        fd_before,
+        current_open_fd_count(),
+        "cancellation and partial-drop storm",
+    );
+}
+
+/// M009 soak: many client construction/drop cycles with one request each.
+///
+/// Reuses one peer so the envelope measures client drop, not fire-and-forget
+/// Quinn server tasks (`QuicTestServer::drop` only signals shutdown).
+#[tokio::test(flavor = "multi_thread")]
+async fn hundred_client_construction_drop_loops_do_not_leak_soak() {
+    let server = QuicTestServer::start(b"drop-ok".to_vec()).await;
+    let url = server.url();
+    {
+        let client = h3_client();
+        let mut resp = client.get(&url).unwrap().send().await.expect("warmup");
+        let _ = resp.text().await;
+        drop(client);
+    }
+    // Let the warmup accept/response tasks settle before the baseline sample.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    let rss_before = current_rss_bytes();
+    let fd_before = current_open_fd_count();
+    for i in 0..SOAK_CLIENT_CONSTRUCTION_DROP {
+        let client = h3_client();
+        let mut resp = client
+            .get(&url)
+            .unwrap()
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("req {i}: {e:?}"));
+        assert_eq!(resp.status().as_u16(), 200);
+        let _ = resp.text().await.expect("body");
+        drop(client);
+    }
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_resource_envelope_with_limits(
+        rss_before,
+        current_rss_bytes(),
+        fd_before,
+        current_open_fd_count(),
+        CLIENT_DROP_RSS_ENVELOPE_BYTES,
+        RESOURCE_FD_ENVELOPE,
+        "hundred client construction/drop",
+    );
 }
 
 // ---------------------------------------------------------------------------

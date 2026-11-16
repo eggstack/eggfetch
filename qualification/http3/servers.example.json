@@ -8,7 +8,7 @@
       "identity": {"source_revision": "record-full-commit-or-image-digest"},
       "endpoint": "https://h3.example.invalid/",
       "capabilities": ["get", "head", "buffered_post", "streaming_upload", "large_streaming_download", "multiplexed_requests", "connection_reuse"],
-      "notes": "Use an authenticated certificate and a fixture endpoint implementing the declared cases. Do not use credentials or query strings in endpoint URLs."
+      "notes": "Use an authenticated certificate and a fixture endpoint implementing the declared cases. Do not use credentials or query strings in endpoint URLs. Optional controls (template placeholders on h3.example.invalid, not evidence): stream_reset, graceful_connection_close, goaway_reconnect, alternative_port — each an https URL on the same authority without query or credentials."
     },
     {
       "implementation": "quiche",

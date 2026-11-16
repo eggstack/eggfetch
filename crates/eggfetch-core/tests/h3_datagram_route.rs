@@ -417,10 +417,12 @@ impl DatagramRoute for CarrierRoute {
                 }
                 tokio::select! {
                     result = self.socket.recv_from(buffer) => {
-                        let (len, _source) = result.map_err(|e| {
+                        let (len, source) = result.map_err(|e| {
                             DialError::new(DialErrorKind::Connection, format!("carrier recv: {e}"))
                         })?;
-                        return Ok(len);
+                        // Report the observed source; the bridge drops anything
+                        // that is not the fixed peer before feeding Quinn.
+                        return Ok((len, source));
                     }
                     changed = kill_route.changed() => {
                         if changed.is_err() || *kill_route.borrow_and_update() == self.route_id {
@@ -453,7 +455,7 @@ struct CarrierDialer {
     default_plan: Option<RoutePlan>,
     probe: Arc<CarrierProbe>,
     /// When set, `connect` fails with this kind instead of returning a route.
-    fail_with: Option<DialErrorKind>,
+    fail_with: Option<(DialErrorKind, String)>,
     /// When true, `connect` never resolves, so only the deadline can end it.
     stall: bool,
 }
@@ -502,7 +504,12 @@ impl CarrierDialer {
     }
 
     fn failing(mut self, kind: DialErrorKind) -> Self {
-        self.fail_with = Some(kind);
+        self.fail_with = Some((kind, "carrier refused".into()));
+        self
+    }
+
+    fn failing_with_message(mut self, kind: DialErrorKind, message: impl Into<String>) -> Self {
+        self.fail_with = Some((kind, message.into()));
         self
     }
 
@@ -532,8 +539,8 @@ impl DatagramDialer for CarrierDialer {
         if self.stall {
             return Box::pin(futures_util::future::pending());
         }
-        if let Some(kind) = self.fail_with {
-            return Box::pin(async move { Err(DialError::new(kind, "carrier refused")) });
+        if let Some((kind, message)) = self.fail_with.clone() {
+            return Box::pin(async move { Err(DialError::new(kind, message)) });
         }
         let plan = self.plan_for(target.port());
         let probe = Arc::clone(&self.probe);
@@ -717,6 +724,39 @@ async fn a_refused_route_never_falls_back_to_a_direct_socket() {
     assert_eq!(control_resp.text().await.expect("body"), "never-used");
 
     assert_connect_class(&error);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connection_dial_errors_never_reexpose_provider_text() {
+    const SECRET: &str = "password=super-secret https://relay.example/token=abc";
+    let server = QuicTestServer::start(b"never-used".to_vec());
+    let probe = Arc::new(CarrierProbe::default());
+    let client = routed_client(
+        CarrierDialer::new(server.addr, probe)
+            .failing_with_message(DialErrorKind::Connection, SECRET),
+    );
+
+    let error = client
+        .get(&server.url())
+        .unwrap()
+        .send()
+        .await
+        .expect_err("connection refusal must fail closed");
+
+    assert!(
+        matches!(error, Error::H3Connect(_)),
+        "Connection-kind dial failures map to H3Connect, got {error}"
+    );
+    let display = format!("{error}");
+    let debug = format!("{error:?}");
+    assert!(
+        !display.contains(SECRET) && !debug.contains(SECRET),
+        "provider Connection messages must not appear in H3Connect Display/Debug: display={display} debug={debug}"
+    );
+    assert!(
+        !display.contains("password=") && !debug.contains("password="),
+        "credential-like fragments must not leak: display={display} debug={debug}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

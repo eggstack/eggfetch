@@ -117,6 +117,10 @@ Eggfetch receives two address facts from the established route:
 - a local socket address used for Quinn endpoint/path bookkeeping;
 - a physical peer address used as the stable Quinn path peer.
 
+Each successful `recv` also reports the datagram source address. The private
+bridge drops any datagram whose source is not the fixed peer before feeding
+Quinn (M011).
+
 The physical peer may be a proxy relay rather than the logical origin and MUST
 NOT be reused as SNI, Host, cookie/auth origin, redirect identity, or
 certificate-verification identity. Eggfetch retains those logical-origin
