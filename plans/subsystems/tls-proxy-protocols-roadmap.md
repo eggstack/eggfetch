@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Roadmap
 
-Status: active — M005–M012 closed (H3 experimental retained). M011–M012 security-audit correctives implemented; exact-SHA Stage C renewal pending freeze commit after Tier 1 green.
+Status: active — M005–M012 closed (H3 experimental retained). Stage C renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` after M011–M012.
 
 Long-term references:
 
@@ -511,5 +511,5 @@ servers, privileged impairment, public origins, and a published fix for h3
 | M008 H3 upstream risk re-audit | closed | `implementation/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | `closure/tls-proxy-protocols/008-h3-upstream-risk-re-audit.md` | No-upgrade; #338 blocker |
 | M009 H3 resource soak and platform scope | closed | `implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | `closure/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | Darwin row only; Stage C rebound |
 | M010 ordinary H3 graduation decision | closed (experimental retained) | `implementation/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | `closure/tls-proxy-protocols/010-ordinary-h3-graduation-decision.md` | Gate failed on independent servers, impairment, public origins, #338 |
-| M011 dial-error sanitization + datagram recv trust | closed (Stage C pending) | `implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | `closure/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | Fixed-text H3Connect; recv source check; Stage C pending freeze |
-| M012 H3 qualification security hygiene | closed (Stage C pending) | `implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | `closure/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | Ledger/embed Quinn pins; netem charset; Stage C pending freeze |
+| M011 dial-error sanitization + datagram recv trust | closed | `implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | `closure/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | Fixed-text H3Connect; recv source check; Stage C on `cef0e7aa…` |
+| M012 H3 qualification security hygiene | closed | `implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | `closure/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | Ledger/embed Quinn pins; netem charset; Stage C on `cef0e7aa…` |

@@ -1,6 +1,6 @@
 # TLS, Proxy, and Protocols Milestone 011 — H3 Dial-Error Sanitization and Datagram Recv Trust
 
-Status: closed (Stage C pending)
+Status: closed
 
 Repository baseline: `8af32d7ca4f1140e266875798522f5da09c17850`
 

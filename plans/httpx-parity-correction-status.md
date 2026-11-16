@@ -4,33 +4,31 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
-## Stage C renewed after Linux H3 soak CI fixes (2026-11-16)
+## Stage C renewed after M011–M012 security correctives (2026-11-16)
 
 Both documented facades are **Stage C qualified (renewal)** on executable
-freeze `8af32d7ca4f1140e266875798522f5da09c17850`. The preceding live binding
-`6b571028767dde4b0a78f36e6ecef525c6d68482` is historical because ubuntu-latest
-Tier 1 failed on `hundred_client_construction_drop_loops_do_not_leak_soak`
-(VmRSS envelope) and executable test fixes followed: reuse one Quinn peer for
-construction/drop, widen the Linux construction/drop `VmRSS` envelope to
-32 MiB from measured ~21 MiB retention, and a clippy `doc_markdown` fix.
-Quinn pins remain **0.11.12** / quinn-proto **0.11.19** / quinn-udp **0.5.16**.
-The M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged. Profile and
-ledger edits after this freeze are documentation only.
+freeze `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. The preceding live binding
+`8af32d7ca4f1140e266875798522f5da09c17850` is historical because M011–M012
+changed executable inputs: fixed-text `H3Connect` for Connection-kind dial
+errors, bridge-side off-peer datagram drops (`DatagramRoute::recv` reports
+source), ledger/embed Quinn pin refresh, and netem `scenario_id` charset
+validation. Quinn pins remain **0.11.12** / quinn-proto **0.11.19** /
+quinn-udp **0.5.16**. The M008 h3/h3-quinn no-upgrade disposition for #338 is
+unchanged. Profile and ledger edits after this freeze are documentation only.
 
-H3 stays experimental. This renewal is not an H3 graduation claim. Security
-audit correctives are registered as TLS/protocols M011–M012 (not implemented
-on this freeze).
+H3 stays experimental. This renewal is not an H3 graduation claim. M011–M012
+are closed on this freeze.
 
 ### Qualification evidence
 
 | Gate | Result |
 |---|---|
-| Tier 1 | `./scripts/check.sh` exit 0 on the freeze under Rosetta (Python behavior **581 passed**; PR #30 ubuntu-latest CI also green on this SHA). |
-| Tier 2 | Full extended gates exit 0 under Rosetta x86_64 / Python 3.14.2 (resource monitor retried once after a 65.39 MB delta near-miss). Both compatibility profiles **2082 passed, 1 skipped** (optional `google.genai` construction fixture left uninstalled: current SDK uses `SyncHttpx2Client`, so the `httpx.Client` isinstance check fails; skip-audit text prints FAIL but does not change pytest's exit status). API oracle clean for both facades (allowed differences only). Rust public-API oracle **8 profiles**; `cargo-semver-checks` **"no semver update required"**. Lifecycle **49 passed**; soak **11 passed**; downstream **4/4 required packages** with `overall_pass: true`. |
-| Resource monitor | **61.42 MB peak / 58.11 MB delta** against 100 MB peak / 64 MB delta limits (passing retry). |
+| Tier 1 | `./scripts/check.sh` exit 0 on the freeze under Rosetta (Python behavior **581 passed**). |
+| Tier 2 | Full extended gates exit 0 under Rosetta x86_64 / Python 3.14.2. Both compatibility profiles **2082 passed, 1 skipped** (optional `google.genai` construction fixture left uninstalled: current SDK uses `SyncHttpx2Client`, so the `httpx.Client` isinstance check fails; skip-audit text prints FAIL but does not change pytest's exit status). API oracle clean for both facades. Rust public-API oracle **8 profiles**; `cargo-semver-checks` **"no semver update required"**. Lifecycle **49 passed**; soak **11 passed**; downstream **4/4 required packages** with `overall_pass: true`. |
+| Resource monitor | **52.42 MB peak / 49.07 MB delta** against 100 MB peak / 64 MB delta limits. |
 | Tier 3 package gate | `./scripts/check.sh package` exit 0. Release wheel built; wheel smoke, content validation, and installed-wheel typing smoke passed (local wheel is x86_64/Rosetta). |
 | Live security preflight | `./scripts/check_security.sh` exit 0 — `advisories ok, bans ok, licenses ok, sources ok`. The `rustix` unsound warning (RUSTSEC-2026-0486) is allowed/informational. |
-| Criterion | Completed on resume path; informational only (no failure threshold). |
+| Criterion | Completed; informational only (no failure threshold). |
 
 ### Host accommodations
 
@@ -40,7 +38,8 @@ on this freeze).
   reference manifest.
 - Shell and build are Rosetta `x86_64` (`RUSTUP_TOOLCHAIN=stable-x86_64-apple-darwin`,
   `CARGO_BUILD_JOBS=6`, `CARGO_INCREMENTAL=0`). `CARGO_TARGET_DIR` must be
-  unset so `./target/release/resource_monitor` matches `check.sh`.
+  unset so `./target/release/resource_monitor` matches `check.sh`. PATH must
+  include `/usr/sbin` so compat FD-stability tests can invoke `lsof`.
 - `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` / `CURL_CA_BUNDLE` pointed at certifi
   because the macOS trust store on this host is empty for the python.org
   builds.
@@ -53,6 +52,26 @@ on this freeze).
 Unchanged: any change to executable inputs invalidates this binding and
 requires a fresh exact-SHA qualification, with the downstream artifact
 manifest re-supplied for that run.
+
+---
+
+## Stage C renewed after Linux H3 soak CI fixes (2026-11-16)
+
+> **Historical.** Live binding moved to `cef0e7aa…` after M011–M012.
+
+Both documented facades were **Stage C qualified (renewal)** on executable
+freeze `8af32d7ca4f1140e266875798522f5da09c17850`. The preceding live binding
+`6b571028767dde4b0a78f36e6ecef525c6d68482` is historical because ubuntu-latest
+Tier 1 failed on `hundred_client_construction_drop_loops_do_not_leak_soak`
+(VmRSS envelope) and executable test fixes followed: reuse one Quinn peer for
+construction/drop, widen the Linux construction/drop `VmRSS` envelope to
+32 MiB from measured ~21 MiB retention, and a clippy `doc_markdown` fix.
+Quinn pins remain **0.11.12** / quinn-proto **0.11.19** / quinn-udp **0.5.16**.
+The M008 h3/h3-quinn no-upgrade disposition for #338 is unchanged.
+
+H3 stays experimental. This renewal is not an H3 graduation claim. Security
+audit correctives were registered as TLS/protocols M011–M012 (implemented on
+the successor freeze).
 
 ---
 

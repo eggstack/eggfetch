@@ -31,7 +31,7 @@ H3 stays experimental; no adapter exposure of the dialer.
 | Existing datagram suites | `h3_datagram_route` (16) + `datagram::tests` (9) | pass | |
 | Threat model aligned | `docs/architecture/threat-model.md` § Malicious Datagram Route | pass | CustomTransport exception documented |
 | Public shapes / no Quinn leak | traits unchanged in name; recv success type refined to include `SocketAddr` | pass | Experimental Rust-only; oracle `all-features.txt` updated |
-| Stage C | exact-SHA renewal after executable change | pending freeze | Recorded with M012 on shared freeze |
+| Stage C | exact-SHA renewal after executable change | pass | Bound to `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` with M012 |
 
 ## 3. Production implementation evidence
 
@@ -58,4 +58,5 @@ already on the surface via `peer_addr`).
 
 ## 11. Closure recommendation
 
-**Closed.** Stage C SHA rebound on the shared M011+M012 freeze commit.
+**Closed.** Stage C SHA rebound on shared freeze
+`cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`.

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "program": "http3-upstream-risk-re-audit",
   "audited_at": "2026-11-16",
-  "git_revision": "8af32d7ca4f1140e266875798522f5da09c17850",
+  "git_revision": "cef0e7aa5c23ef92f4a378f370516d9dfbaa466d",
   "decision": "no-upgrade",
   "decision_summary": "crates.io still has no h3 newer than 0.0.8 and no h3-quinn newer than 0.0.10. PR #339 remains open and unreleased, so #338 stays a graduation blocker. Workspace Quinn pins were refreshed after RUSTSEC-2026-0523 / 0524 / 0538; that bump does not clear #338.",
   "resolved_versions": {

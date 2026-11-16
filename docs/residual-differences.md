@@ -1,13 +1,13 @@
 # Residual Differences from HTTPX 0.28.1
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `8af32d7ca4f1140e266875798522f5da09c17850` (2026-11-16). The
-Linux H3 soak CI fix on top of the M006–M010 harness + Quinn RustSec patch
+executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16). The
+M011–M012 security correctives (H3 dial-path trust + qualification hygiene)
 passed Tier 1/2/3 and the live security preflight. Its dependency policy
 retains the audited Tokio, zstd and brotli pins and carries quinn 0.11.12 /
 quinn-proto 0.11.19 / quinn-udp 0.5.16; see
 `docs/architecture/dependency-policy.md`. The prior
-`6b571028767dde4b0a78f36e6ecef525c6d68482` binding is historical. The full
+`8af32d7ca4f1140e266875798522f5da09c17850` binding is historical. The full
 history of every binding, renewal and supersession is in
 `plans/httpx-parity-correction-status.md`.
 The `015a56d7ec3edf186eec8ebccff01cbf5584274e` binding (the coordinated

@@ -107,7 +107,7 @@ the GIL.
 ## Qualification status
 
 The HTTPX 0.28.1 and HTTPX2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `8af32d7ca4f1140e266875798522f5da09c17850` (2026-11-16). The
+executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16). The
 full compatibility, extended, package, and live security gates passed on that
 freeze. Earlier bindings are historical. Current evidence is in
 `plans/httpx-parity-correction-status.md`; exact facade scopes are recorded in

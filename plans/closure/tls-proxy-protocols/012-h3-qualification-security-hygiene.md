@@ -57,4 +57,5 @@ unchanged. #338 disposition unchanged.
 
 ## 11. Closure recommendation
 
-**Closed.** Paired with M011 on the shared exact-SHA Stage C freeze.
+**Closed.** Paired with M011 on exact-SHA Stage C freeze
+`cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`.
