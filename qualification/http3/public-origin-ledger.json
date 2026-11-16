@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "program": "http3-ordinary-h3-graduation-decision",
+  "status": "shortfall",
+  "decision_sha_note": "Filled during M010 on the post-M008 tree; no public-origin checks were executed.",
+  "successful_origins": 0,
+  "required_successful_origins": 3,
+  "entries": [],
+  "entry_schema": {
+    "date_time_utc": "ISO-8601 UTC timestamp",
+    "hostname": "hostname only; no credentials, paths, or query strings",
+    "operator_or_cdn": "unrelated operator/CDN classification",
+    "h1_h2_discovery_status": "status code and authenticated Alt-Svc category/value",
+    "h3_used": "boolean plus observed route/protocol",
+    "body_integrity": "endpoint-appropriate integrity check",
+    "remote_address_family": "ipv4, ipv6, or unavailable",
+    "udp_unavailable_fallback": "pass, fail, or unsupported",
+    "transient_failure": "boolean",
+    "notes": "diagnostic notes without secrets"
+  },
+  "notes": "M010 retained the experimental label. An empty public-origin ledger is an explicit gate shortfall, not evidence of support. Do not treat the historical plans/http3-public-origin-spot-check-ledger.json as current."
+}

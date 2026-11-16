@@ -896,20 +896,27 @@ recovery, safe fallback with monotonic deadlines, draining reconnect,
 exact observability, and adversarial cases (plaintext/injection/oversized/
 stale/cancellation/clear, SNI preservation, one-shot non-replay).
 
-`crates/eggfetch-core/tests/h3_interop_qualification.rs` (20 deterministic loopback controls;
-external cases are selected by the qualification runner): mandatory Quinn self-interop,
-GET/HEAD, buffered POST upload, 1 MiB streaming download, 20-way
-multiplexed concurrency, H3 trailers after EOF, UDP-blackhole
-connect-budget termination, bad-then-good non-poisoning,
-server-restart reconnect, early-close / mid-response-drop termination
-with recovery, prompt cancellation, 100-request reuse soak,
-fail/reconnect stabilization, 70-origin boundedness beyond the
-64-entry cache, cancellation storms, construction/drop loops, exact
-metrics with truthful `None` H3 per-response metadata, IPv6
-capability detection, and a doc-pinned platform-scope check. The external
-adapter path can select GET/HEAD, buffered and streaming upload, large
-streaming download, trailers, multiplexing and reuse; server-controlled
-lifecycle cases remain unsupported unless an adapter can induce them.
+`crates/eggfetch-core/tests/h3_interop_qualification.rs` (deterministic loopback controls
+mapped to `qualification/http3/corpus.json`; external cases are selected by
+`scripts/h3_qualification.py`): mandatory Quinn self-interop, GET/HEAD, buffered
+and streaming POST upload, 1 MiB streaming download, 20-way multiplexed
+concurrency, H3 trailers after EOF, upload/download cancellation with client
+recovery, stream reset / mid-response-drop, graceful connection close and
+GOAWAY reconnect (with `h3_reconnected` observability), authenticated
+Alt-Svc alternative-port discovery under `Auto { allow_http3: true }`, explicit
+IPv4 loopback, UDP-blackhole connect-budget termination,
+bad-then-good non-poisoning, server-restart reconnect, 100-request reuse soak,
+fail/reconnect stabilization, 70-origin boundedness beyond the 64-entry cache,
+cancellation storms, construction/drop loops, exact metrics with truthful `None`
+H3 per-response metadata, IPv6 capability detection, and a doc-pinned
+platform-scope check. The external adapter path can execute the same generic
+endpoint cases plus client-driven cancellation (before headers, during upload,
+during download). Server-controlled cases (`stream_reset`,
+`graceful_connection_close`, `goaway_reconnect`, `alternative_port`) run only
+when the manifest supplies matching `controls` URLs (validated like the main
+endpoint); a declared capability without its control URL stays **unsupported**
+and does not count as an independent-server pass for that case alone.
+HTTP/3 remains **experimental**; this harness does not change that verdict.
 
 The implementation-neutral case contract is
 `qualification/http3/corpus.json`. Adapter manifests must capture an exact
@@ -948,6 +955,30 @@ milestone: the required independent and impairment evidence is also absent,
 so changing versions now would invalidate the completed frozen-tree gates.
 Any future upgrade must land before a new freeze and requalification.
 
+### Dependency and Upstream-Risk Re-Audit (2026-11-16, M008)
+
+Current resolved pins from `Cargo.lock` (tree
+`f11a46b28df88f43e923d5211f82985784daaf40`; lockfile unchanged by this
+audit):
+
+- `quinn 0.11.11` (`rustls` + `ring` + `runtime-tokio`)
+- `quinn-proto 0.11.18`, `quinn-udp 0.5.15`
+- `h3 0.0.8` with `i-implement-a-third-party-backend-and-opt-into-breaking-changes`
+  (`ConnectionState::is_closing()` / `is_h3_no_error()` still required for drain)
+- `h3-quinn 0.0.10`
+- Companions: `rustls 0.23.46`, `tokio-rustls 0.26.4`, `tokio 1.53.3`
+
+crates.io on 2026-11-16 still has no `h3` newer than 0.0.8 and no
+`h3-quinn` newer than 0.0.10. [PR #339](https://github.com/hyperium/h3/pull/339)
+remains open, so [issue #338](https://github.com/hyperium/h3/issues/338)
+stays a **graduation blocker** with no eggfetch workaround on the
+response-header path. [Issue #361](https://github.com/hyperium/h3/issues/361)
+remains an open cancellation wire-code limitation (STOP_SENDING during a
+pending read). GHSA-6xvm-j4wr-6v98 is addressed by resolved
+`quinn-proto 0.11.18` (≥ 0.11.14). No fork, vendor, or `[patch]` is
+introduced. Machine-readable ledger:
+`qualification/http3/upstream-risk-ledger.json`.
+
 ### Interoperability Evidence (this milestone)
 
 - Deterministic loopback Quinn/h3 fixtures are mandatory and green
@@ -979,6 +1010,35 @@ Any future upgrade must land before a new freeze and requalification.
   required loss/reordering/jitter/duplication/MTU/address-family matrix is
   represented in `qualification/http3/impairment-matrix.json`; execution
   remains qualification-only and unsupported scenarios stay explicit.
+
+#### H3 impairment runner (qualification-only)
+
+The matrix is coordinated by `scripts/h3_impairment.py`. Pass a Linux netem
+runner that understands the coordinator contract:
+
+```bash
+python scripts/h3_impairment.py \
+  --runner scripts/h3_impairment_netem.py \
+  --output target/h3-impairment.json
+```
+
+The runner receives `SCENARIO_ID` and an output path, and sets
+`EGGFETCH_H3_IMPAIRMENT_SCENARIO`, `EGGFETCH_H3_IMPAIRMENT_OUTPUT`, and (when
+netem is applied) `EGGFETCH_H3_IMPAIRMENT_NETEM_ACTIVE=1` for the matching
+`cargo test -p eggfetch-core --test h3_impairment_scenarios` case.
+
+Privileged Linux (`unshare`/`ip netns`, `tc netem` on loopback) is required for
+packet loss, reordering, duplication, jitter, MTU clamp, and mid-transfer path
+loss scenarios. macOS and Windows runs record `unsupported` for those rows; that
+is **not** graduation evidence and does not count as a completed matrix. Example
+fixed loss rates recorded in runner JSON: **1%** (`packet_loss_low`) and **20%**
+(`packet_loss_high`).
+
+Scenarios that use local fixtures only (`udp_blackhole`, `udp_rejected`,
+`server_restart`, `first_address_unreachable`, and address-family rows when the
+host exposes both families) can produce `pass`/`fail` without netem. Tier 1 runs
+only the socket-free contract self-test in `scripts/test_h3_qualification.py`,
+not the netem runner.
 
 ### H3 Diagnostics
 
@@ -1029,24 +1089,36 @@ the procedure on a frozen SHA.
 
 ### Resource and Platform Scope
 
-- Soak coverage is bounded and deterministic: 100 sequential reused-H3
-  requests, 10 fail/reconnect cycles, 20-iteration cancellation storms,
-  20-iteration construction/drop loops, 70-distinct-origin boundedness,
-  20-way multiplexed concurrency, and 1 MiB streaming download.
+- **Short controls** (fast Tier 1): 100 sequential reused-H3 requests, 10
+  fail/reconnect cycles, 20-iteration cancellation storms, 20-iteration
+  construction/drop loops, 70-distinct-origin boundedness, 20-way
+  multiplexed concurrency, and 1 MiB streaming download
+  (`h3_interop_qualification.rs`).
+- **M009 local soak** (same file, `http3` feature): 1 000 sequential reuse,
+  50 fail/reconnect cycles (blackhole then good origin), 50 cancellation
+  timeouts plus 30 partial-body drops then one full recovery, and 100
+  client construction/drop loops (one GET each). On Linux, post-warmup
+  `VmRSS` and open-fd count must stay within a bounded envelope (not exact
+  equality); other OSes skip numeric sampling and still enforce behavioral
+  contracts (`h3_connections_created`, diagnostics cap, successful recovery).
+  `TransportMetrics::h3_diagnostics()` stays at most 64 entries with no
+  origin hostname, header, or close-reason text in debug output.
   Long-duration RSS/descriptor soak with allocator-threshold policy
-  remains extended-tier future work (existing
-  `resource_monitor`/resource-stabilization conventions apply; no
-  fragile exact-RSS assertions in H3 tests).
+  remains extended-tier future work (`eggfetch-bench` `resource_monitor`
+  stays H1/H2-only).
 - Fuzz coverage for EggFetch-owned Alt-Svc parsing/state lives in
   `fuzz/fuzz_targets/fuzz_alt_svc.rs` (header parsing, cache
   learn/expiry/clear bounds, trust gating, plus suppressor
   observe/suppress/recover transitions) plus deterministic adversarial
   unit/integration tests; h3/QPACK internals are not re-fuzzed.
-- Platform scope reuses existing CI/package mechanisms (no new matrix):
-  UDP socket binding, IPv6 availability (capability-detected, never
-  assumed), certificate stores, timer precision, and address metadata
-  follow the same policy as the rest of the engine. Lack of a
-  platform-specific H3 test is not described as support evidence.
+- Platform rows record only what was executed on that host. An unexecuted
+  row is not a failure and is not a support claim.
+
+| OS | arch | build features | deterministic H3 suites | soak (M009) | IPv6 | impairment (netem) | support evidence? |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Darwin | arm64 | `cargo test -p eggfetch-core --all-features --test h3_interop_qualification` | local corpus + short resource controls in `h3_interop_qualification.rs` (2026-11-16 on developer host) | four M009 soak tests in same target (1k reuse, 50 fail/reconnect, 50+30 cancel/partial-drop, 100 client drop); RSS/fd envelope skipped (no `/proc`) | capability probe only (`ipv6_availability_is_detected_not_assumed`); loopback H3 via IPv4 | not executed (macOS has no netem runner) | local developer evidence only — not product support |
+| Linux | — | not executed | not executed | not executed | not executed | not executed | no |
+| Windows | — | not executed | not executed | not executed | not executed | not executed | no |
 
 ### Production Graduation Decision (2026-09-11, re-affirmed 2026-09-12): experimental retained
 
@@ -1077,6 +1149,40 @@ spot checks + impairment/resource + no known corrupting upstream issue
 + documented platform scope + green Tier 1/extended). Advanced QUIC
 features (0-RTT, WebTransport, datagrams, MASQUE, migration) stay
 separately experimental/unimplemented regardless.
+
+### Production Graduation Decision (2026-11-16, M010): experimental retained
+
+Ordinary HTTP/3 request/response operation remains **experimental**.
+M006–M009 closed the harness, audit, soak, and platform-table
+predecessors. The objective gate still fails on operational evidence
+rows. Open blockers on this decision:
+
+1. **Independent servers:** no two non-Quinn servers (ngtcp2/nghttp3,
+   quiche, quic-go, or MsQuic) passed the corpus through
+   `scripts/h3_qualification.py` with a private manifest. Local Quinn
+   corpus coverage is green; that is not independent-server evidence.
+2. **Independent drain:** no non-Quinn peer demonstrated
+   `goaway_reconnect` / stream reset / graceful close via control URLs.
+3. **Public origins:** `qualification/http3/public-origin-ledger.json`
+   records a shortfall (0 of 3 required successful origins). The
+   historical empty ledger under `plans/` was not overwritten.
+4. **Impairment matrix:** `scripts/h3_impairment_netem.py` exists (M007),
+   but no privileged Linux namespace/netem coordinator run produced an
+   all-pass matrix on this host (Darwin arm64 → `unsupported`). An
+   `unsupported` matrix is not graduation evidence.
+5. **Upstream:** `qualification/http3/upstream-risk-ledger.json` (M008)
+   still names h3 #338 / PR #339 as a graduation blocker; #361 stays
+   outside any supported STOP_SENDING wire-code claim.
+6. **Platform claim:** the M009 table has a filled Darwin arm64 developer
+   row only. No Linux or Windows runtime support claim is made.
+
+Default version policy is unchanged: `Auto { allow_http3: false }`.
+Caller-owned datagram routing, 0-RTT, WebTransport, application
+datagrams, MASQUE, and connection migration remain experimental or
+unimplemented. CLI and FFI default features do not gain `http3`.
+This decision is documentation-only relative to the Stage C binding;
+executable-input changes from M006/M007/M009 still require their own
+exact-SHA Stage C renewal on the freeze that contains that work.
 
 ### Python API
 

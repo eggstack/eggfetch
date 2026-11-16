@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "eggfetch-http3-impairment-matrix",
-  "description": "Qualification-only adverse-network scenarios. A runner must report pass, fail, or unsupported for every scenario.",
+  "description": "Qualification-only adverse-network scenarios. A runner must report pass, fail, or unsupported for every scenario. Linux execution: scripts/h3_impairment_netem.py via scripts/h3_impairment.py --runner.",
   "scenarios": [
     {"id": "udp_blackhole", "required": true, "invariants": ["bounded_connect_or_total_deadline", "Http3Only_does_not_fallback", "resources_released"]},
     {"id": "udp_rejected", "required": true, "invariants": ["bounded_connect_or_total_deadline", "safe_auto_fallback_only_pre_commit", "resources_released"]},

@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "program": "http3-upstream-risk-re-audit",
+  "audited_at": "2026-11-16",
+  "git_revision": "f11a46b28df88f43e923d5211f82985784daaf40",
+  "decision": "no-upgrade",
+  "decision_summary": "crates.io still has no h3 newer than 0.0.8 and no h3-quinn newer than 0.0.10. PR #339 remains open and unreleased, so #338 stays a graduation blocker. Lockfile pins are unchanged.",
+  "resolved_versions": {
+    "h3": "0.0.8",
+    "h3_features": [
+      "i-implement-a-third-party-backend-and-opt-into-breaking-changes"
+    ],
+    "h3-quinn": "0.0.10",
+    "quinn": "0.11.11",
+    "quinn-proto": "0.11.18",
+    "quinn-udp": "0.5.15",
+    "rustls": "0.23.46",
+    "tokio-rustls": "0.26.4",
+    "tokio": "1.53.3"
+  },
+  "crates_io_observed": {
+    "fetched_at": "2026-11-16",
+    "h3_newest": "0.0.8",
+    "h3-quinn_newest": "0.0.10",
+    "quinn_newest": "0.11.12",
+    "quinn-proto_newest": "0.11.19",
+    "quinn-udp_newest": "0.6.3",
+    "notes": "A Quinn-only bump does not fix h3 #338. No upgrade is taken in this audit."
+  },
+  "advisories": [
+    {
+      "id": "GHSA-6xvm-j4wr-6v98",
+      "aliases": ["CVE-2026-31812", "RUSTSEC-2026-0037"],
+      "package": "quinn-proto",
+      "affected": "< 0.11.14",
+      "fixed": "0.11.14",
+      "resolved_version": "0.11.18",
+      "disposition": "proven not reachable",
+      "notes": "Resolved quinn-proto 0.11.18 is past the patched floor. No successor advisory observed on 2026-11-16 that re-opens the same varint panic on this pin."
+    }
+  ],
+  "issues": [
+    {
+      "reference": "https://github.com/hyperium/h3/issues/338",
+      "title": "FrameStream discards buffered bytes when QUIC connection error arrives in the same recv batch",
+      "state_on_audit": "open",
+      "pr": "https://github.com/hyperium/h3/pull/339",
+      "pr_state_on_audit": "open",
+      "affected_versions": ["h3 0.0.8"],
+      "eggfetch_paths": ["recv_response", "recv_data"],
+      "impact_on_successful_response": "A complete response can surface as a connection error when STREAM data and CONNECTION_CLOSE coalesce. No eggfetch workaround exists on the response-header path because only h3 holds the buffered frames.",
+      "existing_tests": "Local early-close / graceful-close suites distinguish EOF from error but do not reliably reproduce the coalesced-batch race.",
+      "disposition": "graduation blocker"
+    },
+    {
+      "reference": "https://github.com/hyperium/h3/pull/339",
+      "title": "frame: drain buffered bytes before propagating QUIC connection error",
+      "state_on_audit": "open",
+      "affected_versions": ["unreleased; not on crates.io"],
+      "eggfetch_paths": ["would fix #338 on published h3"],
+      "impact_on_successful_response": "Unreleased fix. Cannot be adopted without a published crate or a forbidden fork/vendor.",
+      "existing_tests": "n/a",
+      "disposition": "graduation blocker"
+    },
+    {
+      "reference": "https://github.com/hyperium/h3/issues/361",
+      "title": "h3-quinn stop_sending during outstanding read deferred; peer may see STOP_SENDING(0)",
+      "state_on_audit": "open",
+      "affected_versions": ["h3-quinn 0.0.10", "h3 0.0.8"],
+      "eggfetch_paths": ["cancellation / stop_sending during pending recv_data"],
+      "impact_on_successful_response": "Does not corrupt ordinary successful responses. Cancellation remains usable in eggfetch tests; conformant STOP_SENDING wire codes during a pending read are not claimed.",
+      "existing_tests": "h3_hardening / h3_interop cancellation suites assert prompt return and a usable client afterwards, not wire codes.",
+      "disposition": "graduation blocker",
+      "graduation_scope": "blocks any claim of conformant STOP_SENDING wire codes during a pending read; does not by itself corrupt an ordinary successful response body"
+    },
+    {
+      "reference": "https://github.com/hyperium/h3/issues/352",
+      "title": "Request reset cannot be observed independently while body polling is paused",
+      "state_on_audit": "open",
+      "affected_versions": ["h3 0.0.8", "h3-quinn 0.0.10"],
+      "eggfetch_paths": ["server-side observation of client RESET while application backpressure pauses poll_data; ordinary client GET/POST recv path still polls"],
+      "impact_on_successful_response": "Does not turn a complete client response into an error by itself. Affects reset observability under backpressure.",
+      "existing_tests": "Local stream_reset / early-close recovery tests; no independent reset-poll API in eggfetch.",
+      "disposition": "proven not reachable"
+    },
+    {
+      "reference": "https://github.com/hyperium/h3/issues/353",
+      "title": "AsyncWrite reduces typed stream failures to io::ErrorKind::Other",
+      "state_on_audit": "open",
+      "affected_versions": ["h3 0.0.8"],
+      "eggfetch_paths": ["eggfetch uses typed h3 poll paths, not the AsyncWrite adapter, for ordinary H3 request/response"],
+      "impact_on_successful_response": "None on the ordinary eggfetch client path.",
+      "existing_tests": "n/a for AsyncWrite adapter",
+      "disposition": "proven not reachable"
+    }
+  ],
+  "drain_api": {
+    "crate": "h3",
+    "version": "0.0.8",
+    "methods": ["ConnectionState::is_closing()", "is_h3_no_error()"],
+    "feature": "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
+    "notes": "Still required for GOAWAY draining in transport/http3.rs. Re-audit on any h3 bump."
+  },
+  "m010_implication": "M010 cannot clear the upstream graduation row while #338/#339 remain unreleased. #361 remains an open cancellation wire-code limitation outside any supported cancellation claim."
+}
