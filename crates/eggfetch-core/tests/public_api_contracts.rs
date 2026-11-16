@@ -114,8 +114,8 @@ fn caller_owned_h3_datagram_route_contracts_compile() {
         fn _send_is_a_future(_: DatagramSendFuture<'static>) {}
         fn _recv_is_a_future(_: DatagramRecvFuture<'static>) {}
         fn _dial_is_a_future(_: DatagramDialFuture<'static>) {}
-        fn _is_a_pinned_send_future(_: Pin<Box<dyn Future<Output = ()> + Send>>) {}
-        let _ = _is_a_pinned_send_future;
+        fn is_a_pinned_send_future(_: Pin<Box<dyn Future<Output = ()> + Send>>) {}
+        let _ = is_a_pinned_send_future;
     }
 
     fn assert_send<T: Send>(_: T) {}

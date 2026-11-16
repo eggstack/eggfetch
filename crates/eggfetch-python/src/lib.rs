@@ -607,6 +607,10 @@ fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 /// eggfetch - Python bindings for eggfetch.
+#[allow(
+    clippy::used_underscore_items,
+    reason = "PyO3 requires the initializer name to match the private `_native` extension module"
+)]
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

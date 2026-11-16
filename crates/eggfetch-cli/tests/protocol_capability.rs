@@ -98,19 +98,7 @@ impl Drop for CountingServer {
 }
 
 fn binary_path() -> PathBuf {
-    let mut path = std::env::current_exe()
-        .expect("failed to get test binary path")
-        .parent()
-        .expect("failed to get test binary dir")
-        .parent()
-        .expect("failed to get target dir")
-        .to_path_buf();
-    path.push("eggfetch");
-    #[cfg(windows)]
-    {
-        path.set_extension("exe");
-    }
-    path
+    PathBuf::from(env!("CARGO_BIN_EXE_eggfetch"))
 }
 
 fn run_cli(args: &[&str]) -> (String, String, Option<i32>) {
