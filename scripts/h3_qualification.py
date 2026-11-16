@@ -413,7 +413,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--danger-accept-invalid-certs",
         action="store_true",
-        help="qualification-only opt-in for local adapter certificates; never use for public evidence",
+        help=(
+            "qualification-only opt-in that disables TLS certificate validation "
+            "(also via EGGFETCH_H3_INTEROP_DANGER_ACCEPT_INVALID_CERTS=1); "
+            "off by default; never enable for public/CI evidence or untrusted endpoints"
+        ),
     )
     args = parser.parse_args(argv)
     try:

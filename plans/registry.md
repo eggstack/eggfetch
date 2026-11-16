@@ -44,7 +44,7 @@ normative policy is `docs/verification-policy.md`.
 |---|---|---|---|
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | No implementation milestone is registered. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M010 closed (H3 experimental retained). M011–M012 ready (security-audit correctives). Stage C renewed on `8af32d7ca4f1140e266875798522f5da09c17850`. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). M011–M012 security correctives implemented; Stage C renewal pending freeze after Tier 1 green. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
@@ -54,8 +54,7 @@ Closed plans are historical evidence, not active requirements or release gates.
 
 | Plan | Status | Notes |
 |---|---|---|
-| `plans/implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | ready | Audit High/Medium: `H3Connect` provider text; datagram recv peer check |
-| `plans/implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | ready | Audit Medium/Low: ledger/embed locks; netem/cert-bypass hygiene |
+| _(none)_ | — | No ready plans; M011–M012 await Stage C freeze |
 
 No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M010).
 
@@ -63,6 +62,8 @@ No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M0
 
 | Plan | Status | Condition |
 |---|---|---|
+| `plans/implementation/tls-proxy-protocols/011-h3-dial-error-sanitization-and-datagram-recv-trust.md` | closed (Stage C pending) | Tier 1 green; exact-SHA Stage C renewal required before unqualified close |
+| `plans/implementation/tls-proxy-protocols/012-h3-qualification-security-hygiene.md` | closed (Stage C pending) | Tier 1 green; exact-SHA Stage C renewal required before unqualified close |
 | `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | closed | Stage C rebound on `8af32d7ca4f1140e266875798522f5da09c17850` (soak CI fix after `6b571028…`) |
 | `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | closed | Stage C rebound; privileged Linux matrix remains operational evidence for graduation |
 | `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | closed | Stage C rebound; Darwin + ubuntu-latest CI Linux soak rows recorded |
@@ -102,7 +103,7 @@ None of these is unblocked by the closed milestones.
 | Area | Blocker |
 |---|---|
 | HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. |
-| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. Security-audit correctives registered as M011–M012. Stage C rebound on `8af32d7ca4f1140e266875798522f5da09c17850`. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. M011–M012 implemented (Stage C freeze pending). Prior Stage C SHA `8af32d7ca4f1140e266875798522f5da09c17850` invalidated by executable inputs. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live

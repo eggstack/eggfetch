@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,20 @@ NETEM_REQUIRED = frozenset(
     }
 )
 
+# Scenario IDs are interpolated into `bash -lc` on the privileged netem path.
+# Reject anything outside a strict identifier charset before any shell use,
+# including direct argv invocation that bypasses matrix lookup.
+_SCENARIO_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def validate_scenario_id(scenario_id: str) -> str:
+    """Fail closed on shell-unsafe or empty scenario identifiers."""
+    if not isinstance(scenario_id, str) or not _SCENARIO_ID_RE.fullmatch(scenario_id):
+        raise ValueError(
+            "scenario_id must be 1–64 chars of [A-Za-z0-9_-] starting with alphanumeric"
+        )
+    return scenario_id
+
 
 def load_matrix(path: Path = MATRIX) -> dict:
     with path.open(encoding="utf-8") as handle:
@@ -46,6 +61,7 @@ def load_matrix(path: Path = MATRIX) -> dict:
 
 
 def scenario_row(matrix: dict, scenario_id: str) -> dict:
+    validate_scenario_id(scenario_id)
     for scenario in matrix["scenarios"]:
         if scenario["id"] == scenario_id:
             return scenario
@@ -116,6 +132,7 @@ def linux_netem_capabilities() -> tuple[bool, str]:
 
 
 def _tc_netem_args(scenario_id: str) -> list[str]:
+    validate_scenario_id(scenario_id)
     if scenario_id == "packet_loss_low":
         return ["loss", PACKET_LOSS_LOW_RATE]
     if scenario_id == "packet_loss_high":
@@ -146,6 +163,7 @@ def run_impairment_cargo_test(
     netem_active: bool,
     cwd: Path = ROOT,
 ) -> subprocess.CompletedProcess[str]:
+    validate_scenario_id(scenario_id)
     env = dict(os.environ)
     env["EGGFETCH_H3_IMPAIRMENT_SCENARIO"] = scenario_id
     if netem_active:
@@ -176,6 +194,7 @@ def run_impairment_cargo_test(
 
 def run_in_netns(scenario_id: str, output_path: Path) -> None:
     """Linux privileged path: netem on lo inside a network namespace, then cargo test."""
+    validate_scenario_id(scenario_id)
     netem_args = apply_netem_on_loopback(scenario_id)
     setup = (
         "set -e; "
@@ -206,11 +225,11 @@ def main(argv: list[str] | None = None) -> int:
     if len(argv) < 2:
         print("usage: h3_impairment_netem.py SCENARIO_ID OUTPUT_JSON", file=sys.stderr)
         return 2
-    scenario_id = argv[0]
     output_path = Path(argv[1])
 
     matrix = load_matrix()
     try:
+        scenario_id = validate_scenario_id(argv[0])
         row = scenario_row(matrix, scenario_id)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

@@ -1,8 +1,10 @@
 # TLS, Proxy, and Protocols Milestone 012 — H3 Qualification Security Hygiene
 
-Status: ready
+Status: closed (Stage C pending)
 
 Repository baseline: `8af32d7ca4f1140e266875798522f5da09c17850`
+
+Closure: `plans/closure/tls-proxy-protocols/012-h3-qualification-security-hygiene.md`
 
 Source roadmap:
 

@@ -184,8 +184,10 @@ seam as narrow as the contract allows:
 
 - **Single fixed peer.** The bridge refuses any transmit whose destination is
   not the route's reported peer, so a provider cannot redirect a QUIC
-  connection. Providers are required to reject datagrams from an unverified
-  source, which is what stops an off-path host injecting packets.
+  connection. Each `recv` reports the datagram source; the bridge drops any
+  datagram whose source is not the fixed peer before feeding Quinn (continue
+  without terminating), so a compromised provider cannot inject off-path UDP
+  into the stack.
 - **Eggfetch keeps the crypto.** The bridge builds the QUIC/TLS client
   configuration. A provider supplies datagrams and never sees the opening
   handshake, certificate material, or QUIC frames, so it cannot downgrade
@@ -198,9 +200,14 @@ seam as narrow as the contract allows:
 - **No silent downgrade.** Configuring a dialer means no direct QUIC endpoint
   exists, so a failing or refusing route cannot fall back to a direct UDP
   socket the caller did not choose.
-- **No diagnostic leakage.** The bridge never renders a `DatagramRoute`;
-  Quinn-facing I/O errors use fixed text, and provider messages are not
-  re-exposed. Classification uses the typed `DialErrorKind`, never parsed text.
+- **No diagnostic leakage on connect-class failures.** The bridge never
+  renders a `DatagramRoute`; Quinn-facing I/O errors use fixed text;
+  `DialErrorKind::Connection` maps to `Error::H3Connect` with fixed text that
+  never embeds `DialError::message()`. Classification uses the typed
+  `DialErrorKind`, never parsed text. **Exception (intentional, matches stream
+  `Dialer`):** `Authentication` / `Rejected` / `Other` remain
+  `Error::CustomTransport` and may surface provider message text as embedder
+  evidence.
 - **Bounded termination.** A terminal route I/O error closes the QUIC
   connection with a transport error, so a dead provider cannot park requests
   until an idle timeout.

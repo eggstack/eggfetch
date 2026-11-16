@@ -62,17 +62,21 @@ pub type DatagramDialFuture<'a> =
 pub type DatagramSendFuture<'a> = Pin<Box<dyn Future<Output = Result<(), DialError>> + Send + 'a>>;
 
 /// Boxed future for receiving one datagram over an established route.
+///
+/// On success the future yields `(len, source)`: the copied length and the
+/// datagram's reported source address. The bridge drops any datagram whose
+/// source is not the route's fixed [`DatagramRoute::peer_addr`].
 pub type DatagramRecvFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<usize, DialError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<(usize, SocketAddr), DialError>> + Send + 'a>>;
 
 /// One established datagram route bound to a single fixed remote peer.
 ///
 /// The peer is fixed by construction: Eggfetch asks the dialer for one route and
 /// then never changes its destination, so an implementation cannot silently
-/// redirect a QUIC connection elsewhere. Implementations must also reject
-/// datagrams whose source is not the peer reported by
-/// [`DatagramRoute::peer_addr`] — a route that forwarded unverified bytes would
-/// let an off-path host inject packets into the QUIC connection.
+/// redirect a QUIC connection elsewhere. Implementations must report the true
+/// source of each received datagram; the private bridge drops any datagram
+/// whose source is not [`DatagramRoute::peer_addr`] before feeding Quinn, so a
+/// compromised provider cannot inject off-path UDP into the QUIC stack.
 ///
 /// `Debug` output must not expose implementation details or configuration that
 /// could carry credentials. Eggfetch's own bridge never formats a route, so a
@@ -83,13 +87,16 @@ pub trait DatagramRoute: Send + Sync + 'static {
     /// The payload is borrowed only for the lifetime of the returned future.
     fn send<'a>(&'a self, payload: &'a [u8]) -> DatagramSendFuture<'a>;
 
-    /// Receives one datagram into `buffer`, returning its length.
+    /// Receives one datagram into `buffer`, returning its length and source.
     ///
     /// A datagram larger than `buffer` may be truncated. QUIC treats a
     /// truncated datagram exactly as it treats a corrupted one, so the packet
-    /// fails its AEAD check, is discarded, and the peer retransmits. `Ok(n)`
-    /// with `n <= buffer.len()` is therefore the only success signal, and
-    /// bytes beyond `n` must never be read.
+    /// fails its AEAD check, is discarded, and the peer retransmits.
+    /// `Ok((n, source))` with `n <= buffer.len()` is the only success signal;
+    /// bytes beyond `n` must never be read. `source` must be the address the
+    /// carrier observed for this datagram — the bridge compares it to
+    /// [`DatagramRoute::peer_addr`] and drops mismatches without terminating
+    /// the route.
     fn recv<'a>(&'a self, buffer: &'a mut [u8]) -> DatagramRecvFuture<'a>;
 
     /// Returns the local address of this route.
@@ -393,7 +400,12 @@ impl RouteUdpSocket {
         });
 
         let send_worker = tokio::spawn(Self::send_worker(send_route, tx_rx, Arc::clone(&shared)));
-        let recv_worker = tokio::spawn(Self::recv_worker(recv_route, rx_tx, Arc::clone(&shared)));
+        let recv_worker = tokio::spawn(Self::recv_worker(
+            recv_route,
+            peer,
+            rx_tx,
+            Arc::clone(&shared),
+        ));
         let mut workers = lock(&socket.workers);
         workers.push(send_worker);
         workers.push(recv_worker);
@@ -441,6 +453,7 @@ impl RouteUdpSocket {
 
     async fn recv_worker(
         route: Arc<dyn DatagramRoute>,
+        peer: SocketAddr,
         tx: tokio::sync::mpsc::Sender<Bytes>,
         shared: Arc<RouteShared>,
     ) {
@@ -452,13 +465,20 @@ impl RouteUdpSocket {
             let Ok(permit) = tx.reserve().await else {
                 return;
             };
-            let len = match route.recv(&mut buffer).await {
-                Ok(len) => usize::min(len, buffer.len()),
+            let (len, source) = match route.recv(&mut buffer).await {
+                Ok((len, source)) => (usize::min(len, buffer.len()), source),
                 Err(error) => {
                     shared.record_failure(error);
                     return;
                 }
             };
+            // Defense in depth beyond AEAD: never feed Quinn a datagram the
+            // provider claims came from somewhere other than the fixed peer.
+            // Drop and continue so off-path noise cannot terminate the route.
+            if source != peer {
+                drop(permit);
+                continue;
+            }
             permit.send(Bytes::copy_from_slice(&buffer[..len]));
             lock(&shared.rx_wakers).wake_all();
         }
@@ -678,12 +698,78 @@ mod tests {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take();
+            let peer = self.peer;
             Box::pin(async move {
                 match pending {
                     Some(datagram) => {
                         let len = datagram.len().min(buffer.len());
                         buffer[..len].copy_from_slice(&datagram[..len]);
-                        Ok(len)
+                        Ok((len, peer))
+                    }
+                    None => futures_util::future::pending().await,
+                }
+            })
+        }
+
+        fn local_addr(&self) -> SocketAddr {
+            LOCAL.parse().expect("local")
+        }
+
+        fn peer_addr(&self) -> SocketAddr {
+            self.peer
+        }
+    }
+
+    /// Provider that yields a foreign-source datagram, then the peer one.
+    struct ForeignThenPeerRoute {
+        peer: SocketAddr,
+        inbound: Mutex<Vec<(Vec<u8>, SocketAddr)>>,
+    }
+
+    impl ForeignThenPeerRoute {
+        fn new(foreign_payload: &'static [u8], peer_payload: &'static [u8]) -> Arc<Self> {
+            Arc::new(Self {
+                peer: PEER.parse().expect("peer"),
+                inbound: Mutex::new(vec![
+                    (
+                        foreign_payload.to_vec(),
+                        "198.51.100.99:443".parse().expect("foreign"),
+                    ),
+                    (peer_payload.to_vec(), PEER.parse().expect("peer")),
+                ]),
+            })
+        }
+    }
+
+    impl fmt::Debug for ForeignThenPeerRoute {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("ForeignThenPeerRoute")
+        }
+    }
+
+    impl DatagramRoute for ForeignThenPeerRoute {
+        fn send<'a>(&'a self, _payload: &'a [u8]) -> DatagramSendFuture<'a> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn recv<'a>(&'a self, buffer: &'a mut [u8]) -> DatagramRecvFuture<'a> {
+            let pending = {
+                let mut guard = self
+                    .inbound
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if guard.is_empty() {
+                    None
+                } else {
+                    Some(guard.remove(0))
+                }
+            };
+            Box::pin(async move {
+                match pending {
+                    Some((datagram, source)) => {
+                        let len = datagram.len().min(buffer.len());
+                        buffer[..len].copy_from_slice(&datagram[..len]);
+                        Ok((len, source))
                     }
                     None => futures_util::future::pending().await,
                 }
@@ -743,10 +829,7 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 
-    #[tokio::test]
-    async fn poll_recv_reports_the_fixed_peer_without_ecn() {
-        let socket = RouteUdpSocket::from_route(TestRoute::with_inbound(Some(b"first")));
-
+    async fn poll_one_datagram(socket: &RouteUdpSocket) -> (Vec<u8>, RecvMeta) {
         let mut buffer = vec![0u8; ROUTE_MTU];
         let mut bufs = vec![io::IoSliceMut::new(&mut buffer)];
         let mut meta = vec![RecvMeta {
@@ -761,25 +844,44 @@ mod tests {
         // route, so readiness arrives as a wake-up rather than synchronously.
         let mut ready = Poll::Pending;
         for _ in 0..100 {
-            ready = quinn::AsyncUdpSocket::poll_recv(&*socket, &mut cx, &mut bufs, &mut meta);
+            ready = quinn::AsyncUdpSocket::poll_recv(socket, &mut cx, &mut bufs, &mut meta);
             if ready.is_ready() {
                 break;
             }
             tokio::task::yield_now().await;
         }
-
         assert!(
             matches!(ready, Poll::Ready(Ok(1))),
             "one datagram per call, got {ready:?}"
         );
-        assert_eq!(meta[0].addr, PEER.parse().expect("peer"));
-        assert_eq!(meta[0].len, 5);
-        assert_eq!(meta[0].stride, 5);
+        (buffer[..meta[0].len].to_vec(), meta[0])
+    }
+
+    #[tokio::test]
+    async fn poll_recv_reports_the_fixed_peer_without_ecn() {
+        let socket = RouteUdpSocket::from_route(TestRoute::with_inbound(Some(b"first")));
+        let (payload, meta) = poll_one_datagram(&socket).await;
+        assert_eq!(payload, b"first");
+        assert_eq!(meta.addr, PEER.parse().expect("peer"));
+        assert_eq!(meta.len, 5);
+        assert_eq!(meta.stride, 5);
         assert!(
-            meta[0].ecn.is_none(),
+            meta.ecn.is_none(),
             "ECN is not observable through this contract, so it must not be claimed"
         );
-        assert!(meta[0].dst_ip.is_none());
+        assert!(meta.dst_ip.is_none());
+    }
+
+    #[tokio::test]
+    async fn foreign_source_datagrams_are_dropped_before_quinn() {
+        let socket = RouteUdpSocket::from_route(ForeignThenPeerRoute::new(b"attacker", b"peer-ok"));
+        let (payload, meta) = poll_one_datagram(&socket).await;
+        assert_eq!(
+            payload, b"peer-ok",
+            "foreign-source bytes must never reach Quinn's receive queue"
+        );
+        assert_eq!(meta.addr, PEER.parse().expect("peer"));
+        assert_ne!(&payload[..], b"attacker");
     }
 
     #[tokio::test]
@@ -877,7 +979,9 @@ mod tests {
             }
 
             fn recv<'a>(&'a self, _buffer: &'a mut [u8]) -> DatagramRecvFuture<'a> {
-                Box::pin(futures_util::future::pending())
+                Box::pin(futures_util::future::pending::<
+                    Result<(usize, SocketAddr), DialError>,
+                >())
             }
 
             fn local_addr(&self) -> SocketAddr {

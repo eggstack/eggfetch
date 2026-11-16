@@ -2,18 +2,18 @@
   "schema_version": 1,
   "program": "http3-upstream-risk-re-audit",
   "audited_at": "2026-11-16",
-  "git_revision": "f11a46b28df88f43e923d5211f82985784daaf40",
+  "git_revision": "8af32d7ca4f1140e266875798522f5da09c17850",
   "decision": "no-upgrade",
-  "decision_summary": "crates.io still has no h3 newer than 0.0.8 and no h3-quinn newer than 0.0.10. PR #339 remains open and unreleased, so #338 stays a graduation blocker. Lockfile pins are unchanged.",
+  "decision_summary": "crates.io still has no h3 newer than 0.0.8 and no h3-quinn newer than 0.0.10. PR #339 remains open and unreleased, so #338 stays a graduation blocker. Workspace Quinn pins were refreshed after RUSTSEC-2026-0523 / 0524 / 0538; that bump does not clear #338.",
   "resolved_versions": {
     "h3": "0.0.8",
     "h3_features": [
       "i-implement-a-third-party-backend-and-opt-into-breaking-changes"
     ],
     "h3-quinn": "0.0.10",
-    "quinn": "0.11.11",
-    "quinn-proto": "0.11.18",
-    "quinn-udp": "0.5.15",
+    "quinn": "0.11.12",
+    "quinn-proto": "0.11.19",
+    "quinn-udp": "0.5.16",
     "rustls": "0.23.46",
     "tokio-rustls": "0.26.4",
     "tokio": "1.53.3"
@@ -25,7 +25,7 @@
     "quinn_newest": "0.11.12",
     "quinn-proto_newest": "0.11.19",
     "quinn-udp_newest": "0.6.3",
-    "notes": "A Quinn-only bump does not fix h3 #338. No upgrade is taken in this audit."
+    "notes": "A Quinn-only bump does not fix h3 #338. No h3/h3-quinn upgrade is taken in this hygiene refresh."
   },
   "advisories": [
     {
@@ -34,9 +34,39 @@
       "package": "quinn-proto",
       "affected": "< 0.11.14",
       "fixed": "0.11.14",
-      "resolved_version": "0.11.18",
+      "resolved_version": "0.11.19",
       "disposition": "proven not reachable",
-      "notes": "Resolved quinn-proto 0.11.18 is past the patched floor. No successor advisory observed on 2026-11-16 that re-opens the same varint panic on this pin."
+      "notes": "Resolved quinn-proto 0.11.19 is past the patched floor."
+    },
+    {
+      "id": "GHSA-53rm-773f-4q8c",
+      "aliases": ["RUSTSEC-2026-0523"],
+      "package": "quinn-proto",
+      "affected": "< 0.11.19",
+      "fixed": "0.11.19",
+      "resolved_version": "0.11.19",
+      "disposition": "proven not reachable",
+      "notes": "MAX_STREAM_DATA stream-limit OOM; patched floor is 0.11.19. Workspace pin matches."
+    },
+    {
+      "id": "GHSA-wppq-2f6r-wfvm",
+      "aliases": ["RUSTSEC-2026-0524"],
+      "package": "quinn-proto",
+      "affected": "< 0.11.19",
+      "fixed": "0.11.19",
+      "resolved_version": "0.11.19",
+      "disposition": "proven not reachable",
+      "notes": "Long Retry token panic/OOM on clients; patched floor is 0.11.19. Workspace pin matches."
+    },
+    {
+      "id": "GHSA-6pp4-4cxf-xf88",
+      "aliases": ["RUSTSEC-2026-0538"],
+      "package": "quinn-udp",
+      "affected": "< 0.5.16, >= 0.6.0 < 0.6.3",
+      "fixed": "0.5.16 / 0.6.3",
+      "resolved_version": "0.5.16",
+      "disposition": "proven not reachable",
+      "notes": "Truncated-datagram receive spin on some platforms; patched floors include 0.5.16. Workspace pin matches."
     }
   ],
   "issues": [
@@ -101,5 +131,6 @@
     "feature": "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
     "notes": "Still required for GOAWAY draining in transport/http3.rs. Re-audit on any h3 bump."
   },
-  "m010_implication": "M010 cannot clear the upstream graduation row while #338/#339 remain unreleased. #361 remains an open cancellation wire-code limitation outside any supported cancellation claim."
+  "m010_implication": "M010 cannot clear the upstream graduation row while #338/#339 remain unreleased. #361 remains an open cancellation wire-code limitation outside any supported cancellation claim. M012 hygiene refresh aligns Quinn pins with workspace Cargo.lock only.",
+  "m012_notes": "Nested qualification/embedded/*/Cargo.lock trees are separate evidence graphs; scripts/check_security.sh scans the workspace root lock only unless an operator runs a named embed evidence refresh."
 }

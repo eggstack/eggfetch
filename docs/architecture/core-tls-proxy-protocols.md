@@ -642,13 +642,15 @@ contract is intentionally narrow and lives entirely in
   The `DialTarget` carries the original **logical** origin host/port, never a
   physical path. Choosing a carrier — including choosing a relay — is the
   provider's job.
-- `DatagramRoute` supplies one datagram `send`, one `recv`, and the fixed
-  `local_addr`/`peer_addr`. The peer is fixed by construction; the bridge
-  refuses any other transmit destination, and a route that forwarded datagrams
-  from an unverified source would be injecting packets into the connection, so
-  providers must reject those.
+- `DatagramRoute` supplies one datagram `send`, one `recv` (returning
+  `(len, source)`), and the fixed `local_addr`/`peer_addr`. The peer is fixed
+  by construction; the bridge refuses any other transmit destination and drops
+  any received datagram whose reported source is not that peer before feeding
+  Quinn.
 - Failures are typed `DialError`/`DialErrorKind`. Nothing is inferred from
-  `Display` text anywhere in the H3 stack.
+  `Display` text anywhere in the H3 stack. Connection-kind dial failures map
+  to fixed-text `H3Connect`; Authentication / Rejected / Other stay on
+  `CustomTransport` with provider text (same as stream `Dialer`).
 
 Eggfetch still owns the whole QUIC stack. The bridge builds the QUIC/TLS client
 configuration, so a caller supplies a datagram carrier and can never take over
@@ -666,14 +668,17 @@ even when the route's physical peer is a relay.
 | No ECN claims | Receive metadata reports no ECN codepoint and no destination IP, because neither is observable through this contract |
 | Terminal I/O ends the generation promptly | The bridge reports the error to Quinn *and* closes the QUIC connection with a transport error, so a request never parks until the idle timeout |
 | No leaked workers | Dropping the socket aborts both worker tasks; workers hold only the bridge's shared state, never the socket, so there is no handle cycle |
-| No provider text escapes | The bridge never formats a `DatagramRoute`; Quinn-facing I/O errors use a fixed string, and the typed `DialErrorKind` is what reaches the connector |
+| No provider text escapes on Connection | The bridge never formats a `DatagramRoute`; Quinn-facing I/O errors use a fixed string; Connection-kind dial failures map to fixed-text `H3Connect`; Auth/Rejected/Other may retain provider text on `CustomTransport` |
+| Recv source trust | `recv` reports source; bridge drops off-peer datagrams without terminating the route |
 
 **Error mapping.** Route failures are reclassified from the caller's typed
 evidence, never from text: `Connection` becomes connect-class `H3Connect`
-(so `Auto` fallback and Alt-Svc suppression stay safe pre-commit), `Timeout`
-becomes `Timeout { phase: Connect }`, and `Authentication`/`Rejected`/`Other`
-are preserved verbatim as `Error::CustomTransport` because Eggfetch has no
-evidence of its own about why a provider refused.
+with fixed text (provider `message()` is never embedded, so `Auto` fallback
+and Alt-Svc suppression stay safe pre-commit without leaking dialer strings),
+`Timeout` becomes `Timeout { phase: Connect }`, and
+`Authentication`/`Rejected`/`Other` are preserved verbatim as
+`Error::CustomTransport` because Eggfetch has no evidence of its own about
+why a provider refused (same evidence path as stream `Dialer`).
 
 **Not in scope.** Concrete carriers. A MASQUE CONNECT-UDP datagram stream, a
 process-local UDP socket, and an inter-process channel are all follow-on work.
@@ -962,7 +967,8 @@ Current resolved pins from `Cargo.lock` (tree
 audit):
 
 - `quinn 0.11.11` (`rustls` + `ring` + `runtime-tokio`)
-- `quinn-proto 0.11.18`, `quinn-udp 0.5.15`
+- `quinn 0.11.12`, `quinn-proto 0.11.19`, `quinn-udp 0.5.16`
+  (RUSTSEC-2026-0523 / 0524 / 0538 floors)
 - `h3 0.0.8` with `i-implement-a-third-party-backend-and-opt-into-breaking-changes`
   (`ConnectionState::is_closing()` / `is_h3_no_error()` still required for drain)
 - `h3-quinn 0.0.10`
@@ -974,10 +980,12 @@ remains open, so [issue #338](https://github.com/hyperium/h3/issues/338)
 stays a **graduation blocker** with no eggfetch workaround on the
 response-header path. [Issue #361](https://github.com/hyperium/h3/issues/361)
 remains an open cancellation wire-code limitation (STOP_SENDING during a
-pending read). GHSA-6xvm-j4wr-6v98 is addressed by resolved
-`quinn-proto 0.11.18` (≥ 0.11.14). No fork, vendor, or `[patch]` is
-introduced. Machine-readable ledger:
-`qualification/http3/upstream-risk-ledger.json`.
+pending read). GHSA-6xvm-j4wr-6v98 and RUSTSEC-2026-0523 / 0524 / 0538 are
+addressed by the resolved Quinn pins above. A Quinn-only bump does not clear
+#338. No fork, vendor, or `[patch]` is introduced. Machine-readable ledger:
+`qualification/http3/upstream-risk-ledger.json`. Nested
+`qualification/embedded/*/Cargo.lock` graphs are separate evidence trees —
+`scripts/check_security.sh` covers the workspace root lock only.
 
 ### Interoperability Evidence (this milestone)
 

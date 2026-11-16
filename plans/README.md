@@ -1,10 +1,10 @@
 # eggfetch Planning System
 
-> **Current status:** TLS/protocols M006–M010 closed (H3 **experimental
-> retained**). M011–M012 ready (post-audit H3 dial-path + qualification
-> hygiene correctives). Exact-SHA Stage C renewed on
-> `8af32d7ca4f1140e266875798522f5da09c17850` after the Linux soak-envelope
-> CI fix. The current release, roadmap statuses, and maintainer actions are
+> **Current status:** TLS/protocols M006–M012 closed (H3 **experimental
+> retained**). M011–M012 security correctives are implemented (Tier 1 green);
+> exact-SHA Stage C renewal is pending a freeze commit. Prior Stage C SHA
+> `8af32d7ca4f1140e266875798522f5da09c17850` is invalidated by executable
+> inputs. The current release, roadmap statuses, and maintainer actions are
 > tracked in `plans/registry.md`. The live Stage C binding is recorded in
 > `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`.
 > Closed plans are historical records, not active gates. Validation tiers

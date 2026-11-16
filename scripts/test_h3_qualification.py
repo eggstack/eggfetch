@@ -198,6 +198,21 @@ class H3ImpairmentContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             NETEM.scenario_row(self.matrix, "not_a_real_scenario")
 
+    def test_scenario_id_charset_rejected_before_shell_use(self) -> None:
+        for bad in (
+            "packet_loss_low; rm -rf /",
+            "$(evil)",
+            "../escape",
+            "has space",
+            "",
+            "-leading-dash",
+        ):
+            with self.assertRaises(ValueError):
+                NETEM.validate_scenario_id(bad)
+            with self.assertRaises(ValueError):
+                NETEM.scenario_row(self.matrix, bad)
+        self.assertEqual(NETEM.validate_scenario_id("packet_loss_low"), "packet_loss_low")
+
     def test_coordinator_rejects_incomplete_invariants(self) -> None:
         row = NETEM.scenario_row(self.matrix, "latency_jitter")
         observed = {
