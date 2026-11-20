@@ -129,6 +129,16 @@ Cargo features:
 eggfetch-ffi = { version = "0.3", features = ["http2", "cookies", "proxy"] }
 ```
 
+The exported C ABI is fixed, so some capabilities are always on regardless of
+the flags selected: redirect control
+(`eggfetch_client_builder_follow_redirects`,
+`eggfetch_client_builder_max_redirects`) and Basic auth
+(`eggfetch_client_builder_basic_auth`) require core's `redirects` and
+`basic-auth`, which the crate's `eggfetch-core` dependency names explicitly.
+They are not obtainable by turning `proxy` on: core's `proxy` feature
+selects `native-http1` and does not imply the
+`logical-retry`/`redirects`/`basic-auth` policy bundle.
+
 ## Node.js Binding
 
 See `crates/eggfetch-node/` for a prototype Node.js binding using `napi-rs`.

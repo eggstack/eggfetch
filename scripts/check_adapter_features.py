@@ -39,6 +39,18 @@ def main() -> None:
     assert ffi_core["uses_default_features"] is False, (
         "eggfetch-ffi must not inherit eggfetch-core default features"
     )
+    # The FFI's C ABI exports these setters unconditionally, so the capability
+    # they drive must always be present. They used to arrive by accident
+    # through `proxy = ["http1", ...]`, which core's `proxy` no longer selects;
+    # an FFI build with `--no-default-features --features proxy` then failed to
+    # compile. Keep the requirement explicit rather than transitive.
+    unconditional_abi_capabilities = {"redirects", "basic-auth"}
+    missing = unconditional_abi_capabilities - set(ffi_core["features"])
+    assert not missing, (
+        "eggfetch-ffi exports setters that need these core capabilities "
+        f"unconditionally: {sorted(missing)}"
+    )
+
     ffi_features = ffi["features"]
     assert ffi_features.get("tls-native-roots") == [
         "tls-rustls",

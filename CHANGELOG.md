@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Proxy auth keeps its own `base64` edge, so `Proxy-Authorization`
   encoding is unchanged. The default feature set and the `http1`/`http2`
   aliases are unchanged, so the CLI and Python adapters are unaffected.
+- `eggfetch-ffi`: the `eggfetch-core` dependency now names `redirects` and
+  `basic-auth` explicitly. The C ABI exports
+  `eggfetch_client_builder_follow_redirects`, `..._max_redirects` and
+  `..._basic_auth` unconditionally, and those capabilities used to arrive only
+  through the old `proxy` implication. Default builds are unchanged; this
+  repairs non-default configurations such as
+  `--no-default-features --features proxy`, which otherwise stopped compiling.
 
 ## [0.3.0] - 2026-10-30
 
