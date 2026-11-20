@@ -119,6 +119,7 @@ fn advance_redirect_hop(
         proxy_override: _,
         #[cfg(feature = "logical-retry")]
             retry: _,
+        retry_disabled: _,
         transport_hints: _,
         proxied_target: _,
         failure_context: _,

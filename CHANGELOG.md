@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `eggfetch-core`: a URL-free native request builder. `Client::get_uri`,
+  `Client::post_uri`, and `Client::request_uri` accept an already-parsed
+  `http::Uri` and return a `NativeRequestBuilder`, which is available in
+  every profile. A consumer on the minimal native slice can now build and
+  dispatch a request without the `url`/`idna`/ICU closure that
+  `high-level-url` pulls in. The builder dispatches through the same
+  frame-preserving transport as `Client::execute_http_body`: exactly one
+  attempt, no redirects, no logical retries, no cookies, no authentication,
+  no response decompression, and no decoded-body limits. The caller owns
+  IDNA/punycode conversion before constructing the URI. The native builder
+  is a separate type from the high-level `RequestBuilder` so the existing
+  high-level signatures are unchanged.
+- `eggfetch-core`: `RequestBuilder::without_retry()` and
+  `RequestBuilder::redirect_policy()` are available in every profile.
+  Both are disable switches, so a caller must be able to express "this
+  request is not retried" and "this request does not follow redirects" even
+  where the corresponding capability is compiled out.
+  `RedirectPolicy`/`RedirectDowngradePolicy` are therefore available in
+  every profile too. With `logical-retry`/`redirects` enabled the values
+  are honored exactly as before; without them the capability is already
+  absent, so the setter is a semantic no-op. The backing state is an
+  always-present `Request::retry_disabled` flag that the gated retry loop
+  consults, and a request-level `Option<RedirectPolicy>`.
+- `eggfetch-core`: `RequestBody` implements `http_body::Body`, so a
+  request body can be handed to any `http-body`-based API.
+
+### Changed
+
+- `eggfetch-core`: the `proxy` feature now selects `native-http1`
+  instead of the `http1` alias. A consumer that wants eggfetch's proxy
+  support no longer also compiles in the `logical-retry`, `redirects`, and
+  `basic-auth` policy bundle, which the proxy transport does not use.
+  Proxy auth keeps its own `base64` edge, so `Proxy-Authorization`
+  encoding is unchanged. The default feature set and the `http1`/`http2`
+  aliases are unchanged, so the CLI and Python adapters are unaffected.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

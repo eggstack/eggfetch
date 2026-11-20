@@ -308,14 +308,14 @@ pub(super) async fn prepare_single_request(
         body,
         version,
         timeout: _request_timeout,
-        #[cfg(feature = "redirects")]
-            redirect: _request_redirect,
+        redirect: _request_redirect,
         auth: _,
         auth_disabled: _,
         decompress: request_decompress,
         proxy_override,
         #[cfg(feature = "logical-retry")]
             retry: _,
+        retry_disabled: _,
         transport_hints,
         proxied_target,
         failure_context,

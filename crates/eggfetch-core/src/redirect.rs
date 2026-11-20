@@ -9,8 +9,11 @@ use http::Method;
 #[cfg(feature = "high-level-url")]
 use url::Url;
 
+#[cfg(feature = "high-level-url")]
 use crate::body::RequestBody;
+#[cfg(feature = "high-level-url")]
 use crate::error::{Error, Result};
+#[cfg(feature = "high-level-url")]
 use crate::headers::Headers;
 #[cfg(feature = "high-level-url")]
 use crate::request::Request;
@@ -106,7 +109,7 @@ impl RedirectPolicy {
     /// [`Error::InvalidRedirectLocation`] when the hop is an HTTPS -> HTTP
     /// downgrade and the policy is [`RedirectDowngradePolicy::Deny`].
     /// Scheme allow-listing (`http`/`https` only) and userinfo rejection
-    /// are enforced separately by [`validate_redirect_url`]; this method
+    /// are enforced separately by `validate_redirect_url`; this method
     /// only enforces the downgrade boundary.
     ///
     /// # Errors
@@ -151,6 +154,7 @@ pub fn check_https_downgrade(from: &Url, to: &Url, policy: RedirectDowngradePoli
 
 /// Headers that should be removed when the body is dropped (e.g., on
 /// POST→GET rewrite).
+#[cfg(feature = "high-level-url")]
 const BODY_HEADERS: &[&str] = &["content-length", "content-type", "transfer-encoding"];
 
 /// Check if a status code indicates a redirect that should be followed.

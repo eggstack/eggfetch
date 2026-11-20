@@ -41,14 +41,16 @@ compression-zstd = ["dep:async-compression", "async-compression/zstd", "dep:toki
 compression-deflate = ["dep:async-compression", "async-compression/deflate", "async-compression/zlib", "dep:tokio-util", "tokio/io-util", "dep:flate2"]
 cookies = ["dep:cookie", "high-level-url"]
 multipart = ["dep:getrandom"]
-proxy = ["http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect", "dep:base64"]
+proxy = ["native-http1", "tls-rustls", "tokio/io-util", "high-level-url", "dep:eggfetch-http-connect", "dep:base64"]
 tracing = ["dep:tracing"]
 test-util = ["tokio/test-util"]
 ```
 
 `http1`/`http2` are compatibility aliases: they preserve the existing
 high-level string/URL API plus logical retry, redirect following, and Basic
-auth. `transport-http1`/`transport-http2` are primitive Hyper protocol
+auth. The `proxy` feature selects `native-http1` rather than the `http1`
+alias, so a consumer that only wants proxy support does not also compile
+in the logical-retry, redirect, and Basic-auth policy bundle. `transport-http1`/`transport-http2` are primitive Hyper protocol
 slices; `standard-route` is the ordinary DNS -> TCP/TLS path;
 `advanced-routing` owns custom Dialer, DirectConnector / local-address /
 socket options, resolved-target/pinned-address cache, SNI-override cache,
@@ -102,7 +104,14 @@ trust store.
 Native embedding slices (manual, not Tier 2 gates): replace `http1` with
 `native-http1` (and `http2` with `native-http2`) and omit `high-level-url`
 to build the `Client::execute_http_body`/`NativeHttpService` transport
-without `url`, `idna`, ICU, or `percent-encoding`. Example:
+without `url`, `idna`, ICU, or `percent-encoding`.
+
+Proxy-only slice (manual, not a gated profile): select
+`default-features = false, features = ["native-http1", "tls-rustls", "proxy"]`
+for proxy routing without the `logical-retry`/`redirects`/`basic-auth`
+policy bundle. It keeps `high-level-url` (the proxy feature lists it
+explicitly), so the `url`/IDNA/ICU closure is still present; only the policy
+bundle is gone. Example:
 `default-features = false, features = ["native-http1", "tls-rustls"]`.
 Built-in proxy, cookies, HTTP/3, and the string-URL `RequestBuilder` API
 require `high-level-url` and are unavailable in the minimal slice.
@@ -224,18 +233,61 @@ High-level string/URL request semantics backed by `url` (plus
 routing. Native callers provide a valid `http::Uri` and own any
 IDNA/punycode conversion; the native path performs none.
 
+A consumer that wants the *builder* API without this feature uses the
+[Native request builder](#native-request-builder) instead.
+
+### Native request builder
+
+**Status:** implemented (no feature gate).
+`Client::get_uri`, `Client::post_uri`, and `Client::request_uri` build a
+request from an already-parsed `http::Uri` and return a
+`NativeRequestBuilder`. The builder and its `Client` entry points are
+available in every profile, including the minimal native slice, so a
+consumer can build and dispatch a request without the `url`/`idna`/ICU
+closure that `high-level-url` pulls in.
+
+The native builder dispatches through the same frame-preserving transport as
+`Client::execute_http_body`: exactly one attempt, no redirects, no logical
+retries, no cookies, no authentication, no response decompression, and no
+decoded-body limits. The built-in proxy and HTTP/3 routes reject native
+frame bodies, and the caller owns IDNA/punycode conversion before
+constructing the `http::Uri`.
+
+The native builder is a separate type from the high-level
+`RequestBuilder` on purpose. The high-level builder owns URL semantics
+(query pairs, relative redirect resolution, cookie and proxy matching by
+URL) and returns the high-level `Response`; the native builder owns only
+the wire-level request and returns a plain `http::Response`. Keeping them
+separate means a native consumer does not pull in the URL layer, and it
+keeps the existing high-level signatures intact.
+
+`NativeRequestBuilder::without_retry()` and
+`NativeRequestBuilder::redirect_policy()` are available here for the same
+reason they are available on the high-level builder: the native transport
+already satisfies both assertions (one attempt, no redirect following), so
+the setters let one request-building code path express the same
+single-attempt contract in every profile.
+
 ### logical-retry
 
 **Status:** implemented.
 Logical retry orchestration: `RetryPolicy`/`RetryPolicyBuilder`,
 `BackoffPolicy`/`MethodPolicy`/`StatusPolicy`, backoff/jitter
 (`getrandom`), `Retry-After` HTTP-date parsing (`httpdate`), replay checks,
-and the `ClientBuilder::retry` / `RequestBuilder::retry` /
-`without_retry` APIs plus the `pipeline::retry` loop. Enabled by the
-`http1`/`http2` compatibility aliases; omitted by the lean profile, which
-dispatches once under the outer total deadline. Hyper's distinct
-canceled-idle-request retry (`retry_canceled_requests`) is transport policy
-and remains available in all profiles.
+and the `ClientBuilder::retry` / `RequestBuilder::retry` APIs plus the
+`pipeline::retry` loop. Enabled by the `http1`/`http2` compatibility
+aliases; omitted by the lean profile, which dispatches once under the outer
+total deadline. Hyper's distinct canceled-idle-request retry
+(`retry_canceled_requests`) is transport policy and remains available in all
+profiles.
+
+`RequestBuilder::without_retry()` is available in every profile. It is a
+disable switch, so a caller must be able to express "this request is not
+retried" even where the retry engine is compiled out. With `logical-retry`
+enabled it suppresses the client-level policy exactly as before; without it
+there is no retry engine to disable, so the request is already dispatched
+once and the call is a semantic no-op. The backing state is an always-present
+`Request::retry_disabled` flag, which the gated retry loop consults.
 
 ### redirects
 
@@ -246,6 +298,15 @@ history (`Response::history`), and the `RedirectPolicy` /
 `RequestBuilder::redirect_policy` APIs. Enabled by the `http1`/`http2`
 compatibility aliases; omitted by the lean profile, which returns 3xx
 responses as ordinary responses with no second hop and no history.
+
+`RedirectPolicy`/`RedirectDowngradePolicy` and
+`RequestBuilder::redirect_policy()` are available in every profile. The
+policy is a disable switch, so a caller must be able to name it and attach
+it even where the redirect loop is compiled out. With `redirects` enabled the
+override is honored exactly as before; without it there is no redirect loop,
+so a stored policy has no effect and a 3xx response is returned unchanged.
+The client-level `ClientBuilder::redirect_policy` stays gated on `redirects`,
+because the client-level policy is the redirect loop's own default.
 
 ### basic-auth
 
@@ -401,8 +462,13 @@ with neither feature omit core's direct `getrandom` edge (transitive
 
 **Status:** implemented.
 Enables HTTP proxy and SOCKS5 proxy support in eggfetch-core. The feature
-implies `http1` and `tls-rustls` because HTTPS proxy endpoints, CONNECT
-tunnels, and HTTPS-over-SOCKS require the Rustls transport. Provides HTTP
+implies `native-http1` and `tls-rustls` because HTTPS proxy endpoints,
+CONNECT tunnels, and HTTPS-over-SOCKS require the Rustls transport. It
+implies `native-http1` rather than the `http1` alias, so a consumer that
+selects only `proxy` does not also compile in the `logical-retry`,
+`redirects`, and `basic-auth` policy bundle: the proxy transport uses none
+of them. The `http1`/`http2` aliases still carry the full policy bundle, so
+the CLI and Python adapters are unchanged. Provides HTTP
 proxying, HTTPS CONNECT tunneling, SOCKS5 tunneling (socks5:// and socks5h://),
 proxy authentication, per-request and per-client proxy configuration via
 `ClientBuilder::proxy()` and `RequestBuilder::proxy()`, and `NO_PROXY`-style

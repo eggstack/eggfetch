@@ -39,13 +39,13 @@ pub mod http_version;
 pub mod limits;
 #[cfg(feature = "multipart")]
 pub mod multipart;
+pub mod native_request;
 pub mod network_stream;
 pub(crate) mod pipeline;
 pub mod pool;
 #[cfg(feature = "proxy")]
 pub mod proxy;
 pub mod redact;
-#[cfg(feature = "redirects")]
 pub mod redirect;
 #[cfg(feature = "high-level-url")]
 pub mod request;
@@ -77,6 +77,7 @@ pub use http_version::HttpVersionPolicy;
 pub use limits::Limits;
 #[cfg(feature = "multipart")]
 pub use multipart::{Boundary, Multipart, MultipartEncoder, Part, PartBody};
+pub use native_request::NativeRequestBuilder;
 pub use network_stream::{
     ConnectionMetadata, ExtraInfo, NetworkStream, TlsInfo, TransportKind, UpgradedStream,
     UpgradedStreamVariant,
@@ -93,7 +94,6 @@ pub use redact::{redact_url, redact_url_string};
 pub use redirect::{
     build_redirect_request_with_redirect_policy, check_https_downgrade, is_https_downgrade,
 };
-#[cfg(feature = "redirects")]
 pub use redirect::{RedirectDowngradePolicy, RedirectPolicy};
 #[cfg(feature = "high-level-url")]
 pub use request::{ProxyOverride, Request, RequestBuilder};

@@ -17,6 +17,34 @@ without following and with empty history, and no core `base64` edge from `basic-
 The policy-only `native-http1` + `high-level-url` + `tls-rustls` recipe
 without the three policy features remains a valid manual profile where
 advanced routing (Dialer, pinned/SNI, UDS) is still needed.
+
+The `proxy` feature selects `native-http1` rather than the `http1` alias, so
+a consumer that wants proxy support does not also compile in the
+`logical-retry`, `redirects`, or `basic-auth` policy bundle. The proxy
+transport uses none of them: the proxy implementation lives in `proxy.rs`,
+`transport/proxy.rs`, and `pipeline/proxy_dispatch.rs`, and none of those
+references a policy item. Proxy auth keeps its own `base64` edge, so the
+`Proxy-Authorization` encoding is unaffected by dropping `basic-auth`.
+
+The two disable switches are available in every profile, because a profile
+without the corresponding capability has nothing to disable and the caller
+still needs to say so:
+
+- `RequestBuilder::without_retry()` sets the always-present
+  `Request::retry_disabled` flag. With `logical-retry` enabled the gated
+  retry loop consults that flag and dispatches exactly once, matching the
+  previous `Option<RetryPolicy>` override. Without it there is no retry
+  engine, so the request is already dispatched once and the call is a
+  semantic no-op. A later `RequestBuilder::retry(policy)` re-enables
+  retries, preserving the previous setter order.
+- `RequestBuilder::redirect_policy(policy)` stores an
+  `Option<RedirectPolicy>` that is always present. With `redirects` enabled
+  the override is honored exactly as before. Without it there is no
+  redirect loop, so a 3xx response is returned unchanged and the stored
+  policy has no effect. `RedirectPolicy` and `RedirectDowngradePolicy`
+  themselves are therefore available in every profile; the client-level
+  `ClientBuilder::redirect_policy` stays gated on `redirects` because the
+  client-level policy is the redirect loop's own default.
 `Client::send`/`send_detailed` dispatch to `pipeline::retry::send_with_retry`
 when `logical-retry` is present, to
 `pipeline::redirect::send_with_redirects` when only `redirects` is present,

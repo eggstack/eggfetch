@@ -86,8 +86,7 @@ pub(super) fn prepare_first_hop(client: &Client, request: Request) -> HopBuildPa
         body,
         version,
         timeout: request_timeout,
-        #[cfg(feature = "redirects")]
-            redirect: _,
+        redirect: _,
         auth: req_auth,
         auth_disabled: req_auth_disabled,
         decompress: request_decompress,
@@ -96,6 +95,7 @@ pub(super) fn prepare_first_hop(client: &Client, request: Request) -> HopBuildPa
         proxy_override: request_proxy,
         #[cfg(feature = "logical-retry")]
             retry: _,
+        retry_disabled: _,
         transport_hints: request_transport_hints,
         proxied_target: request_proxied_target,
         failure_context,

@@ -42,7 +42,7 @@ normative policy is `docs/verification-policy.md`.
 
 | Subsystem | Roadmap status | Roadmap | Current state |
 |---|---|---|---|
-| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | No implementation milestone is registered. |
+| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is closing; the oracle semver cross-check awaits a version decision. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
 | TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). Stage C renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
@@ -54,7 +54,7 @@ Closed plans are historical evidence, not active requirements or release gates.
 
 | Plan | Status | Notes |
 |---|---|---|
-| _(none)_ | — | No ready plans in this subsystem |
+| `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | closing | Implements eggstack/eggfetch#31, #32, and #33. The Rust public-surface oracle passes for all eight profiles; the semver cross-check reports a major lint for the intentional `proxy` feature-implication change and awaits a version decision. |
 
 No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M010).
 
