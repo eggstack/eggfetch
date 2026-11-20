@@ -67,7 +67,8 @@ M009.
 | API | Available |
 | --- | --- |
 | `Client` / `ClientBuilder` | Yes |
-| `RequestBuilder` with method chaining | Yes |
+| `RequestBuilder` with method chaining | Yes (requires `high-level-url`) |
+| `NativeRequestBuilder` + `Client::{get_uri, post_uri, request_uri}` | Yes (URL-free builder over `http::Uri`; available in every profile, including those without `high-level-url`) |
 | `Response` (buffered + streaming) | Yes |
 | `Timeout` / `TimeoutBuilder` | Yes |
 | `TlsConfig` / `TlsConfigBuilder` | Yes |
@@ -78,7 +79,7 @@ M009.
 | `BasicAuth` | Yes (requires `basic-auth`; lean profiles are Bearer-only) |
 | `BearerAuth` | Yes (available in all profiles, including lean) |
 | `HttpVersionPolicy` | Yes |
-| `RedirectPolicy` | Yes (requires `redirects`; lean profiles return 3xx without following) |
+| `RedirectPolicy` / `RedirectDowngradePolicy` | Yes (available in every profile; following redirects requires `redirects`, and lean profiles return 3xx without following) |
 | `Dialer` / `DialTarget` / `SocketOption` | Yes (require `advanced-routing`; absent from lean profiles) |
 | `ClientBuilder::dialer` / `local_address` / `socket_options` / `uds_path` | Yes (require `advanced-routing`; absent from lean profiles) |
 | `RequestBuilder::resolved_addresses` / `TransportHints::{sni_hostname, resolved_target}` | Yes (require `advanced-routing`; fail closed with `Unsupported` in lean profiles) |

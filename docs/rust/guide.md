@@ -281,6 +281,43 @@ does not consume that budget. It is intended for native gateways, service
 meshes, middleware, and custom-network clients; the existing `RequestBuilder`
 API remains the application-oriented choice.
 
+### URL-free request building (`http::Uri`)
+
+`Client::get_uri`, `Client::post_uri`, and `Client::request_uri` build a
+request from an already-parsed `http::Uri` and return a
+`NativeRequestBuilder`. They are available in **every** profile, so a
+`native-http1`/`native-http2` consumer can construct and dispatch a request
+without enabling `high-level-url` and therefore without the
+`url`/`idna`/ICU closure:
+
+```rust
+use eggfetch_core::Client;
+
+let uri: http::Uri = "https://api.example.com/items".parse()?;
+let response = Client::new()
+    .get_uri(&uri)?
+    .header("accept", "application/json")
+    .timeout(eggfetch_core::Timeout::from_secs(10))
+    .send()
+    .await?;
+
+let status = response.status();
+let body = response.into_body();
+```
+
+The builder exposes `header`, `headers`, `body`, `bytes`, `version`,
+`timeout`, `transport_hints`, `without_retry`, and `redirect_policy`, plus
+`build()` for an `http::Request<RequestBody>` that can be handed to
+`execute_http_body`.
+
+Semantics are the native transport's, not the high-level client's: exactly one
+attempt, no redirects, no logical retries, no cookies, no authentication, no
+response decompression, and no decoded-body limits. The caller owns IDNA and
+punycode conversion before constructing the URI, and a relative or non-HTTP(S)
+URI is rejected eagerly by the constructor. Use the high-level
+`RequestBuilder` when you want URL parsing, redirect following, retry policy,
+cookies, or auth.
+
 ### Native Tower service interoperability
 
 For callers using Tower-native middleware, `Client::native_service()` is a

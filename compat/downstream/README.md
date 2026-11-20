@@ -52,10 +52,21 @@ EGGFETCH_COMPAT_REQUIRED=1 pytest crates/eggfetch-python/tests/compat/test_downs
 
 ### Install all downstream packages for manual testing
 ```bash
-pip install httpx==0.28.1 respx==0.21.1 pytest-httpx==0.30.0 starlette==0.37.2
-pip install anthropic==0.39.0 groq==0.13.0 httpx-sse==0.4.0 httpcore==1.0.5
-pip install anyio==4.8.0 httpx-auth==0.22.0 httpx-ws==0.7.0 pydantic==2.10.0
+pip install -r compat/httpx/0.28.1/requirements.txt
+pip install -r compat/httpx2/2.12.0/requirements.txt
 ```
+Those two files are the canonical pins the compatibility profiles use; install
+from them rather than from a hand-written list so the versions cannot drift
+away from what the gates actually run.
+
+### Prerequisites for the artifact producer
+`python scripts/build_downstream_artifact.py` builds both wheels, so the
+interpreter it runs under needs `maturin` (for the eggfetch wheel) and
+`build` + `setuptools` (for the controlled HTTPX replacement, per
+`compat/httpx-controlled-replacement/build.sh`). In a fresh virtual
+environment the second pair is not installed by
+`scripts/ci-requirements.txt`, and the producer fails with
+`No module named build`.
 
 ## Isolation Requirements
 

@@ -111,10 +111,11 @@ Proxy-only slice (manual, not a gated profile): select
 for proxy routing without the `logical-retry`/`redirects`/`basic-auth`
 policy bundle. It keeps `high-level-url` (the proxy feature lists it
 explicitly), so the `url`/IDNA/ICU closure is still present; only the policy
-bundle is gone. Example:
-`default-features = false, features = ["native-http1", "tls-rustls"]`.
-Built-in proxy, cookies, HTTP/3, and the string-URL `RequestBuilder` API
-require `high-level-url` and are unavailable in the minimal slice.
+bundle is gone. Because `proxy` keeps `high-level-url`, the string-URL
+`RequestBuilder` API is usable in this slice; cookie handling and HTTP/3
+still need the `cookies` and `http3` features. In the minimal slice above,
+which omits `high-level-url`, built-in proxy, cookies, HTTP/3, and the
+string-URL `RequestBuilder` API are all unavailable.
 For the leanest standard-route native transport without advanced routing,
 select `transport-http1` + `standard-route` (e.g.
 `default-features = false, features = ["transport-http1", "standard-route", "tls-rustls"]`);
