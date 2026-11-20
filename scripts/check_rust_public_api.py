@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = "03ecba973010e2858bf16a2b5f84d51ce70adae4"
+BASELINE = "05f14f442dba697d7c140ead552e87f126ceac6b"
 SNAPSHOT_ROOT = ROOT / "compat/rust-public-api"
 
 PROFILES: tuple[tuple[str, tuple[str, ...]], ...] = (
