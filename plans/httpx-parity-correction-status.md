@@ -4,7 +4,83 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C binding invalidated by Core Transport M011 (2026-11-20)
+
+> **This is the live state.** The freshest *qualification* below it is the
+> 2026-11-16 renewal on `cef0e7aa…`, which no longer describes the tree.
+
+**The live Stage C binding is invalidated by this change.** Core Transport
+M011 — eggstack/eggfetch#31, #32 and #33 — changed executable inputs: Rust
+sources under `crates/eggfetch-core/src/`, two new core test targets, the
+eight committed `compat/rust-public-api/` snapshots, the oracle baseline
+constant in `scripts/check_rust_public_api.py`, the FFI manifest, and
+`scripts/check_adapter_features.py`. Under
+`.skills/verification-qualification.md` the binding at
+`cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` no longer describes the tree.
+
+That SHA remains the **last completed qualification**: Tier 1, Tier 2, Tier 3
+and the live security preflight are green at `cef0e7aa…`. The milestone's
+executable freeze is `49f8910d45414b51937a28857e57c68bcf2413d7`, where
+**Tier 1 alone** has been run. The current tree is **unqualified**, and no
+publication may cite the previous Stage C binding until a fresh exact-SHA
+qualification runs at the new freeze.
+
+`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml` are
+deliberately **unchanged**: they carry machine-readable binding fields, and
+their `qualification-sha` still names the last SHA that was actually
+qualified. This ledger, not the profiles, records whether that binding is
+currently live.
+
+### What M011 changed
+
+It delivers three capability changes requested by upstream issues, none of
+which touches the compatibility facades' Python surface:
+
+- **#31** — core's `proxy` feature selects `native-http1` instead of the
+  `http1` alias, so proxy support no longer compiles in
+  `logical-retry`/`redirects`/`basic-auth`. Defaults and the `http1`/`http2`
+  aliases are untouched, so the CLI, Python and HTTPX facades resolve the same
+  feature set as before. `compat/httpx*` imports nothing from `proxy`
+  directly.
+- **#32** — a new `NativeRequestBuilder` builds a request from an `http::Uri`
+  in every profile and dispatches through the existing frame-preserving native
+  path.
+- **#33** — `without_retry()` and `redirect_policy()` are available in every
+  profile; `RedirectPolicy`/`RedirectDowngradePolicy` are ungated.
+
+Rust-only and additive by construction: no generated Python API manifest, typing
+surface or `__all__` changed, and the adapter feature-ownership gate passes.
+
+### Oracle baseline advance
+
+The `proxy` implication change trips `feature_no_longer_enables_feature`, a
+**major** lint under both patch and minor release types, with no working
+per-lint downgrade. Rather than bump the coordinated version or weaken the
+release gate, the oracle **baseline** advanced to
+`05f14f442dba697d7c140ead552e87f126ceac6b`, the commit carrying the change.
+The eight-profile oracle and `cargo-semver-checks` both pass against it
+(`223 checks: 223 pass, 30 skip`, `no semver update required`), and the
+snapshot diff is additive only — `564` lines added, `0` removed. This is a
+verification-baseline decision, not a release: the version stays 0.3.0.
+
+### The condition for the next renewal
+
+Unchanged procedure: a fresh exact-SHA qualification at the new freeze, with the
+downstream artifact manifest re-supplied. Tier 2 and Tier 3 have not run at
+`49f8910d…`, and Tier 2's downstream gate fails closed without the manifest.
+Because the change is **not patch-compatible** — a downstream crate that relied
+on `proxy` implying `http1` loses that closure — the release carrying it must
+be a **minor** bump under `docs/reference/versioning.md`.
+
+---
+
 ## Stage C renewed after M011–M012 security correctives (2026-11-16)
+
+> **Superseded 2026-11-20.** Core Transport M011 changed executable inputs and
+> invalidated this binding; see the record above. In particular this section's
+> statement that "profile and ledger edits after this freeze are documentation
+> only" no longer holds. The renewal below remains the history of what was
+> qualified at `cef0e7aa…`.
 
 Both documented facades are **Stage C qualified (renewal)** on executable
 freeze `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. The preceding live binding

@@ -42,9 +42,9 @@ normative policy is `docs/verification-policy.md`.
 
 | Subsystem | Roadmap status | Roadmap | Current state |
 |---|---|---|---|
-| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is closing; the oracle semver cross-check awaits a version decision. |
+| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification is outstanding. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). Stage C renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` is invalidated by core-transport M011; requalification is outstanding. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
@@ -52,9 +52,7 @@ Closed plans are historical evidence, not active requirements or release gates.
 
 ## Dependency-ready implementation plans
 
-| Plan | Status | Notes |
-|---|---|---|
-| `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | closing | Implements eggstack/eggfetch#31, #32, and #33. The Rust public-surface oracle passes for all eight profiles; the semver cross-check reports a major lint for the intentional `proxy` feature-implication change and awaits a version decision. |
+None.
 
 No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M010).
 
@@ -62,6 +60,7 @@ No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M0
 
 | Plan | Status | Condition |
 |---|---|---|
+| `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | conditionally closed | Tier 2 and Tier 3 have not run at the freeze `49f8910d45414b51937a28857e57c68bcf2413d7`, and the exact-SHA Stage C requalification this change invalidated is outstanding. Closure record: `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` |
 | `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | closed | Stage C rebound on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` |
 | `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | closed | Stage C rebound; privileged Linux matrix remains operational evidence for graduation |
 | `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | closed | Stage C rebound; Darwin + ubuntu-latest CI Linux soak rows recorded |
@@ -102,8 +101,8 @@ None of these is unblocked by the closed milestones.
 
 | Area | Blocker |
 |---|---|
-| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. |
-| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. M011–M012 closed. Stage C rebound on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`. |
+| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. Separately, the Stage C binding is invalidated by core-transport M011, so a fresh exact-SHA qualification is required before any binding can be cited. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. TLS/proxy M011–M012 closed. The Stage C binding last renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` is invalidated by core-transport M011. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live

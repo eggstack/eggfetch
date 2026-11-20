@@ -453,6 +453,18 @@ first-hop preparation builder; M010 consolidates the seven duplication
 clusters with no runtime and no public-API change, and the Rust public-surface
 oracle is byte-identical to the frozen snapshots in all eight profiles.
 
+M011 was implemented from baseline `db3a553b27f3c3a8a29b77446d7d46449c4be8b8`
+and is **conditionally closed**. It delivers the three capability changes
+requested by eggstack/eggfetch#31, #32 and #33, and it is the first milestone
+to exercise the oracle baseline advance: the `proxy` feature-implication
+change in #31 is classified `feature_no_longer_enables_feature`, a **major**
+lint under both patch and minor release types, so rather than bump the
+coordinated version or weaken the gate the baseline moved to
+`05f14f442dba697d7c140ead552e87f126ceac6b`, the commit carrying the change.
+The condition on closure is the exact-SHA Stage C requalification the
+milestone's own executable changes invalidated; Tier 1 is green at the freeze
+and Tier 2/3 have not been run at it.
+
 ## 12. Milestone status
 
 | Milestone | Status | Implementation plan | Closure record | Blockers |
@@ -469,4 +481,4 @@ oracle is byte-identical to the frozen snapshots in all eight profiles.
 | M008 profile matrix completion | closed | `plans/implementation/core-transport-policy/008-profile-matrix-completion.md` | `plans/closure/core-transport-policy/008-profile-matrix-completion.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
 | M009 lean path single-sourcing | closed | `plans/implementation/core-transport-policy/009-lean-path-single-sourcing.md` | `plans/closure/core-transport-policy/009-lean-path-single-sourcing.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
 | M010 core duplicate-helper consolidation | closed | `plans/implementation/core-transport-policy/010-core-duplicate-helper-consolidation.md` | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` | Closed on bound SHA `26fa619299fb8d447f25cbcb5eb713a1f537a30c` with the Stage C binding renewed there. |
-| M011 profile-independent request policy and native `http::Uri` builder | closing | `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | pending | Implementation landed in the working tree. The eight-profile Rust public-surface oracle passes with an additive-only diff; the semver cross-check reports a major lint for the intentional `proxy` feature-implication change and awaits a version decision. |
+| M011 profile-independent request policy and native `http::Uri` builder | conditionally closed | `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | Implementation complete and Tier 1 green at the freeze. The oracle baseline advanced to `05f14f442dba697d7c140ead552e87f126ceac6b`; condition is the exact-SHA Stage C requalification these executable changes invalidated. |

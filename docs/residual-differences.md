@@ -1,7 +1,12 @@
 # Residual Differences from HTTPX 0.28.1
 
-The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16). The
+The HTTPX 0.28.1 and httpx2 2.12.0 facades **were** Stage C qualified on
+frozen executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16);
+**that binding is invalidated** by Core Transport M011, which changed executable
+inputs and has only Tier 1 evidence at its freeze `49f8910d…`. The current tree
+is unqualified, and a fresh exact-SHA qualification is required before any
+binding can be cited; the live state is recorded in
+`plans/httpx-parity-correction-status.md`. The
 M011–M012 security correctives (H3 dial-path trust + qualification hygiene)
 passed Tier 1/2/3 and the live security preflight. Its dependency policy
 retains the audited Tokio, zstd and brotli pins and carries quinn 0.11.12 /

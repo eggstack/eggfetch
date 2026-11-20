@@ -101,6 +101,35 @@ semantic no-op that keeps the assertion expressible. The client-level
 `ClientBuilder::redirect_policy` stays gated on `redirects`, because the
 client-level policy is the redirect loop's own default.
 
+### 2.4 The FFI adapter's capability requirement becomes explicit
+
+Decoupling `proxy` from `http1` exposed an accidental dependency in
+`eggfetch-ffi`. Its C ABI exports `eggfetch_client_builder_follow_redirects`,
+`eggfetch_client_builder_max_redirects`, and
+`eggfetch_client_builder_basic_auth` unconditionally, and those call
+`ClientBuilder::follow_redirects` / `max_redirects` and `AuthScheme::basic`.
+The FFI never needed `redirects` or `basic-auth` in its own manifest, because
+the old `proxy = ["http1", ...]` implication supplied both transitively.
+
+Measured at the milestone baseline `db3a553b…`, `cargo check -p eggfetch-ffi
+--no-default-features --features proxy` succeeded; on the changed tree it
+failed with four `E0599` errors. The FFI's core dependency therefore now
+declares `features = ["redirects", "basic-auth"]` explicitly. The default FFI
+build is unchanged — its `http1` feature already implied both — so this
+repairs a previously working non-default configuration rather than adding a
+capability.
+
+Dropping `logical-retry` from that configuration has no behavioral
+consequence: the FFI exposes no retry API and never sets a retry policy, and
+`pipeline::retry::send_with_retry` dispatches straight to
+`dispatch_attempt` when no policy is enabled, which is
+`send_with_redirects` whenever `redirects` is present.
+
+`scripts/check_adapter_features.py` gained an assertion that the FFI's core
+dependency still names those two capabilities, so the requirement cannot
+silently return to being transitive. The guard was proven to reject the
+pre-fix manifest.
+
 ## 3. Tests
 
 - `crates/eggfetch-core/tests/native_request_builder_tests.rs` — native
@@ -128,23 +157,49 @@ client-level policy is the redirect loop's own default.
 - Rust public-surface oracle regenerated for all eight profiles and passing
   (`python scripts/check_rust_public_api.py --skip-semver`). The diff is
   additive only: zero removed lines.
+- The FFI adapter's feature matrix re-measured against the baseline for eleven
+  configurations, including the `proxy`-only one that §2.4 repairs;
+  `cookies`-only improved from seven errors to zero because §2.3 ungated the
+  redirect module and the request-level policy. `tls-rustls`-only remains at
+  its pre-existing six errors and is out of scope.
 
-## 5. Release consequence (open)
+## 5. Release consequence (resolved)
 
 `cargo-semver-checks` classifies `feature_no_longer_enables_feature` as a
-**major** lint, so the `proxy` implication change in §2.1 makes the
-semver cross-check of `scripts/check_rust_public_api.py` report
-"semver requires new major version" against the current oracle baseline
-`03ecba973010e2858bf16a2b5f84d51ce70adae4`. The lint fires under both
-`--release-type patch` and `--release-type minor`.
+**major** lint, so the `proxy` implication change in §2.1 makes the semver
+cross-check report "semver requires new major version" against the then-current
+oracle baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`. The lint fires
+under both `--release-type patch` and `--release-type minor`.
 
-This is an intended consequence of issue #31, not an accidental API break:
-the Rust public API itself gains items and removes none. Closing it needs a
-maintainer decision on the next version number and on whether the oracle
-baseline advances to a SHA that includes this change (the baseline has
-never been advanced since the oracle was introduced in `ba4b7d57`, and
-the previous feature-graph change — the `standard-http1`/`native-http1`
-split — already predates it).
+**Resolution: the oracle baseline advances to
+`05f14f442dba697d7c140ead552e87f126ceac6b`** — the commit that carries this
+change. `scripts/check_rust_public_api.py`'s `BASELINE` and
+`compat/rust-public-api/README.md` name that SHA, and the oracle then reports
+`Rust public API oracle passed (8 profiles)` with `cargo-semver-checks`
+`no semver update required` (223 checks: 223 pass, 30 skip).
+
+Advancing the baseline was chosen over bumping the coordinated version or
+weakening the release gate because:
+
+- no version bump short of a major satisfies the lint, and a 1.0 bump is a
+  product decision far outside this change; a per-lint `check-settings.toml`
+  downgrade was tested at both repository and crate level and does not work;
+- the Rust public surface only gains items — `0` removed lines across all
+  eight snapshots (564 added);
+- the previous feature-graph change, the `standard-http1`/`native-http1`
+  split, already predates the old baseline and was absorbed the same way, so
+  this is the established path rather than a new exception.
+
+Two consequences are recorded rather than papered over:
+
+- **This is not patch-compatible.** Defaults are unchanged, but a downstream
+  crate that relied on `proxy` implying `http1` observably loses that
+  closure. Under `docs/reference/versioning.md` ("patch versions are always
+  backward-compatible"), the next release carrying this change must be a
+  **minor** bump. The baseline advance authorizes no publication and does not
+  change the current version.
+- Historical closure and plan documents keep their recorded `03ecba97…`
+  baseline. They are evidence records, not live control surfaces.
 
 ## 6. Non-goals
 
