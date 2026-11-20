@@ -43,7 +43,7 @@ no supported profile is covered only as a side effect of `--all-features`.
 
 | Profile | Cargo recipe | Tier 1 contract matrix | Tier 2 public-surface oracle | Other gates |
 | --- | --- | --- | --- | --- |
-| Ordinary default | `eggfetch-core = { version = "0.3" }` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+| Ordinary default | `eggfetch-core = { version = "0.4" }` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
 | H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | yes | yes | Tier 2 feature matrix and the feature-gated tests (compression, proxy) build on this feature set |
 | H2 deterministic HTTPS | `default-features = false, features = ["http2", "tls-rustls"]` | yes | yes | none |
 | H1 lean Bearer client | `default-features = false, features = ["standard-http1", "tls-rustls"]` | yes | yes | Tier 1 lean behavioral suites `lean_policy_tests` and `lean_route_tests` run under this profile |

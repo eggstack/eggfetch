@@ -126,7 +126,7 @@ Cargo features:
 
 ```toml
 [dependencies]
-eggfetch-ffi = { version = "0.3", features = ["http2", "cookies", "proxy"] }
+eggfetch-ffi = { version = "0.4", features = ["http2", "cookies", "proxy"] }
 ```
 
 The exported C ABI is fixed, so some capabilities are always on regardless of
