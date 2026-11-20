@@ -85,6 +85,17 @@ signature change to the high-level surface.
 a request body to `execute_http_body` without exposing `http-body-util`
 types in the public API.
 
+**Acceptance wording, decided 2026-11-20.** Issue #32's acceptance names a
+`RequestBuilder`, but that type is gated on `high-level-url` together with
+`pub mod request`/`pub mod response` (`lib.rs:50`, `lib.rs:99`), and `Request`
+carries a `url::Url` with public URL accessors. A `RequestBuilder` therefore
+cannot exist in the profile the criterion targets, so the criterion as literally
+worded is unsatisfiable without ungating the whole high-level surface. The
+maintainer accepted `NativeRequestBuilder` as the resolution: it satisfies the
+issue's stated intent (a URL-free builder constructed from `http::Uri` that
+dispatches), and the issue's own proposed change allows "an equivalent"
+constructor. No high-level ungating is in scope.
+
 ### 2.3 The disable switches become profile-independent
 
 - `redirect.rs` is no longer gated on `redirects`, so `RedirectPolicy` and

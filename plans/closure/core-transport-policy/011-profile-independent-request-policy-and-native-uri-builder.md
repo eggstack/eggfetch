@@ -62,7 +62,7 @@ release carrying this change must be a minor bump.
 |---|---|---|---|
 | #31: `proxy` does not pull the policy bundle | Isolated consumer probe (`default-features = false`, path dependency) resolved via `cargo tree -e features`; `crates/eggfetch-core/Cargo.toml:78` | Met | A standalone probe is required: inside the workspace, `cargo metadata`/resolver unifies the CLI and Python feature sets and cannot measure one crate's closure |
 | #31: defaults and `http1`/`http2` aliases unchanged | `crates/eggfetch-core/Cargo.toml:19,45,46`; CLI/Python adapters still resolve the policy bundle | Met | `proxy` keeps its own `dep:base64` edge, so `Proxy-Authorization` encoding is unaffected |
-| #32: `http::Uri` request construction without `high-level-url` | `crates/eggfetch-core/src/native_request.rs`; `tests/native_request_builder_tests.rs` (7 tests) passing in all eight contract profiles | Met | Separate type from the high-level `RequestBuilder`, so no high-level signature changed |
+| #32: `http::Uri` request construction without `high-level-url` | `crates/eggfetch-core/src/native_request.rs`; `tests/native_request_builder_tests.rs` (7 tests) passing in all eight contract profiles | Met as accepted | The issue's acceptance names `RequestBuilder`, which cannot exist in that profile; `NativeRequestBuilder` is the accepted resolution — see "Recorded decision" below |
 | #32: existing `high-level-url` entry points keep behavior and signatures | `crates/eggfetch-core/tests/public_api_contracts.rs`; eight-profile oracle with `0` removed lines | Met | The issue's own compatibility constraint |
 | #33: both setters available in every profile | `tests/request_policy_assertion_tests.rs` (4 tests) compiled and run in the lean, native, standard and all-features profiles | Met | Contract fixtures also ungated in `public_api_contracts.rs` |
 | #33: setter semantics preserved where the feature is enabled | `without_retry()` → 1 attempt against a client retry policy; later `retry()` → 3 attempts; request redirect policy honored | Met | `without_retry()` still stores `Some(RetryPolicy::default())`, so the prior observable state is preserved |
@@ -72,6 +72,28 @@ release carrying this change must be a minor bump.
 | Tier 2 green at the freeze | not run | **Not met** | Requires the pinned `nightly-2026-05-07` oracle toolchain, the exact 1.89.0 MSRV toolchain, and an operator-supplied downstream artifact manifest |
 | Tier 3 green at the freeze | not run | **Not met** | `./scripts/check.sh package` |
 | FFI adapter keeps building in its non-default configurations | Eleven-configuration matrix measured against `db3a553b…`; `scripts/check_adapter_features.py` guard | Met | See §3, "The FFI regression" |
+
+### Recorded decision — the #32 acceptance wording (2026-11-20)
+
+Issue #32's acceptance criterion reads "a `RequestBuilder` can be constructed
+from an `http::Uri` and dispatched" under
+`--no-default-features --features native-http1,tls-rustls`. That literal
+criterion cannot be satisfied as written: `pub mod request`, `pub mod
+response`, and the `RequestBuilder`/`Response` re-exports are all gated on
+`high-level-url` (`crates/eggfetch-core/src/lib.rs:50` and `lib.rs:99`), and
+`Request` holds a `url::Url` with URL accessors on the public surface, so
+ungating them is not a small edit.
+
+The issue itself allows latitude — its proposed change permits "an equivalent
+`RequestBuilder` constructor that takes an `http::Uri`" — and
+`NativeRequestBuilder` satisfies the stated intent: a URL-free builder that
+constructs from an `http::Uri` and dispatches in a `native-http1` profile.
+
+**Maintainer decision: accept `NativeRequestBuilder` as the resolution of
+#32.** No ungating of `request`/`response` is required, and #32's acceptance
+criterion should be read as satisfied by the native builder rather than by the
+type name. If the issue text is amended, the criterion becomes "a builder can be
+constructed from an `http::Uri` and dispatched" without naming the type.
 
 ## 3. Production implementation evidence
 
