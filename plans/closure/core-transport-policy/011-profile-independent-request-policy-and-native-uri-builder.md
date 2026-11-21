@@ -33,17 +33,13 @@ Tier 3 and the live security preflight are green**, and the downstream artifact
 manifest was produced with `scripts/build_downstream_artifact.py`, so Tier 2's
 downstream gate is no longer structurally blocked.
 
-**Tier 2 is nevertheless not green, and 0.4.0 is therefore not releasable.**
-Four attempts all stopped in `tests/retry_integration.rs`, which is
-timing-dependent: it assumes a closed idle connection always surfaces a
-*canceled* hyper error, but under load the same close can surface
-`IncompleteMessage`, which `RetryPolicy::is_error_retryable` deliberately does
-not retry (mid-request failures must not be masked). The flake is **pre-existing
-and not caused by this branch**: the test file and `src/retry.rs` are
-byte-identical to `db3a553b`, the only retry-path diff is the inert
-`is_retry_disabled()` gate, and the full workspace suite fails the same test
-with the same error on unmodified `db3a553b`. See §10 F1 for the recommended
-corrective.
+**Tier 2 is now green as well.** Four earlier attempts had stopped in
+`tests/retry_integration.rs`, a timing-dependent fixture, and a fifth surfaced a
+second latent fixture race in `protocol_capability_tests`. Both were pre-existing
+and both are fixed in `5d8108ef` and `873cf2a3`; `./scripts/check.sh extended`
+then completed at `873cf2a3…` with `TIER2_EXIT=0`, 6909 Rust tests and zero
+failures, and one policy-defined optional skip (the Node JS surface, whose
+native artifact is not built here). §10 F1 and F2 record the diagnoses.
 
 The remaining closure condition is unchanged: the exact-SHA Stage C
 requalification that these executable changes invalidated.
@@ -85,7 +81,7 @@ published, and publication remains a maintainer action.
 | #33: inert (not failing) where the capability is absent | `tests/request_policy_assertion_tests.rs`, lean profile | Met | Absent capability means the setter is a semantic no-op |
 | No public API removals in any profile | Eight-profile oracle diff: `564` added lines, `0` removed | Met | `cargo-semver-checks` 0.49.0 reports `no semver update required` |
 | Tier 1 green at the freeze | `./scripts/check.sh` (via the Tier 3 gate) at `2249860d…` — `TIER3_EXIT=0` | Met | 1828 Rust workspace tests, 0 failed; 581 Python passed; 134 compatibility smoke passed. Green earlier at `49f8910d…` and `35fa96d8…` as well |
-| Tier 2 green at the freeze | four attempts; furthest reached the feature-gated tests | **Not met — blocked** | Blocked by a pre-existing flake in `tests/retry_integration.rs`, reproduced on unmodified `db3a553b`; see §10 F1. Phases that did complete are green: both compat profiles 2082 passed / 1 skipped, API manifests, eight-profile oracle (223 checks), feature matrix |
+| Tier 2 green at the freeze | `./scripts/check.sh extended` at `873cf2a3…` — `TIER2_EXIT=0` | Met | 6909 Rust tests, 0 failed; both compat profiles 2082 passed / 1 skipped; eight-profile oracle (223 checks) and `no semver update required`; MSRV 1.89.0 (5 rows); docs; FFI; resource; lifecycle; soak; downstream portfolio; lossless merge; benchmarks. One policy-defined skip: the Node JS surface |
 | Tier 3 green at the freeze | `./scripts/check.sh package` at `2249860d…` — `TIER3_EXIT=0` | Met | http-connect publish dry-run, `cargo package --list` for all five dependent crates, wheel build, wheel smoke, package content, installed-wheel typing smoke |
 | Live security preflight green at the freeze | `./scripts/check_security.sh` at `2249860d…` — exit 0 | Met | `advisories ok, bans ok, licenses ok, sources ok`; one allowed `rustix` unsound warning (RUSTSEC-2026-0486), as at 0.3.0 |
 | FFI adapter keeps building in its non-default configurations | Eleven-configuration matrix measured against `db3a553b…`; `scripts/check_adapter_features.py` guard | Met | See §3, "The FFI regression" |
@@ -249,19 +245,17 @@ TC=nightly-2026-05-07 CARGO=… RUSTC=… RUSTDOC=… python3 scripts/check_rust
   `advisories ok, bans ok, licenses ok, sources ok` against 1555 live
   advisories and 273 locked dependencies, with one allowed warning
   (`rustix` RUSTSEC-2026-0486, unsound, allowed as at 0.3.0).
-- **Tier 2** at `2249860d…`: **not green**, four attempts. Every attempt stopped
-  in `tests/retry_integration.rs` on a stale-idle-connection test with
-  `HyperClient(SendRequest, IncompleteMessage)`: two in the all-features
-  workspace suite, one in the brotli profile, one in the gzip profile. One
-  further attempt was killed by host conditions (load average peaked at 87) and
-  wrote no exit code. Phases that completed before the failure are green: both
-  compatibility profiles `2082 passed, 1 skipped` (identical to the 0.3.0
-  recorded figures), the Python behaviour suite, the API manifest comparison,
-  the eight-profile Rust public-surface oracle, the feature matrix, and — in a
-  standalone rerun of the whole feature-gated block — all five profiles.
-- **Tier 2 phases not reached**: MSRV (Rust 1.89.0), documentation, FFI,
-  resource monitor, lifecycle, soak, downstream portfolio, lossless merge and
-  the Criterion benchmarks.
+- **Tier 2** at `873cf2a3…`: `TIER2_EXIT=0`, "Extended validation passed with
+  1 optional check(s) skipped". 6909 Rust tests across the profile rows, 0
+  failed. Both compatibility profiles `2082 passed, 1 skipped` — identical to
+  the recorded 0.3.0 figures — and the eight-profile Rust public-surface oracle
+  reports `223 checks: 223 pass, 30 skip` with `no semver update required`. The
+  MSRV rows run on the exact Rust 1.89.0 toolchain. Documentation, FFI tests,
+  resource regression, lifecycle, soak, the downstream portfolio, lossless merge
+  and the Criterion benchmarks all ran and passed. The single skip is the
+  policy-defined Node JS surface, whose native artifact is not built here.
+- **Tier 3 and the security preflight** were re-run at `873cf2a3…`:
+  `TIER3_EXIT=0` and security exit 0, unchanged from `2249860d…`.
 
 ## 5. Invariant review
 
@@ -356,8 +350,9 @@ overstate coverage.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | F1 — `tests/retry_integration.rs` is timing-dependent and fails intermittently in full-suite runs | Tier 2 cannot complete, so 0.4.0 cannot be qualified; the failure also reproduces on unmodified `db3a553b` | Planned separately as a test-determinism corrective: replace the socket race with deterministic fault injection (a dialer that yields a canceled hyper error) instead of a timing wait. Not fixed here: it is pre-existing, and masking it inside a release-prep branch would weaken the assertion |
-| High | Tier 2 has not completed at the freeze | 0.4.0 has Tier 1, Tier 3 and security evidence but no extended evidence; MSRV, docs, FFI, resource, lifecycle, soak, downstream and bench phases are unverified | Re-run `./scripts/check.sh extended` on a quiet host once F1 is resolved |
+| Resolved | F1 — `tests/retry_integration.rs` assumed a closed idle connection always surfaces a *canceled* hyper error | It does not: under load the same close yields `IncompleteMessage`, which is deliberately not retryable. Four Tier 2 attempts failed; the failure reproduces on unmodified `db3a553b` | Fixed in `5d8108ef` by replacing the socket race with a deterministic dropped-connection fixture; the three remaining tests pin the contract eggfetch owns, and retry recovery stays covered by the status/budget tests. 40 runs, zero failures |
+| Resolved | F2 — `protocol_capability_tests` replied before the client's request arrived | Accepted sockets inherited `O_NONBLOCK` from the non-blocking listener (observed on macOS), so the fixture answered a request it never received; ~1 run in 12 failed with `SendRequest` | Fixed in `873cf2a3`: accepted sockets are set blocking, and the head is read to CRLFCRLF before replying. 70 runs, zero failures |
+| Resolved | Tier 2 had not completed at the freeze | 0.4.0 had Tier 1, Tier 3 and security evidence but no extended evidence | `./scripts/check.sh extended` is green at `873cf2a3…` (6909 Rust tests, 0 failed) |
 | High | The live Stage C binding is invalidated | The tree is unqualified for HTTPX Stage C claims | Run a fresh exact-SHA qualification and record the renewal in the ledger |
 | Medium | `eggfetch-ffi --no-default-features --features tls-rustls` does not compile | Pre-existing at `db3a553b…`, not caused by this milestone; it selects no transport and no `high-level-url` | Decide whether unsupported adapter combinations should fail with a clearer manifest error or be documented as unsupported |
 | Resolved | The next release must be a minor bump | A patch release carrying this change would break a `proxy`-implying-`http1` consumer | Resolved: the coordinated version is now 0.4.0 (`2249860d…`), with `[Unreleased]` promoted to `[0.4.0] - 2026-11-20`. Not published |

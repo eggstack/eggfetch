@@ -23,15 +23,19 @@ The current public version is 0.3.0 across the six publishable crates and the
 Python distribution. The publication evidence is in
 `plans/closure/release-verification/008-0-3-0-publication.md`.
 
-**0.4.0 is prepared but not released.** The coordinated version is bumped to
-0.4.0 (`2249860d…`) and `CHANGELOG.md`'s `[Unreleased]` entries are promoted to
-`[0.4.0] - 2026-11-20`. Tier 1, Tier 3 and the live security preflight are green
-at that SHA; **Tier 2 is not**, and 0.4.0 must not be published until it is.
-The blocker is a pre-existing timing-dependent test,
-`tests/retry_integration.rs`, which fails intermittently and reproduces on
-unmodified `db3a553b`; see
+**0.4.0 is prepared and gate-clean, but not released.** The coordinated version
+is 0.4.0 and `CHANGELOG.md`'s `[Unreleased]` entries are promoted to
+`[0.4.0] - 2026-11-20`. At `873cf2a3…` all four gates are green: Tier 1 (1828
+Rust tests), **Tier 2** (`./scripts/check.sh extended`, 6909 Rust tests, 0
+failed, one policy-defined Node skip), Tier 3 and the live security preflight.
+The two fixture races that had blocked Tier 2 are fixed and recorded in
 `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md`
-§10 F1. No tag exists and no package is published for 0.4.0.
+§10.
+
+What remains is not engineering: the exact-SHA Stage C requalification (the
+binding is still invalidated), then the maintainer's tag and publication steps
+in `docs/releases/process.md`. No tag exists and no package is published for
+0.4.0.
 
 Validation tiers are defined in `.skills/verification-qualification.md`; the
 normative policy is `docs/verification-policy.md`.
