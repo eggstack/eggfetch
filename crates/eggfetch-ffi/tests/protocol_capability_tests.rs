@@ -67,11 +67,45 @@ impl CountingServer {
                     Ok((mut stream, _)) => {
                         ac.fetch_add(1, Ordering::SeqCst);
                         thread::spawn(move || {
-                            let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+                            // Read until the request head is complete. A single
+                            // read() can return a partial head, and it can time
+                            // out before the client has written anything at all;
+                            // answering in either case fabricates a response for
+                            // a request the server never received, which the
+                            // caller then observes as a failed send rather than
+                            // as the protocol decision under test.
+                            // The listener is non-blocking, and macOS
+                            // accepts sockets with O_NONBLOCK inherited, so a
+                            // read here can fail with WouldBlock before the
+                            // client has written anything. Block explicitly so
+                            // the head read waits for the request instead of
+                            // racing it. This is a no-op on platforms whose
+                            // accept() returns blocking sockets.
+                            let _ = stream.set_nonblocking(false);
+                            let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                            let mut head = Vec::new();
                             let mut buffer = [0_u8; 1024];
-                            let _ = stream.read(&mut buffer);
-                            let _ =
-                                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+                            loop {
+                                match stream.read(&mut buffer) {
+                                    Ok(0) => break,
+                                    Ok(read) => {
+                                        head.extend_from_slice(&buffer[..read]);
+                                        if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                            break;
+                                        }
+                                    }
+                                    // A retried read is the only error worth
+                                    // continuing for; anything else (including
+                                    // the timeout) means no usable head.
+                                    Err(ref error)
+                                        if error.kind() == std::io::ErrorKind::Interrupted => {}
+                                    Err(_) => break,
+                                }
+                            }
+                            if head.windows(4).any(|window| window == b"\r\n\r\n") {
+                                let _ = stream
+                                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+                            }
                         });
                     }
                     Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
