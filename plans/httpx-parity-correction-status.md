@@ -4,10 +4,43 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Stage C renewed after the 0.4.0 release qualification (2026-11-21)
+
+Both documented facades are **Stage C qualified (renewal)** on executable
+freeze `48ff1a39733c295906fd873cae757cc9eb149d6c` — the merge of PR #34 into
+`main`. The preceding live binding `cef0e7aa…` is historical because Core
+Transport M011 changed executable inputs; this renewal is the requalification
+that change required.
+
+The freeze's tree is byte-identical to the qualified freeze `873cf2a3…`; the
+only paths changed since are two planning documents, which the exact-SHA rule
+treats as non-invalidating for executable inputs.
+
+| Gate | Result |
+|---|---|
+| Tier 1 | `./scripts/check.sh` exit 0 — 1828 Rust tests, 0 failed; 581 Python; 134 compat smoke |
+| Tier 2 | `./scripts/check.sh extended` exit 0 — 6909 Rust tests, 0 failed; one policy-defined Node skip |
+| HTTPX compat (both facades) | **2082 passed, 1 skipped** each — identical to the 0.3.0 figures; the skip is the optional `google-genai` SDK construction fixture |
+| API manifest oracle | clean for both facades |
+| Rust public API oracle | 8 profiles, `223 checks: 223 pass, 30 skip`, `no semver update required` |
+| Tier 3 | `./scripts/check.sh package` exit 0 |
+| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok`; one allowed `rustix` unsound warning (RUSTSEC-2026-0486) |
+
+The two fixture races that had blocked Tier 2 are fixed in `5d8108ef` (retry
+integration) and `873cf2a3` (FFI protocol capability). Version 0.4.0 is a
+**minor** bump because the `proxy` feature no longer implies the
+`logical-retry`/`redirects`/`basic-auth` bundle.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding.
+
+---
+
 ## Recorded state — Stage C binding invalidated by Core Transport M011 (2026-11-20)
 
-> **This is the live state.** The freshest *qualification* below it is the
-> 2026-11-16 renewal on `cef0e7aa…`, which no longer describes the tree.
+> **Superseded 2026-11-21.** The renewal above re-established the binding on
+> `48ff1a39…`. This section remains the history of the invalidation.
 
 **The live Stage C binding is invalidated by this change.** Core Transport
 M011 — eggstack/eggfetch#31, #32 and #33 — changed executable inputs: Rust
