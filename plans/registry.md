@@ -20,8 +20,18 @@ Live compatibility binding:
 ## Current release
 
 The current public version is 0.3.0 across the six publishable crates and the
-Python distribution. No release milestone is active. The publication evidence
-is in `plans/closure/release-verification/008-0-3-0-publication.md`.
+Python distribution. The publication evidence is in
+`plans/closure/release-verification/008-0-3-0-publication.md`.
+
+**0.4.0 is prepared but not released.** The coordinated version is bumped to
+0.4.0 (`2249860d…`) and `CHANGELOG.md`'s `[Unreleased]` entries are promoted to
+`[0.4.0] - 2026-11-20`. Tier 1, Tier 3 and the live security preflight are green
+at that SHA; **Tier 2 is not**, and 0.4.0 must not be published until it is.
+The blocker is a pre-existing timing-dependent test,
+`tests/retry_integration.rs`, which fails intermittently and reproduces on
+unmodified `db3a553b`; see
+`plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md`
+§10 F1. No tag exists and no package is published for 0.4.0.
 
 Validation tiers are defined in `.skills/verification-qualification.md`; the
 normative policy is `docs/verification-policy.md`.

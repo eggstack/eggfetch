@@ -27,12 +27,26 @@ Implementation commits:
 
 ## 1. Executive finding
 
-M011 is implemented, Tier 1 is green at the freeze, and the milestone is
-**conditionally closed**. The condition is the exact-SHA Stage C requalification
-that the milestone's own executable changes invalidated: Tier 2 and Tier 3 have
-not been run at `49f8910d…`, and Tier 2's downstream gate cannot complete on
-this checkout because `target/downstream-qualification/artifact-manifest.json`
-has no in-repository producer.
+M011 is implemented and prepared for the 0.4.0 release, and the milestone is
+**conditionally closed**. At `2249860d…` — the 0.4.0 version bump — **Tier 1,
+Tier 3 and the live security preflight are green**, and the downstream artifact
+manifest was produced with `scripts/build_downstream_artifact.py`, so Tier 2's
+downstream gate is no longer structurally blocked.
+
+**Tier 2 is nevertheless not green, and 0.4.0 is therefore not releasable.**
+Four attempts all stopped in `tests/retry_integration.rs`, which is
+timing-dependent: it assumes a closed idle connection always surfaces a
+*canceled* hyper error, but under load the same close can surface
+`IncompleteMessage`, which `RetryPolicy::is_error_retryable` deliberately does
+not retry (mid-request failures must not be masked). The flake is **pre-existing
+and not caused by this branch**: the test file and `src/retry.rs` are
+byte-identical to `db3a553b`, the only retry-path diff is the inert
+`is_retry_disabled()` gate, and the full workspace suite fails the same test
+with the same error on unmodified `db3a553b`. See §10 F1 for the recommended
+corrective.
+
+The remaining closure condition is unchanged: the exact-SHA Stage C
+requalification that these executable changes invalidated.
 
 The milestone delivers the three capability changes requested by
 eggstack/eggfetch#31, #32 and #33:
@@ -51,10 +65,12 @@ eggstack/eggfetch#31, #32 and #33:
   profile, backed by an always-present `retry_disabled` flag and an
   always-present request-level `Option<RedirectPolicy>`.
 
-Two things are **not** claimed. First, this record does not assert Tier 2 or
-Tier 3. Second, the version is unchanged: advancing the oracle baseline is a
-verification-baseline decision, not a release, and §7 records why the next
-release carrying this change must be a minor bump.
+Two things are **not** claimed. First, this record does not assert Tier 2: the
+extended phases after the feature-gated tests (MSRV, docs, FFI, resource,
+lifecycle, soak, downstream, lossless merge, benchmarks) are unverified.
+Second, nothing here authorizes a release: the coordinated version is now
+**0.4.0** with `[Unreleased]` promoted, but no tag exists, no package is
+published, and publication remains a maintainer action.
 
 ## 2. Requirement-to-evidence matrix
 
@@ -68,9 +84,10 @@ release carrying this change must be a minor bump.
 | #33: setter semantics preserved where the feature is enabled | `without_retry()` → 1 attempt against a client retry policy; later `retry()` → 3 attempts; request redirect policy honored | Met | `without_retry()` still stores `Some(RetryPolicy::default())`, so the prior observable state is preserved |
 | #33: inert (not failing) where the capability is absent | `tests/request_policy_assertion_tests.rs`, lean profile | Met | Absent capability means the setter is a semantic no-op |
 | No public API removals in any profile | Eight-profile oracle diff: `564` added lines, `0` removed | Met | `cargo-semver-checks` 0.49.0 reports `no semver update required` |
-| Tier 1 green at the freeze | `./scripts/check.sh` at `49f8910d…` — `CHECK_EXIT=0` | Met | 1828 Rust workspace tests, 0 failed; 541 Python passed, 40 skipped; 134 compatibility smoke passed |
-| Tier 2 green at the freeze | not run | **Not met** | Requires the pinned `nightly-2026-05-07` oracle toolchain, the exact 1.89.0 MSRV toolchain, and an operator-supplied downstream artifact manifest |
-| Tier 3 green at the freeze | not run | **Not met** | `./scripts/check.sh package` |
+| Tier 1 green at the freeze | `./scripts/check.sh` (via the Tier 3 gate) at `2249860d…` — `TIER3_EXIT=0` | Met | 1828 Rust workspace tests, 0 failed; 581 Python passed; 134 compatibility smoke passed. Green earlier at `49f8910d…` and `35fa96d8…` as well |
+| Tier 2 green at the freeze | four attempts; furthest reached the feature-gated tests | **Not met — blocked** | Blocked by a pre-existing flake in `tests/retry_integration.rs`, reproduced on unmodified `db3a553b`; see §10 F1. Phases that did complete are green: both compat profiles 2082 passed / 1 skipped, API manifests, eight-profile oracle (223 checks), feature matrix |
+| Tier 3 green at the freeze | `./scripts/check.sh package` at `2249860d…` — `TIER3_EXIT=0` | Met | http-connect publish dry-run, `cargo package --list` for all five dependent crates, wheel build, wheel smoke, package content, installed-wheel typing smoke |
+| Live security preflight green at the freeze | `./scripts/check_security.sh` at `2249860d…` — exit 0 | Met | `advisories ok, bans ok, licenses ok, sources ok`; one allowed `rustix` unsound warning (RUSTSEC-2026-0486), as at 0.3.0 |
 | FFI adapter keeps building in its non-default configurations | Eleven-configuration matrix measured against `db3a553b…`; `scripts/check_adapter_features.py` guard | Met | See §3, "The FFI regression" |
 
 ### Recorded decision — the #32 acceptance wording (2026-11-20)
@@ -222,10 +239,29 @@ TC=nightly-2026-05-07 CARGO=… RUSTC=… RUSTDOC=… python3 scripts/check_rust
 - **Skipped**: the Node JS surface, because
   `crates/eggfetch-node/eggfetch.node` is not built on this host. This is the
   policy-defined optional Tier 1 skip, not a failure.
-- **Not run**: Tier 2 and Tier 3, and the live security preflight. Tier 2
-  needs the pinned nightly oracle toolchain, the exact 1.89.0 MSRV toolchain and
-  the operator-supplied downstream artifact manifest; the manifest is absent
-  from this checkout, and the gate fails closed rather than skipping.
+- **Tier 3** at `2249860d…`: `TIER3_EXIT=0`, "All package checks passed."
+  `eggfetch-http-connect` `cargo publish --dry-run`; `cargo package --list` for
+  `eggfetch-core`, `eggfetch-cli`, `eggfetch-ffi`, `eggfetch-python` and
+  `eggfetch-node`; wheel build; wheel smoke; package content validation;
+  installed-wheel typing smoke. Tier 3 runs Tier 1 first, which is where the
+  `2249860d` Tier 1 counts above come from.
+- **Live security preflight** at `2249860d…`: exit 0 —
+  `advisories ok, bans ok, licenses ok, sources ok` against 1555 live
+  advisories and 273 locked dependencies, with one allowed warning
+  (`rustix` RUSTSEC-2026-0486, unsound, allowed as at 0.3.0).
+- **Tier 2** at `2249860d…`: **not green**, four attempts. Every attempt stopped
+  in `tests/retry_integration.rs` on a stale-idle-connection test with
+  `HyperClient(SendRequest, IncompleteMessage)`: two in the all-features
+  workspace suite, one in the brotli profile, one in the gzip profile. One
+  further attempt was killed by host conditions (load average peaked at 87) and
+  wrote no exit code. Phases that completed before the failure are green: both
+  compatibility profiles `2082 passed, 1 skipped` (identical to the 0.3.0
+  recorded figures), the Python behaviour suite, the API manifest comparison,
+  the eight-profile Rust public-surface oracle, the feature matrix, and — in a
+  standalone rerun of the whole feature-gated block — all five profiles.
+- **Tier 2 phases not reached**: MSRV (Rust 1.89.0), documentation, FFI,
+  resource monitor, lifecycle, soak, downstream portfolio, lossless merge and
+  the Criterion benchmarks.
 
 ## 5. Invariant review
 
@@ -284,9 +320,12 @@ baseline and was absorbed the same way. The Rust surface only gained items.
 **The change is not patch-compatible.** Defaults are unchanged, but a
 downstream crate that relied on `proxy` implying `http1` observably loses that
 closure. Under `docs/reference/versioning.md` ("patch versions are always
-backward-compatible"), the next release carrying this change must be a
-**minor** bump. The current version stays 0.3.0, and nothing here authorizes a
-release.
+backward-compatible"), the release carrying this change must be a **minor**
+bump; that is now done — the coordinated version is 0.4.0 at `2249860d…`, with
+`Cargo.lock`, `pyproject.toml`, the Node prototype manifests, the documentation
+dependency snippets and the Python version assertion moved with it. 0.3.0
+remains the current *published* version on crates.io and PyPI, and nothing here
+authorizes a release.
 
 ## 8. Security review
 
@@ -317,10 +356,11 @@ overstate coverage.
 
 | Severity | Finding | Impact | Required action |
 |---|---|---|---|
-| High | Tier 2 and Tier 3 have not run at `49f8910d…` | The freeze has Tier 1 evidence only; no release may cite it | Run `./scripts/check.sh extended` and `./scripts/check.sh package` at the freeze, supplying the downstream artifact manifest |
+| High | F1 — `tests/retry_integration.rs` is timing-dependent and fails intermittently in full-suite runs | Tier 2 cannot complete, so 0.4.0 cannot be qualified; the failure also reproduces on unmodified `db3a553b` | Planned separately as a test-determinism corrective: replace the socket race with deterministic fault injection (a dialer that yields a canceled hyper error) instead of a timing wait. Not fixed here: it is pre-existing, and masking it inside a release-prep branch would weaken the assertion |
+| High | Tier 2 has not completed at the freeze | 0.4.0 has Tier 1, Tier 3 and security evidence but no extended evidence; MSRV, docs, FFI, resource, lifecycle, soak, downstream and bench phases are unverified | Re-run `./scripts/check.sh extended` on a quiet host once F1 is resolved |
 | High | The live Stage C binding is invalidated | The tree is unqualified for HTTPX Stage C claims | Run a fresh exact-SHA qualification and record the renewal in the ledger |
 | Medium | `eggfetch-ffi --no-default-features --features tls-rustls` does not compile | Pre-existing at `db3a553b…`, not caused by this milestone; it selects no transport and no `high-level-url` | Decide whether unsupported adapter combinations should fail with a clearer manifest error or be documented as unsupported |
-| Low | The next release must be a minor bump | A patch release carrying this change would break a `proxy`-implying-`http1` consumer | Hold this change for 0.4.0; do not ship it in a 0.3.x patch |
+| Resolved | The next release must be a minor bump | A patch release carrying this change would break a `proxy`-implying-`http1` consumer | Resolved: the coordinated version is now 0.4.0 (`2249860d…`), with `[Unreleased]` promoted to `[0.4.0] - 2026-11-20`. Not published |
 
 ## 11. Roadmap disposition
 
