@@ -19,23 +19,24 @@ Live compatibility binding:
 
 ## Current release
 
-The current public version is 0.3.0 across the six publishable crates and the
-Python distribution. The publication evidence is in
-`plans/closure/release-verification/008-0-3-0-publication.md`.
+The current public version is **0.4.0** across the six publishable crates and
+the Python distribution. The publication evidence is in
+`plans/closure/release-verification/009-0-4-0-publication.md`; the 0.3.0 record
+is `plans/closure/release-verification/008-0-3-0-publication.md`.
 
-**0.4.0 is prepared and gate-clean, but not released.** The coordinated version
-is 0.4.0 and `CHANGELOG.md`'s `[Unreleased]` entries are promoted to
-`[0.4.0] - 2026-11-20`. At `873cf2a3…` all four gates are green: Tier 1 (1828
-Rust tests), **Tier 2** (`./scripts/check.sh extended`, 6909 Rust tests, 0
-failed, one policy-defined Node skip), Tier 3 and the live security preflight.
-The two fixture races that had blocked Tier 2 are fixed and recorded in
+**0.4.0 is published.** Qualified at `873cf2a3…`, merged as `48ff1a39…`
+(PR [#34](https://github.com/eggstack/eggfetch/pull/34)) and released from
+`c9ddf4c2…` under signed tag `v0.4.0`. All four gates were green before
+publication — Tier 1 (1828 Rust tests), Tier 2 (`./scripts/check.sh extended`,
+6909 Rust tests, 0 failed, one policy-defined Node skip), Tier 3, and the live
+security preflight. All six crates resolve at 0.4.0 on crates.io; PyPI carries
+25 distributions for the version; the GitHub Release is live.
+
+The Stage C binding was renewed on `48ff1a39…` as part of this release, so it
+is current rather than invalidated. The two fixture races that had blocked
+Tier 2 are fixed and recorded in
 `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md`
 §10.
-
-What remains is not engineering: the exact-SHA Stage C requalification (the
-binding is still invalidated), then the maintainer's tag and publication steps
-in `docs/releases/process.md`. No tag exists and no package is published for
-0.4.0.
 
 Validation tiers are defined in `.skills/verification-qualification.md`; the
 normative policy is `docs/verification-policy.md`.
@@ -59,7 +60,7 @@ normative policy is `docs/verification-policy.md`.
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification is outstanding. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. |
 | TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` is invalidated by core-transport M011; requalification is outstanding. |
-| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.3.0 publication is closed. |
+| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.4.0 publication is closed (`plans/closure/release-verification/009-0-4-0-publication.md`). |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
 Closed plans are historical evidence, not active requirements or release gates.
