@@ -15,7 +15,6 @@ use crate::body::RequestBody;
 use crate::client::Client;
 use crate::error::Result;
 use crate::headers::Headers;
-#[cfg(feature = "redirects")]
 use crate::redirect::RedirectPolicy;
 use crate::response::Response;
 #[cfg(feature = "logical-retry")]
@@ -66,7 +65,6 @@ pub(crate) struct RequestParts {
     pub(crate) body: RequestBody,
     pub(crate) version: Version,
     pub(crate) timeout: Option<Timeout>,
-    #[cfg(feature = "redirects")]
     pub(crate) redirect: Option<RedirectPolicy>,
     pub(crate) auth: Option<AuthScheme>,
     pub(crate) auth_disabled: bool,
@@ -76,6 +74,12 @@ pub(crate) struct RequestParts {
     pub(crate) proxy_override: ProxyOverride,
     #[cfg(feature = "logical-retry")]
     pub(crate) retry: Option<RetryPolicy>,
+    /// Whether logical retries are disabled for this request.
+    ///
+    /// Always present so `without_retry()` stays expressible in profiles
+    /// that compile out the retry engine. The gated retry loop consults
+    /// this flag; in a profile without the loop it is inert.
+    pub(crate) retry_disabled: bool,
     pub(crate) transport_hints: TransportHints,
     pub(crate) proxied_target: Option<ResolvedTarget>,
     pub(crate) failure_context: Option<Arc<crate::error::RequestFailureContext>>,
@@ -100,7 +104,6 @@ impl RequestParts {
             body,
             version,
             timeout,
-            #[cfg(feature = "redirects")]
             redirect,
             auth,
             auth_disabled,
@@ -110,6 +113,7 @@ impl RequestParts {
             proxy_override,
             #[cfg(feature = "logical-retry")]
             retry,
+            retry_disabled,
             transport_hints,
             proxied_target,
             failure_context,
@@ -119,10 +123,7 @@ impl RequestParts {
         request.set_body(body);
         request.set_version(version);
         request.set_timeout(timeout);
-        #[cfg(feature = "redirects")]
         request.set_redirect(redirect);
-        #[cfg(not(feature = "redirects"))]
-        let _ = ();
         request.set_auth(auth);
         request.set_auth_disabled(auth_disabled);
         request.set_decompress(decompress);
@@ -136,6 +137,7 @@ impl RequestParts {
         request.set_retry(retry);
         #[cfg(not(feature = "logical-retry"))]
         let _ = ();
+        request.set_retry_disabled(retry_disabled);
         request.set_transport_hints(transport_hints);
         request.set_proxied_target(proxied_target);
         request.set_failure_context(failure_context);
@@ -167,7 +169,6 @@ impl RequestParts {
         request.set_body(replayed);
         request.set_version(self.version);
         request.set_timeout(attempt_timeout);
-        #[cfg(feature = "redirects")]
         request.set_redirect(self.redirect.clone());
         request.set_auth(self.auth.clone());
         request.set_auth_disabled(self.auth_disabled);
@@ -177,6 +178,7 @@ impl RequestParts {
         #[cfg(feature = "proxy")]
         request.set_proxy_override(self.proxy_override.clone());
         request.set_retry(self.retry.clone());
+        request.set_retry_disabled(self.retry_disabled);
         request.set_transport_hints(self.transport_hints.clone());
         request.set_proxied_target(self.proxied_target.clone());
         request.set_failure_context(self.failure_context.clone());
@@ -224,7 +226,6 @@ pub struct Request {
     body: RequestBody,
     version: Version,
     timeout: Option<Timeout>,
-    #[cfg(feature = "redirects")]
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
@@ -236,6 +237,11 @@ pub struct Request {
     /// Per-request retry policy override. Only available with `logical-retry`.
     #[cfg(feature = "logical-retry")]
     retry: Option<RetryPolicy>,
+    /// Whether logical retries are disabled for this request.
+    ///
+    /// Always present so `without_retry()` stays expressible in profiles
+    /// that compile out the retry engine.
+    retry_disabled: bool,
     /// Typed transport-level hints (target override, SNI hostname, etc.).
     transport_hints: TransportHints,
     /// Caller-supplied physical destination for a proxied request.
@@ -255,7 +261,6 @@ impl std::fmt::Debug for Request {
             .field("body", &self.body)
             .field("version", &self.version)
             .field("timeout", &self.timeout);
-        #[cfg(feature = "redirects")]
         debug.field("redirect", &self.redirect);
         debug
             .field("auth", &self.auth)
@@ -266,6 +271,7 @@ impl std::fmt::Debug for Request {
             .field("proxy_override", &self.proxy_override);
         #[cfg(feature = "logical-retry")]
         debug.field("retry", &self.retry);
+        debug.field("retry_disabled", &self.retry_disabled);
         debug
             .field("transport_hints", &self.transport_hints)
             .field("proxied_target", &self.proxied_target)
@@ -287,7 +293,6 @@ impl Request {
             body: RequestBody::default(),
             version: Version::HTTP_11,
             timeout: None,
-            #[cfg(feature = "redirects")]
             redirect: None,
             auth: None,
             auth_disabled: false,
@@ -297,6 +302,7 @@ impl Request {
             proxy_override: ProxyOverride::Inherit,
             #[cfg(feature = "logical-retry")]
             retry: None,
+            retry_disabled: false,
             transport_hints: TransportHints::default(),
             proxied_target: None,
             failure_context: None,
@@ -361,8 +367,10 @@ impl Request {
 
     /// Returns the request-level redirect policy override, if set.
     ///
-    /// Only available with the `redirects` feature.
-    #[cfg(feature = "redirects")]
+    /// The override is honored by the redirect loop when the `redirects`
+    /// feature is enabled. Without that feature no redirect loop exists,
+    /// so a stored policy has no effect and 3xx responses are returned
+    /// unchanged.
     #[must_use]
     pub fn redirect(&self) -> Option<&RedirectPolicy> {
         self.redirect.as_ref()
@@ -370,8 +378,9 @@ impl Request {
 
     /// Set the request-level redirect policy override.
     ///
-    /// Only available with the `redirects` feature.
-    #[cfg(feature = "redirects")]
+    /// The override is honored by the redirect loop when the `redirects`
+    /// feature is enabled. Without that feature no redirect loop exists,
+    /// so the stored policy has no effect.
     pub fn set_redirect(&mut self, redirect: Option<RedirectPolicy>) {
         self.redirect = redirect;
     }
@@ -469,6 +478,24 @@ impl Request {
         self.retry = retry;
     }
 
+    /// Returns whether logical retries are disabled for this request.
+    ///
+    /// Always available, so a caller can assert the single-attempt
+    /// contract in a profile that compiles out the retry engine.
+    #[must_use]
+    pub fn is_retry_disabled(&self) -> bool {
+        self.retry_disabled
+    }
+
+    /// Set whether logical retries are disabled for this request.
+    ///
+    /// The retry loop consults this flag when the `logical-retry` feature
+    /// is enabled. Without that feature there is no retry loop, so the
+    /// flag is inert.
+    pub fn set_retry_disabled(&mut self, retry_disabled: bool) {
+        self.retry_disabled = retry_disabled;
+    }
+
     /// Returns a reference to the transport hints for this request.
     #[must_use]
     pub fn transport_hints(&self) -> &TransportHints {
@@ -510,7 +537,6 @@ impl Request {
             body: self.body,
             version: self.version,
             timeout: self.timeout,
-            #[cfg(feature = "redirects")]
             redirect: self.redirect,
             auth: self.auth,
             auth_disabled: self.auth_disabled,
@@ -520,6 +546,7 @@ impl Request {
             proxy_override: self.proxy_override,
             #[cfg(feature = "logical-retry")]
             retry: self.retry,
+            retry_disabled: self.retry_disabled,
             transport_hints: self.transport_hints,
             proxied_target: self.proxied_target,
             failure_context: self.failure_context,
@@ -535,7 +562,6 @@ pub struct RequestBuilder {
     headers: Headers,
     body: RequestBody,
     timeout: Option<Timeout>,
-    #[cfg(feature = "redirects")]
     redirect: Option<RedirectPolicy>,
     auth: Option<AuthScheme>,
     auth_disabled: bool,
@@ -545,6 +571,11 @@ pub struct RequestBuilder {
     proxy_override: ProxyOverride,
     #[cfg(feature = "logical-retry")]
     retry: Option<RetryPolicy>,
+    /// Whether logical retries are disabled for this request.
+    ///
+    /// Always present so `without_retry()` stays expressible in profiles
+    /// that compile out the retry engine.
+    retry_disabled: bool,
     transport_hints: TransportHints,
     proxied_target: Option<ResolvedTarget>,
     error: Option<crate::Error>,
@@ -560,7 +591,6 @@ impl RequestBuilder {
             headers: Headers::new(),
             body: RequestBody::default(),
             timeout: None,
-            #[cfg(feature = "redirects")]
             redirect: None,
             auth: None,
             auth_disabled: false,
@@ -570,6 +600,7 @@ impl RequestBuilder {
             proxy_override: ProxyOverride::Inherit,
             #[cfg(feature = "logical-retry")]
             retry: None,
+            retry_disabled: false,
             transport_hints: TransportHints::default(),
             proxied_target: None,
             error: None,
@@ -651,9 +682,12 @@ impl RequestBuilder {
 
     /// Override the redirect policy for this specific request.
     ///
-    /// Only available with the `redirects` feature. When set, this overrides
-    /// the client-level redirect policy for this request only.
-    #[cfg(feature = "redirects")]
+    /// Available in every profile. When the `redirects` feature is
+    /// enabled, the override replaces the client-level redirect policy for
+    /// this request only. Without that feature there is no redirect loop,
+    /// so a stored policy has no effect and 3xx responses are returned
+    /// unchanged; the setter stays callable so profile-independent code
+    /// can express the same request contract in every build.
     #[must_use]
     pub fn redirect_policy(mut self, policy: RedirectPolicy) -> Self {
         self.redirect = Some(policy);
@@ -748,21 +782,50 @@ impl RequestBuilder {
     ///
     /// Only available with the `logical-retry` feature. When set, this
     /// overrides the client-level retry policy for this request only.
+    ///
+    /// This re-enables retries for the request, so a later call clears a
+    /// preceding [`Self::without_retry`].
     #[cfg(feature = "logical-retry")]
     #[must_use]
     pub fn retry(mut self, policy: RetryPolicy) -> Self {
         self.retry = Some(policy);
+        self.retry_disabled = false;
         self
     }
+
+    /// Replace the per-request retry policy override with the
+    /// no-retry default policy.
+    ///
+    /// The override only exists with the `logical-retry` feature; in a
+    /// profile without the retry engine there is nothing to replace.
+    #[cfg(feature = "logical-retry")]
+    fn disable_retry_policy(&mut self) {
+        self.retry = Some(RetryPolicy::default());
+    }
+
+    /// Replace the per-request retry policy override with the
+    /// no-retry default policy.
+    ///
+    /// The override only exists with the `logical-retry` feature; in a
+    /// profile without the retry engine there is nothing to replace.
+    #[cfg(not(feature = "logical-retry"))]
+    fn disable_retry_policy(&mut self) {}
 
     /// Disable retries for this specific request, even if the client
     /// has a retry policy configured.
     ///
-    /// Only available with the `logical-retry` feature.
-    #[cfg(feature = "logical-retry")]
+    /// Available in every profile. With the `logical-retry` feature the
+    /// request is dispatched exactly once, which is the behavior this
+    /// setter has always had. Without that feature there is no retry
+    /// engine to disable, so the request is already dispatched once and
+    /// the call is a semantic no-op that keeps the single-attempt
+    /// assertion expressible in profile-independent code.
+    ///
+    /// A later `retry()` call re-enables retries for the request.
     #[must_use]
     pub fn without_retry(mut self) -> Self {
-        self.retry = Some(RetryPolicy::default());
+        self.retry_disabled = true;
+        self.disable_retry_policy();
         self
     }
 
@@ -863,7 +926,6 @@ impl RequestBuilder {
         req.headers = self.headers;
         req.body = self.body;
         req.timeout = self.timeout;
-        #[cfg(feature = "redirects")]
         req.set_redirect(self.redirect);
         req.auth = self.auth;
         req.auth_disabled = self.auth_disabled;
@@ -873,6 +935,7 @@ impl RequestBuilder {
         req.proxy_override = self.proxy_override;
         #[cfg(feature = "logical-retry")]
         req.set_retry(self.retry);
+        req.set_retry_disabled(self.retry_disabled);
         req.transport_hints = self.transport_hints;
         req.proxied_target = self.proxied_target;
         Ok(req)

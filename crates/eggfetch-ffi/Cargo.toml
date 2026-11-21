@@ -1,6 +1,6 @@
 [package]
 name = "eggfetch-ffi"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -40,7 +40,14 @@ compression-deflate = ["eggfetch-core/compression-deflate"]
 multipart = ["eggfetch-core/multipart"]
 
 [dependencies]
-eggfetch-core = { version = "0.3.0", path = "../eggfetch-core", default-features = false }
+# The C ABI below is unconditional: `eggfetch_client_builder_follow_redirects`,
+# `eggfetch_client_builder_max_redirects` and `eggfetch_client_builder_basic_auth`
+# are always exported, so core must always provide the capabilities they drive.
+# These two edges were previously satisfied by accident, through the old
+# `proxy = ["http1", ...]` implication; core's `proxy` no longer selects the
+# `http1` alias, so the requirement is declared here explicitly instead of
+# leaving the FFI dependent on another feature's transitive closure.
+eggfetch-core = { version = "0.4.0", path = "../eggfetch-core", default-features = false, features = ["redirects", "basic-auth"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 bytes = "1"
 http = "1"

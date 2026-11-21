@@ -107,10 +107,16 @@ pub(crate) async fn send_with_retry(client: &Client, request: Request) -> Result
     let body_replayable = request.body().is_replayable();
 
     // Resolve the effective retry policy. Request-level takes precedence.
-    let effective_policy = request
-        .retry()
-        .cloned()
-        .or_else(|| client.config().retry.clone());
+    // A request-level `without_retry()` disables retries even when the
+    // client has a retry policy configured.
+    let effective_policy = if request.is_retry_disabled() {
+        None
+    } else {
+        request
+            .retry()
+            .cloned()
+            .or_else(|| client.config().retry.clone())
+    };
     let policy = match effective_policy {
         Some(p) if p.is_enabled() => p,
         _ => {
@@ -400,8 +406,7 @@ mod tests {
             body: _,
             version: _,
             timeout: _,
-            #[cfg(feature = "redirects")]
-                redirect: _,
+            redirect: _,
             auth: _,
             auth_disabled: _,
             decompress: _,
@@ -409,6 +414,7 @@ mod tests {
             max_decompression_ratio: _,
             proxy_override: _,
             retry: _,
+            retry_disabled: _,
             transport_hints: _,
             proxied_target: _,
             failure_context: _,

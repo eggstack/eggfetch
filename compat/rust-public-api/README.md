@@ -1,7 +1,7 @@
 # Rust public API oracle
 
 These snapshots freeze the supported `eggfetch-core` Rust surface at planning
-baseline `03ecba973010e2858bf16a2b5f84d51ce70adae4`.  They are verification
+baseline `05f14f442dba697d7c140ead552e87f126ceac6b`.  They are verification
 artifacts, not an additional supported API or a source of feature semantics.
 
 The generator is `cargo-public-api 0.52.0`, run with the pinned repository

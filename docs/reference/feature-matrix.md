@@ -43,7 +43,7 @@ no supported profile is covered only as a side effect of `--all-features`.
 
 | Profile | Cargo recipe | Tier 1 contract matrix | Tier 2 public-surface oracle | Other gates |
 | --- | --- | --- | --- | --- |
-| Ordinary default | `eggfetch-core = { version = "0.3" }` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
+| Ordinary default | `eggfetch-core = { version = "0.4" }` | yes | yes | Tier 1 workspace tests and clippy run `--all-features`; Tier 2 feature matrix runs `cargo check --all-features` |
 | H1 deterministic HTTPS | `default-features = false, features = ["http1", "tls-rustls"]` | yes | yes | Tier 2 feature matrix and the feature-gated tests (compression, proxy) build on this feature set |
 | H2 deterministic HTTPS | `default-features = false, features = ["http2", "tls-rustls"]` | yes | yes | none |
 | H1 lean Bearer client | `default-features = false, features = ["standard-http1", "tls-rustls"]` | yes | yes | Tier 1 lean behavioral suites `lean_policy_tests` and `lean_route_tests` run under this profile |
@@ -67,7 +67,8 @@ M009.
 | API | Available |
 | --- | --- |
 | `Client` / `ClientBuilder` | Yes |
-| `RequestBuilder` with method chaining | Yes |
+| `RequestBuilder` with method chaining | Yes (requires `high-level-url`) |
+| `NativeRequestBuilder` + `Client::{get_uri, post_uri, request_uri}` | Yes (URL-free builder over `http::Uri`; available in every profile, including those without `high-level-url`) |
 | `Response` (buffered + streaming) | Yes |
 | `Timeout` / `TimeoutBuilder` | Yes |
 | `TlsConfig` / `TlsConfigBuilder` | Yes |
@@ -78,7 +79,7 @@ M009.
 | `BasicAuth` | Yes (requires `basic-auth`; lean profiles are Bearer-only) |
 | `BearerAuth` | Yes (available in all profiles, including lean) |
 | `HttpVersionPolicy` | Yes |
-| `RedirectPolicy` | Yes (requires `redirects`; lean profiles return 3xx without following) |
+| `RedirectPolicy` / `RedirectDowngradePolicy` | Yes (available in every profile; following redirects requires `redirects`, and lean profiles return 3xx without following) |
 | `Dialer` / `DialTarget` / `SocketOption` | Yes (require `advanced-routing`; absent from lean profiles) |
 | `ClientBuilder::dialer` / `local_address` / `socket_options` / `uds_path` | Yes (require `advanced-routing`; absent from lean profiles) |
 | `RequestBuilder::resolved_addresses` / `TransportHints::{sni_hostname, resolved_target}` | Yes (require `advanced-routing`; fail closed with `Unsupported` in lean profiles) |

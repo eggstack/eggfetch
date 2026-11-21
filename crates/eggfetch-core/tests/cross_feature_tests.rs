@@ -1375,6 +1375,7 @@ async fn compressed_response_through_connect_tunnel() {
 }
 
 #[tokio::test]
+#[cfg(feature = "redirects")]
 async fn redirect_same_origin_through_proxy() {
     let redirect_server = RedirectServer::start(None).await;
     let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
@@ -1402,6 +1403,7 @@ async fn redirect_same_origin_through_proxy() {
 }
 
 #[tokio::test]
+#[cfg(feature = "redirects")]
 async fn redirect_cross_origin_through_proxy() {
     let cross_server = CrossOriginServer::start().await;
     let origin_server = RedirectServer::start(Some(cross_server.port())).await;
@@ -1439,6 +1441,7 @@ async fn redirect_cross_origin_through_proxy() {
 /// `proxy-authorization`) from the redirect hop so the pipeline can
 /// re-attach configured credentials cleanly.
 #[tokio::test]
+#[cfg(all(feature = "redirects", feature = "basic-auth"))]
 async fn client_auth_survives_same_origin_redirect() {
     let redirect_server = RedirectServer::start(None).await;
 
@@ -1470,6 +1473,7 @@ async fn client_auth_survives_same_origin_redirect() {
 /// the pipeline re-attaches the snapshot when the hop stays same-origin.
 /// Cross-origin hops still drop it (covered by header-stripping tests).
 #[tokio::test]
+#[cfg(feature = "redirects")]
 async fn manual_authorization_survives_same_origin_redirect() {
     let redirect_server = RedirectServer::start(None).await;
 
@@ -1503,7 +1507,7 @@ async fn manual_authorization_survives_same_origin_redirect() {
 }
 
 #[tokio::test]
-#[cfg(feature = "cookies")]
+#[cfg(all(feature = "cookies", feature = "redirects"))]
 async fn cookies_set_on_proxy_redirect_hop() {
     let redirect_server = RedirectServer::start(None).await;
     let proxy = HttpProxyServer::start(HttpProxyConfig::default()).await;
@@ -1653,6 +1657,7 @@ async fn proxy_authenticated_multipart_upload() {
 }
 
 #[tokio::test]
+#[cfg(all(feature = "redirects", feature = "basic-auth"))]
 async fn auth_stripping_on_cross_origin_proxied_redirect() {
     let cross_server = CrossOriginServer::start().await;
     let origin_server = RedirectServer::start(Some(cross_server.port())).await;

@@ -18,7 +18,6 @@ use crate::transport::hyper_client::{
     CONNECT_CLIENT_CACHE_MAX_ENTRIES, FORWARD_CLIENT_CACHE_MAX_ENTRIES,
     SOCKS_CLIENT_CACHE_MAX_ENTRIES,
 };
-#[cfg(feature = "high-level-url")]
 use http::Method;
 #[cfg(any(feature = "advanced-routing", feature = "proxy"))]
 use tokio::sync::Mutex;
@@ -307,6 +306,64 @@ impl Client {
     pub fn request(&self, method: Method, url: &str) -> Result<RequestBuilder> {
         let parsed = parse_url(url)?;
         Ok(RequestBuilder::new(self.clone(), method, parsed))
+    }
+
+    /// Create a native GET request builder for the given [`http::Uri`].
+    ///
+    /// This is the URL-free counterpart to `Client::get`: it needs no
+    /// `url`/`idna`/ICU dependency closure and is available in every
+    /// profile, including the minimal native slice. The request is
+    /// dispatched through the native transport, which applies no redirects,
+    /// no logical retries, no cookies, no authentication, and no response
+    /// decompression.
+    ///
+    /// The caller owns IDNA and punycode conversion before constructing the
+    /// URI.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URI is not an absolute HTTP(S) URI with an
+    /// authority.
+    pub fn get_uri(&self, uri: &http::Uri) -> Result<crate::native_request::NativeRequestBuilder> {
+        self.request_uri(Method::GET, uri)
+    }
+
+    /// Create a native POST request builder for the given [`http::Uri`].
+    ///
+    /// This is the URL-free counterpart to `Client::post`. See
+    /// [`Self::get_uri`] for the dispatch semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URI is not an absolute HTTP(S) URI with an
+    /// authority.
+    pub fn post_uri(&self, uri: &http::Uri) -> Result<crate::native_request::NativeRequestBuilder> {
+        self.request_uri(Method::POST, uri)
+    }
+
+    /// Create a native request builder for a method and an [`http::Uri`].
+    ///
+    /// This is the URL-free counterpart to `Client::request`. See
+    /// [`Self::get_uri`] for the dispatch semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URI is not an absolute HTTP(S) URI with an
+    /// authority.
+    pub fn request_uri(
+        &self,
+        method: Method,
+        uri: &http::Uri,
+    ) -> Result<crate::native_request::NativeRequestBuilder> {
+        // Validate eagerly so a relative or non-HTTP(S) URI is reported
+        // at build time instead of at dispatch time. The native transport
+        // applies the same rule.
+        crate::http_origin::HttpOrigin::from_uri(uri)?;
+        Ok(crate::native_request::NativeRequestBuilder::new(
+            self.clone(),
+            method,
+            uri.clone(),
+        ))
     }
 
     /// Returns a reference to the connection pool metrics.

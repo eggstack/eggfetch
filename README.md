@@ -18,6 +18,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Proxy**: HTTP forwarding, HTTPS CONNECT, proxy auth, `NO_PROXY`, SOCKS5 ([proxy](docs/concepts/proxy.md))
 - **Cookies, auth, multipart, compression**: RFC 6265 jar, Basic/Bearer, streaming uploads, gzip/brotli/zstd/deflate
 - **Retries and redirects**: backoff with `Retry-After`, replayable-body redirect handling
+- **URL-free native builder**: `Client::get_uri`/`post_uri`/`request_uri` build from an `http::Uri` in every feature profile, for embeddings that omit `url`/IDNA/ICU
 - **Python**: requests/HTTPX-compatible sync and async APIs plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](docs/reference/compatibility.md))
 - **CLI** with streaming output, machine-readable formats, and shell completions ([guide](docs/cli/guide.md))
 

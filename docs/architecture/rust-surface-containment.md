@@ -42,6 +42,21 @@ record, not a proposal to hide or redesign existing public items.
 - `Pool`, `PoolConfig`, `PoolMetrics`, and `PoolGuard`: existing public types
   and lifecycle/metrics observations remain frozen; route/cache refactors do
   not introduce a second pool or expose its private keys.
+- `NativeRequestBuilder` and `Client::{get_uri, post_uri, request_uri}`: the
+  URL-free request builder. Its public surface is exactly the builder type,
+  the three `Client` entry points, and the builder's own methods. It is a
+  separate type from the high-level `RequestBuilder` on purpose: the
+  high-level builder owns URL semantics and returns the high-level
+  `Response`, while the native builder owns only the wire-level request and
+  returns a plain `http::Response`. The two are not unified behind one
+  type, so no existing high-level signature changes.
+- `RedirectPolicy`, `RedirectDowngradePolicy`, and the request-level
+  `redirect_policy`/`without_retry` setters: available in every profile so a
+  caller can express a disable switch where the corresponding capability is
+  compiled out. The client-level `ClientBuilder::redirect_policy` and the
+  `RetryPolicy` types stay feature-gated, because the client-level policy
+  is the redirect loop's own default and the retry policy types own the
+  retry-only dependencies.
 
 Historical compatibility re-exports and feature-specific availability are
 covered by the six profile snapshots in `compat/rust-public-api/`. The exact

@@ -106,10 +106,13 @@ the GIL.
 
 ## Qualification status
 
-The HTTPX 0.28.1 and HTTPX2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16). The
-full compatibility, extended, package, and live security gates passed on that
-freeze. Earlier bindings are historical. Current evidence is in
+The HTTPX 0.28.1 and HTTPX2 2.12.0 facades **were** Stage C qualified on
+frozen executable SHA `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` (2026-11-16),
+where the full compatibility, extended, package, and live security gates passed.
+**That binding is invalidated**: Core Transport M011 changed executable inputs,
+its freeze `49f8910d…` has Tier 1 evidence only, and the current tree is
+unqualified. A fresh exact-SHA qualification is required before any binding can
+be cited. Earlier bindings are historical. Current evidence is in
 `plans/httpx-parity-correction-status.md`; exact facade scopes are recorded in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.
 

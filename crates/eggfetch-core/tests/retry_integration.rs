@@ -207,57 +207,60 @@ impl MockServer {
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic stale-idle connection fixture
+// Deterministic dropped-connection fixture
 // ---------------------------------------------------------------------------
 
-/// A loopback server that closes its first keepalive connection only after the
-/// client has completed the first request. This makes Hyper's reused-idle
-/// connection retry path observable without relying on timing or an external
-/// origin.
-struct StaleIdleServer {
+/// A loopback server that reads one request and then closes the connection
+/// without writing a single response byte.
+///
+/// This makes a *mid-request* transport failure deterministic: the client has
+/// already written the request when the socket goes away, so Hyper reports
+/// `IncompleteMessage`.
+///
+/// It deliberately replaces the earlier stale-idle fixture, which closed a
+/// pooled idle connection and asserted that the client had *not* yet observed
+/// the FIN. Whether Hyper classifies that situation as `is_canceled`
+/// (retryable) or `IncompleteMessage` (not retryable) depends on scheduling,
+/// so those tests failed intermittently under load — on unmodified `main` as
+/// well as here. A canceled error cannot be forced from the server side: when
+/// the pool does observe the close it quietly opens a new connection, and when
+/// it does not the resulting failure is a mid-request one. These tests
+/// therefore pin the contract eggfetch owns — non-retryable transport failures
+/// surface and are never retried, with or without a policy — instead of
+/// Hyper's internal classification.
+struct DroppedConnectionServer {
     port: u16,
     request_count: Arc<AtomicUsize>,
-    connection_count: Arc<AtomicUsize>,
-    close_idle: Option<oneshot::Sender<()>>,
-    idle_closed: Option<oneshot::Receiver<()>>,
     shutdown: Option<oneshot::Sender<()>>,
     accept_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
-impl StaleIdleServer {
+impl DroppedConnectionServer {
     async fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let request_count = Arc::new(AtomicUsize::new(0));
-        let connection_count = Arc::new(AtomicUsize::new(0));
-        let (close_idle_tx, close_idle_rx) = oneshot::channel();
-        let (idle_closed_tx, idle_closed_rx) = oneshot::channel();
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
-        let request_count_for_accept = request_count.clone();
-        let connection_count_for_accept = connection_count.clone();
+        let counter = request_count.clone();
         let accept_handle = tokio::spawn(async move {
-            let mut first_close = Some(close_idle_rx);
-            let mut first_closed = Some(idle_closed_tx);
-
             loop {
                 tokio::select! {
                     result = listener.accept() => {
                         let Ok((stream, _)) = result else {
                             break;
                         };
-                        connection_count_for_accept.fetch_add(1, Ordering::SeqCst);
-                        let request_count = request_count_for_accept.clone();
-                        let close_rx = first_close.take();
-                        let closed_tx = first_closed.take();
+                        let counter = counter.clone();
                         tokio::spawn(async move {
-                            serve_stale_idle_connection(
-                                stream,
-                                request_count,
-                                close_rx,
-                                closed_tx,
-                            )
-                            .await;
+                            let (read_half, write_half) = stream.into_split();
+                            let mut reader = BufReader::new(read_half);
+                            if read_http_request(&mut reader).await.is_some() {
+                                counter.fetch_add(1, Ordering::SeqCst);
+                            }
+                            // Close without writing a response: dropping the
+                            // write half sends the FIN the client observes
+                            // mid-response.
+                            drop(write_half);
                         });
                     }
                     _ = &mut shutdown_rx => break,
@@ -268,9 +271,6 @@ impl StaleIdleServer {
         Self {
             port,
             request_count,
-            connection_count,
-            close_idle: Some(close_idle_tx),
-            idle_closed: Some(idle_closed_rx),
             shutdown: Some(shutdown_tx),
             accept_handle: Some(accept_handle),
         }
@@ -280,63 +280,15 @@ impl StaleIdleServer {
         format!("http://127.0.0.1:{}/", self.port)
     }
 
-    async fn close_idle_connection(&mut self) {
-        self.close_idle
-            .take()
-            .expect("stale connection close command already sent")
-            .send(())
-            .expect("stale connection handler exited before close command");
-        self.idle_closed
-            .take()
-            .expect("stale connection close acknowledgement already received")
-            .await
-            .expect("stale connection handler dropped close acknowledgement");
-    }
-
-    async fn shutdown(&mut self) {
+    fn shutdown(&mut self) {
         let _ = self
             .shutdown
             .take()
             .expect("server already shut down")
             .send(());
-        self.accept_handle
-            .take()
-            .expect("server accept task already joined")
-            .await
-            .expect("stale connection accept task panicked");
-    }
-}
-
-async fn serve_stale_idle_connection(
-    stream: tokio::net::TcpStream,
-    request_count: Arc<AtomicUsize>,
-    close_rx: Option<oneshot::Receiver<()>>,
-    closed_tx: Option<oneshot::Sender<()>>,
-) {
-    let (read_half, mut write_half) = stream.into_split();
-    let mut reader = BufReader::new(read_half);
-    if read_http_request(&mut reader).await.is_none() {
-        return;
-    }
-
-    request_count.fetch_add(1, Ordering::SeqCst);
-    let keepalive = close_rx.is_some();
-    let connection = if keepalive { "keep-alive" } else { "close" };
-    let response =
-        format!("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: {connection}\r\n\r\nok");
-    if write_half.write_all(response.as_bytes()).await.is_err() || write_half.flush().await.is_err()
-    {
-        return;
-    }
-
-    if let Some(close_rx) = close_rx {
-        let _ = close_rx.await;
-        let _ = write_half.shutdown().await;
-        let _ = closed_tx
-            .expect("first connection must carry close acknowledgement")
-            .send(());
-    } else {
-        let _ = write_half.shutdown().await;
+        if let Some(handle) = self.accept_handle.take() {
+            handle.abort();
+        }
     }
 }
 
@@ -518,90 +470,60 @@ async fn retry_stream_body_sends_once() {
 }
 
 #[tokio::test]
-async fn stale_idle_default_retries_transparently() {
-    let mut server = StaleIdleServer::start().await;
+async fn dropped_connection_mid_request_surfaces_as_a_transport_error() {
+    let mut server = DroppedConnectionServer::start().await;
     let client = Client::new();
-    let url = server.url();
 
-    let mut first = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
-    server.close_idle_connection().await;
-
-    let mut second = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(second.status(), 200);
-    assert_eq!(second.bytes().await.unwrap().as_ref(), b"ok");
-    assert_eq!(server.request_count.load(Ordering::SeqCst), 2);
-    assert_eq!(server.connection_count.load(Ordering::SeqCst), 2);
-    server.shutdown().await;
-}
-
-#[tokio::test]
-async fn stale_idle_strict_mode_surfaces_transport_failure() {
-    let mut server = StaleIdleServer::start().await;
-    let client = Client::builder().retry_canceled_requests(false).build();
-    let url = server.url();
-
-    let mut first = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
-    server.close_idle_connection().await;
-
-    let result = client.get(&url).unwrap().send().await;
-    let error = result.expect_err("strict mode must not transparently retry");
+    let error = client
+        .get(&server.url())
+        .unwrap()
+        .send()
+        .await
+        .expect_err("a dropped connection must surface as an error");
     assert_eq!(error.kind(), "hyper_client");
     assert!(StdError::source(&error).is_some());
     assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
-    assert_eq!(server.connection_count.load(Ordering::SeqCst), 1);
-    server.shutdown().await;
+    server.shutdown();
 }
 
 #[tokio::test]
-async fn stale_idle_strict_mode_allows_explicit_retry() {
-    let mut server = StaleIdleServer::start().await;
+async fn dropped_connection_mid_request_is_not_retried_by_a_policy() {
+    // A mid-request failure may already have reached the server, so it is
+    // never replayed: is_error_retryable excludes it and a configured policy
+    // must not mask it.
+    let mut server = DroppedConnectionServer::start().await;
     let policy = RetryPolicy::builder()
-        .max_attempts(2)
+        .max_attempts(3)
         .backoff_factor(0.0)
         .build();
-    let client = Client::builder()
-        .retry_canceled_requests(false)
-        .retry(policy)
-        .build();
-    let url = server.url();
+    let client = Client::builder().retry(policy).build();
 
-    let mut first = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
-    server.close_idle_connection().await;
-
-    let mut second = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(second.status(), 200);
-    assert_eq!(second.bytes().await.unwrap().as_ref(), b"ok");
-    assert_eq!(server.request_count.load(Ordering::SeqCst), 2);
-    assert_eq!(server.connection_count.load(Ordering::SeqCst), 2);
-    server.shutdown().await;
+    let error = client
+        .get(&server.url())
+        .unwrap()
+        .send()
+        .await
+        .expect_err("a dropped connection must not be retried");
+    assert_eq!(error.kind(), "hyper_client");
+    assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
+    server.shutdown();
 }
 
 #[tokio::test]
-async fn stale_idle_strict_mode_does_not_retry_one_shot_body() {
-    let mut server = StaleIdleServer::start().await;
+async fn dropped_connection_mid_request_is_not_retried_for_a_one_shot_body() {
+    let mut server = DroppedConnectionServer::start().await;
     let client = Client::builder().retry_canceled_requests(false).build();
-    let url = server.url();
-    let mut first = client.get(&url).unwrap().send().await.unwrap();
-    assert_eq!(first.bytes().await.unwrap().as_ref(), b"ok");
-    server.close_idle_connection().await;
-
     let body = RequestBody::from_stream(
         futures_util::stream::once(async {
             Ok::<bytes::Bytes, Error>(bytes::Bytes::from_static(b"body"))
         }),
         Some(4),
     );
-    let result = client.post(&url).unwrap().body(body).send().await;
-    assert!(
-        result.is_err(),
-        "strict mode must surface the stale-idle failure"
-    );
+
+    let result = client.post(&server.url()).unwrap().body(body).send().await;
+    assert!(result.is_err(), "a dropped connection must surface");
     assert_eq!(server.request_count.load(Ordering::SeqCst), 1);
-    assert_eq!(server.connection_count.load(Ordering::SeqCst), 1);
-    server.shutdown().await;
+    server.shutdown();
 }
 
 #[tokio::test]

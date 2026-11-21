@@ -329,6 +329,65 @@ impl From<&str> for RequestBody {
     }
 }
 
+impl http_body::Body for RequestBody {
+    type Data = Bytes;
+    type Error = Error;
+
+    /// Yield the next body frame.
+    ///
+    /// An empty body ends the stream immediately, a byte body yields its
+    /// single data frame, and a stream body yields one data frame per
+    /// produced chunk. The body is consumed as it is polled, matching the
+    /// single-consumption contract of the high-level request path.
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<std::result::Result<Frame<Self::Data>, Self::Error>>> {
+        match &mut *self {
+            Self::Empty => Poll::Ready(None),
+            Self::Bytes(bytes) => {
+                if bytes.is_empty() {
+                    return Poll::Ready(None);
+                }
+                let frame = std::mem::replace(bytes, Bytes::new());
+                Poll::Ready(Some(Ok(Frame::data(frame))))
+            }
+            Self::Stream { stream, .. } => match stream.as_mut().poll_next(cx) {
+                Poll::Ready(Some(Ok(chunk))) => Poll::Ready(Some(Ok(Frame::data(chunk)))),
+                Poll::Ready(Some(Err(error))) => Poll::Ready(Some(Err(error))),
+                Poll::Ready(None) => Poll::Ready(None),
+                Poll::Pending => Poll::Pending,
+            },
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        match self {
+            Self::Empty => true,
+            Self::Bytes(bytes) => bytes.is_empty(),
+            // A stream body may still produce frames, so it is never
+            // reported as finished before it actually ends.
+            Self::Stream { .. } => false,
+        }
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        let mut hint = http_body::SizeHint::new();
+        match self {
+            Self::Empty => hint.set_exact(0),
+            Self::Bytes(bytes) => hint.set_exact(u64::try_from(bytes.len()).unwrap_or(u64::MAX)),
+            Self::Stream {
+                length: Some(length),
+                ..
+            } => {
+                hint.set_exact(u64::try_from(*length).unwrap_or(u64::MAX));
+            }
+            Self::Stream { length: None, .. } => {}
+        }
+        hint
+    }
+}
+
 pin_project! {
     /// Type-erased native request body with per-frame write deadlines.
     ///

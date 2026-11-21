@@ -71,10 +71,49 @@ fn retry_contracts_compile() {
     let _ = eggfetch_core::RetryPolicyBuilder::new();
 }
 
-#[cfg(feature = "redirects")]
+/// The redirect policy types are available in every profile.
+///
+/// The policy is a disable switch, so a caller must be able to name it even
+/// in a profile that compiles out the redirect loop.
 #[test]
 fn redirect_contracts_compile() {
     let _ = eggfetch_core::RedirectPolicy::default();
+    let _ = eggfetch_core::RedirectDowngradePolicy::default();
+}
+
+/// The native `http::Uri` request builder is available in every profile.
+///
+/// The native builder needs no `url`/`idna`/ICU closure, so a consumer on
+/// the minimal native slice can build and dispatch a request without the
+/// high-level URL layer.
+#[test]
+fn native_request_contracts_compile() {
+    use eggfetch_core::{NativeRequestBuilder, RedirectPolicy};
+
+    let client = eggfetch_core::Client::new();
+    let uri: http::Uri = "https://example.com/path".parse().expect("valid URI");
+
+    let _: fn(
+        &eggfetch_core::Client,
+        &http::Uri,
+    ) -> Result<NativeRequestBuilder, eggfetch_core::Error> = eggfetch_core::Client::get_uri;
+    let _: fn(
+        &eggfetch_core::Client,
+        &http::Uri,
+    ) -> Result<NativeRequestBuilder, eggfetch_core::Error> = eggfetch_core::Client::post_uri;
+    let _: fn(
+        &eggfetch_core::Client,
+        http::Method,
+        &http::Uri,
+    ) -> Result<NativeRequestBuilder, eggfetch_core::Error> = eggfetch_core::Client::request_uri;
+
+    // The single-attempt assertions are callable in every profile.
+    let builder = client
+        .get_uri(&uri)
+        .expect("valid URI")
+        .without_retry()
+        .redirect_policy(RedirectPolicy::strict(0));
+    let _ = builder;
 }
 
 #[test]

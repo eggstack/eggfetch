@@ -8,7 +8,7 @@ Add `eggfetch-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-eggfetch-core = { version = "0.3" } # H1 + Rustls + native roots/WebPKI fallback
+eggfetch-core = { version = "0.4" } # H1 + Rustls + native roots/WebPKI fallback
 ```
 
 Enable optional features as needed:
@@ -39,7 +39,7 @@ For a typical H1/H2 client with cookies, proxying, multipart, all response
 compression codecs, and native JSON helpers:
 
 ```toml
-eggfetch-core = { version = "0.3", features = ["http1", "http2", "tls-rustls", "tls-native-roots", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "json"] }
+eggfetch-core = { version = "0.4", features = ["http1", "http2", "tls-rustls", "tls-native-roots", "cookies", "proxy", "multipart", "compression-gzip", "compression-brotli", "compression-zstd", "compression-deflate", "json"] }
 # Add this when deriving request/response types for the `json` helpers.
 serde = { version = "1", features = ["derive"] }
 ```
@@ -48,14 +48,14 @@ For a minimal embedded HTTPS client (deterministic WebPKI roots, retaining
 advanced routing and the retry/redirect/Basic policy bundle):
 
 ```toml
-eggfetch-core = { version = "0.3", default-features = false, features = ["http1", "tls-rustls"] }
+eggfetch-core = { version = "0.4", default-features = false, features = ["http1", "tls-rustls"] }
 ```
 
 For a lean Bearer-only standard-route client without advanced routing or
 retry/redirect/Basic machinery:
 
 ```toml
-eggfetch-core = { version = "0.3", default-features = false, features = ["standard-http1", "tls-rustls"] }
+eggfetch-core = { version = "0.4", default-features = false, features = ["standard-http1", "tls-rustls"] }
 ```
 
 `http1` alone is cleartext-only. The opt-in `json` feature adds native
@@ -280,6 +280,43 @@ poll and reset after each frame; delaying consumption after response headers
 does not consume that budget. It is intended for native gateways, service
 meshes, middleware, and custom-network clients; the existing `RequestBuilder`
 API remains the application-oriented choice.
+
+### URL-free request building (`http::Uri`)
+
+`Client::get_uri`, `Client::post_uri`, and `Client::request_uri` build a
+request from an already-parsed `http::Uri` and return a
+`NativeRequestBuilder`. They are available in **every** profile, so a
+`native-http1`/`native-http2` consumer can construct and dispatch a request
+without enabling `high-level-url` and therefore without the
+`url`/`idna`/ICU closure:
+
+```rust
+use eggfetch_core::Client;
+
+let uri: http::Uri = "https://api.example.com/items".parse()?;
+let response = Client::new()
+    .get_uri(&uri)?
+    .header("accept", "application/json")
+    .timeout(eggfetch_core::Timeout::from_secs(10))
+    .send()
+    .await?;
+
+let status = response.status();
+let body = response.into_body();
+```
+
+The builder exposes `header`, `headers`, `body`, `bytes`, `version`,
+`timeout`, `transport_hints`, `without_retry`, and `redirect_policy`, plus
+`build()` for an `http::Request<RequestBody>` that can be handed to
+`execute_http_body`.
+
+Semantics are the native transport's, not the high-level client's: exactly one
+attempt, no redirects, no logical retries, no cookies, no authentication, no
+response decompression, and no decoded-body limits. The caller owns IDNA and
+punycode conversion before constructing the URI, and a relative or non-HTTP(S)
+URI is rejected eagerly by the constructor. Use the high-level
+`RequestBuilder` when you want URL parsing, redirect following, retry policy,
+cookies, or auth.
 
 ### Native Tower service interoperability
 
