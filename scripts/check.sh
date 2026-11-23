@@ -127,6 +127,14 @@ tier1_release_validation() {
     "$PYTHON_BIN" "$SCRIPT_DIR/test_validate_release_versions.py"
 }
 
+tier1_wheel_coverage_self_test() {
+    info "Wheel coverage validator self-test (coverage rules only — not a release result)"
+    # Asserts which Python/ABI tag combinations the release validator accepts
+    # and rejects, including the free-threaded ones. It reads no wheel set and
+    # asserts nothing about an assembled release.
+    "$PYTHON_BIN" "$SCRIPT_DIR/validate_wheel_coverage.py" --self-test
+}
+
 tier1_clippy() {
     info "Rust clippy"
     cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -254,6 +262,7 @@ run_tier1() {
     tier1_adapter_features
     tier1_downstream_artifact_self_test
     tier1_release_validation
+    tier1_wheel_coverage_self_test
     tier1_clippy
     tier1_rust_tests
     tier1_rust_api_contracts

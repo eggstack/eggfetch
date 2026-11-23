@@ -11,8 +11,10 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
+import re
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import venv
@@ -133,15 +135,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return
 
 
+WHEEL_TAG_RE = re.compile(
+    r"^(?P<name>.+?)-(?P<version>[^-]+)(?:-\d[^-]*)?-"
+    r"(?P<py>[^-]+)-(?P<abi>[^-]+)-(?P<platform>[^-]+)\.whl$"
+)
+
+
+def _interpreter_tags() -> tuple[str, str]:
+    """Expected (Python tag, ABI tag) for the running interpreter.
+
+    A free-threaded interpreter expects the "t"-suffixed ABI tag, so the
+    GIL-enabled and free-threaded wheels for one Python version are distinct
+    artifacts and must not be confused with each other.
+    """
+    major, minor = sys.version_info[:2]
+    py_tag = f"cp{major}{minor}"
+    if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
+        return py_tag, f"{py_tag}t"
+    return py_tag, py_tag
+
+
 def _resolve_wheel(wheel_dir: Path) -> Path:
     """Resolve exactly one compatible wheel from a directory."""
     wheels = sorted(wheel_dir.glob("*.whl"))
     if not wheels:
         raise SystemExit(f"no wheels found in {wheel_dir}")
 
-    major, minor = sys.version_info[:2]
-    cp_tag = f"cp{major}{minor}"
-    matched = [w for w in wheels if cp_tag in w.name]
+    py_tag, abi_tag = _interpreter_tags()
+    matched = []
+    for wheel in wheels:
+        m = WHEEL_TAG_RE.match(wheel.name)
+        if m and m.group("py") == py_tag and m.group("abi") == abi_tag:
+            matched.append(wheel)
     if not matched:
         matched = [w for w in wheels if "abi3" in w.name or "py3-none-any" in w.name]
     if not matched:

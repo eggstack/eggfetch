@@ -142,6 +142,26 @@ jobs:
             maturin-args: --target x86_64-unknown-linux-gnu
             manylinux: "2014"
             python: "3.15"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --target x86_64-unknown-linux-gnu
+            python: "3.14t"
+            # The free-threaded interpreters need glibc 2.34, so they cannot
+            # run inside the manylinux2014 container. Build on the host
+            # instead; maturin then derives the platform tag from the
+            # interpreter (manylinux_2_34) rather than a fixed tag.
+            container: "off"
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            maturin-args: --target x86_64-unknown-linux-gnu
+            python: "3.15t"
+            # The free-threaded interpreters need glibc 2.34, so they cannot
+            # run inside the manylinux2014 container. Build on the host
+            # instead; maturin then derives the platform tag from the
+            # interpreter (manylinux_2_34) rather than a fixed tag.
+            container: "off"
           # Linux aarch64 uses a native runner for build and import smoke.
           - os: linux
             arch: aarch64
@@ -179,6 +199,26 @@ jobs:
             maturin-args: --target aarch64-unknown-linux-gnu
             manylinux: "2014"
             python: "3.15"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            python: "3.14t"
+            # The free-threaded interpreters need glibc 2.34, so they cannot
+            # run inside the manylinux2014 container. Build on the host
+            # instead; maturin then derives the platform tag from the
+            # interpreter (manylinux_2_34) rather than a fixed tag.
+            container: "off"
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+            maturin-args: --target aarch64-unknown-linux-gnu
+            python: "3.15t"
+            # The free-threaded interpreters need glibc 2.34, so they cannot
+            # run inside the manylinux2014 container. Build on the host
+            # instead; maturin then derives the platform tag from the
+            # interpreter (manylinux_2_34) rather than a fixed tag.
+            container: "off"
           # macOS arm64
           - os: macos
             arch: arm64
@@ -210,6 +250,16 @@ jobs:
             runner: macos-latest
             maturin-args: --target aarch64-apple-darwin
             python: "3.15"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.14t"
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            maturin-args: --target aarch64-apple-darwin
+            python: "3.15t"
           # Windows x86_64
           - os: windows
             arch: x86_64
@@ -241,6 +291,16 @@ jobs:
             runner: windows-latest
             maturin-args: --target x86_64-pc-windows-msvc
             python: "3.15"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.14t"
+          - os: windows
+            arch: x86_64
+            runner: windows-latest
+            maturin-args: --target x86_64-pc-windows-msvc
+            python: "3.15t"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -255,8 +315,9 @@ jobs:
           # Python 3.15 has no stable interpreter yet: only the 3.15 rows may
           # fall back to the current prerelease. 3.10-3.14 keep selecting stable
           # interpreters. The same row resolves a stable 3.15.x automatically
-          # once 3.15.0 final ships, with no further change.
-          allow-prereleases: ${{ matrix.python == '3.15' }}
+          # once 3.15.0 final ships, with no further change. The "t"-suffixed
+          # rows are the free-threaded builds and follow the same rule.
+          allow-prereleases: ${{ startsWith(matrix.python, '3.15') }}
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -265,6 +326,7 @@ jobs:
           maturin-version: 1.14.1
           args: --release --out dist ${{ matrix.maturin-args }} -i python${{ matrix.python }} -m crates/eggfetch-python/Cargo.toml
           manylinux: ${{ matrix.manylinux || 'auto' }}
+          container: ${{ matrix.container || '' }}
 
       - name: Verify exactly one wheel
         shell: bash
@@ -282,7 +344,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv .venv-test
+          # The interpreter must match the matrix row: the "t"-suffixed rows
+          # build free-threaded wheels, which only install into a
+          # free-threaded environment of the same version.
+          python${{ matrix.python }} -m venv .venv-test
           WHEEL_PATH="${WHEEL//\\//}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             .venv-test/Scripts/pip install "$WHEEL_PATH"
@@ -450,8 +515,8 @@ jobs:
           echo "Sdists: $sdist_count"
           echo "Total: $total"
 
-          if [[ $wheel_count -ne 24 ]]; then
-            echo "FAIL: expected 24 wheels, found $wheel_count" >&2; exit 1
+          if [[ $wheel_count -ne 32 ]]; then
+            echo "FAIL: expected 32 wheels, found $wheel_count" >&2; exit 1
           fi
           if [[ $sdist_count -ne 1 ]]; then
             echo "FAIL: expected 1 sdist, found $sdist_count" >&2; exit 1
@@ -511,8 +576,8 @@ jobs:
           set -euo pipefail
           count=$(find dist/ -type f \( -name '*.whl' -o -name '*.tar.gz' \) | wc -l)
           echo "Distributions to publish: $count"
-          if [[ $count -ne 25 ]]; then
-            echo "FAIL: expected 25 distributions, found $count" >&2; exit 1
+          if [[ $count -ne 33 ]]; then
+            echo "FAIL: expected 33 distributions, found $count" >&2; exit 1
           fi
 
       - name: Publish to PyPI
