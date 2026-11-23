@@ -11,6 +11,14 @@ pip install eggfetch
 Requires Python 3.10 through 3.15. Wheels are interpreter-specific; ABI3 is
 not enabled or claimed.
 
+Free-threaded CPython (PEP 703) is supported for Python 3.14 and 3.15. The
+release matrix includes `cp314-cp314t` and `cp315-cp315t` wheels alongside
+the GIL-enabled ones, and importing `eggfetch` leaves the interpreter's GIL
+disabled. On a free-threaded interpreter the binding does not serialize the
+Python callbacks it invokes: a trace callback or a request-body iterator
+supplied by the caller may be entered by two requests at the same time, so
+state shared between them must be synchronized by the caller.
+
 The native package ships a PEP 561 `py.typed` marker and reviewed stubs for
 the public `eggfetch` surface. `Client` accepts lazy synchronous iterable
 request bodies; `AsyncClient` also accepts lazy asynchronous iterables of

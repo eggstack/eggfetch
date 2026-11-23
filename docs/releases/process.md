@@ -87,10 +87,16 @@ PyPI publication is performed via the manually dispatched `.github/workflows/pyp
 |---|---|---|
 | Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
 | Linux manylinux2014 | aarch64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
+| Linux manylinux_2_34 | x86_64 | 3.14t, 3.15t |
+| Linux manylinux_2_34 | aarch64 | 3.14t, 3.15t |
 | macOS | arm64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
+| macOS | arm64 | 3.14t, 3.15t |
 | Windows | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 |
+| Windows | x86_64 | 3.14t, 3.15t |
 
-24 wheels + 1 source distribution = 25 distributions per release. Linux aarch64 wheels are built and smoke-tested on native `ubuntu-24.04-arm` runners. The publish job checks for all 25 assembled distributions before upload.
+32 wheels + 1 source distribution = 33 distributions per release. Linux aarch64 wheels are built and smoke-tested on native `ubuntu-24.04-arm` runners. The publish job checks for all 33 assembled distributions before upload.
+
+The free-threaded Linux wheels target glibc 2.34 (`manylinux_2_34`) and build on the host with the container disabled, because the free-threaded CPython interpreters require that glibc and no manylinux container provides it.
 
 ### Dispatch Procedure
 
@@ -139,7 +145,7 @@ A coordinated public release requires a manual GitHub Release after PyPI publica
 3. Run `./scripts/check.sh`, `./scripts/check.sh extended`, and `./scripts/check.sh package`, plus the live `./scripts/check_security.sh` preflight.
 4. Manually publish crates.io packages in dependency order.
 5. Verify crates.io propagation between publishes.
-6. Dispatch PyPI Wheels from the frozen candidate SHA with `publish=false`; inspect all 24 wheels and the sdist.
+6. Dispatch PyPI Wheels from the frozen candidate SHA with `publish=false`; inspect all 32 wheels and the sdist.
 7. Create and push the signed tag on that exact candidate after crates.io publication.
 8. Dispatch from the same tag with `publish=true`.
 9. Approve the `pypi` environment deployment after assembled-set validation.

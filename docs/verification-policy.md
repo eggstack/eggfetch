@@ -173,10 +173,23 @@ The PyPI wheel workflow (`.github/workflows/pypi.yml`) is a manually dispatched,
 |---|---|---|---|
 | Linux manylinux2014 | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
 | Linux manylinux2014 | aarch64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action on native `ubuntu-24.04-arm` |
+| Linux manylinux_2_34 | x86_64 | 3.14t, 3.15t | maturin-action on the host, no container |
+| Linux manylinux_2_34 | aarch64 | 3.14t, 3.15t | maturin-action on native `ubuntu-24.04-arm`, no container |
 | macOS | arm64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
+| macOS | arm64 | 3.14t, 3.15t | maturin-action native |
 | Windows | x86_64 | 3.10, 3.11, 3.12, 3.13, 3.14, 3.15 | maturin-action native |
+| Windows | x86_64 | 3.14t, 3.15t | maturin-action native |
 
-24 wheels + 1 sdist = 25 distributions per release.
+32 wheels + 1 sdist = 33 distributions per release. Coverage is keyed on the
+platform, the Python tag and the ABI tag: `cp314-cp314` and `cp314-cp314t` are
+distinct artifacts, so a free-threaded wheel never covers a GIL-enabled
+target and vice versa. The Stable ABI (`abi3`) is not used.
+
+The free-threaded Linux rows target glibc 2.34 (`manylinux_2_34`) rather than
+the `manylinux2014` baseline of the GIL-enabled rows, because the
+free-threaded CPython interpreters require that glibc. They therefore build on
+the host with the container disabled instead of inside a manylinux container,
+and maturin derives the platform tag from the interpreter.
 
 ### Workflow Modes
 

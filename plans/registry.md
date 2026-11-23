@@ -58,8 +58,8 @@ normative policy is `docs/verification-policy.md`.
 | Subsystem | Roadmap status | Roadmap | Current state |
 |---|---|---|---|
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification is outstanding. |
-| Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. A free-threaded (PEP 703) support investigation is recorded in `plans/python-free-threaded-support-investigation.md`; the wheel-support decision is open. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` is invalidated by core-transport M011; requalification is outstanding. |
+| Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. Free-threaded (PEP 703) wheel support was adopted (Option A) and implemented: `cp314-cp314t` and `cp315-cp315t` wheels ship for 3.14t and 3.15t on the four release platforms, and the release set grows from 24 to 32 wheels. The evidence is in `plans/python-free-threaded-support-investigation.md`; the separate `abi3t`/PEP 803 question is still open. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work; requalification is outstanding. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.4.0 publication is closed (`plans/closure/release-verification/009-0-4-0-publication.md`). |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
@@ -111,14 +111,14 @@ None of these is unblocked by the closed milestones.
 | 2 | Decide whether CLI work gets its own subsystem roadmap or belongs under an existing roadmap. | Project maintainers | `plans/implementation/release-verification/007-planning-and-documentation-hygiene.md` §5 |
 | 6 | Decide whether the IPv6 pool-key divergence needs its own milestone. The high-level and native paths currently produce different keys for the same IPv6 origin. | Project maintainers | `plans/closure/core-transport-policy/010-core-duplicate-helper-consolidation.md` §10 |
 | H3 | Supply two non-Quinn servers, a privileged Linux impairment pass, and three public-origin checks before any future support decision. | Project maintainers | M010 closure |
-| FT | Decide whether to adopt, defer, or scope free-threaded (PEP 703) wheel support. | Project maintainers | `plans/python-free-threaded-support-investigation.md` §9 |
+| FT | Decide whether `abi3t` / PEP 803 should be revisited as a separate question from free-threading. The free-threaded wheel-support decision itself is closed: Option A was adopted on 2026-11-23. | Project maintainers | `plans/python-free-threaded-support-investigation.md` §9 |
 
 ## Operational blockers
 
 | Area | Blocker |
 |---|---|
-| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. Separately, the Stage C binding is invalidated by core-transport M011, so a fresh exact-SHA qualification is required before any binding can be cited. |
-| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. TLS/proxy M011–M012 closed. The Stage C binding last renewed on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` is invalidated by core-transport M011. |
+| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. Separately, the Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work, so a fresh exact-SHA qualification is required before any binding can be cited. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. TLS/proxy M011–M012 closed. The Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live

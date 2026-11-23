@@ -179,6 +179,49 @@ and cancelling the request drops the in-flight producer future.
 - **Pre-resolved futures**: `__aenter__`/`__aexit__` return pre-resolved `asyncio.Future` objects.
 - **Cancellation safety**: cancelling an in-flight request drops the Rust future cleanly; pool permits are released via RAII.
 
+## Free-Threaded Execution
+
+The native module declares `Py_MOD_GIL_NOT_USED`. PyO3 0.29 emits that by
+default, so no `gil_used` opt-in is needed, and importing `eggfetch` into a
+free-threaded CPython build (`Py_GIL_DISABLED == 1`) leaves the GIL
+disabled instead of letting the interpreter silently re-enable it.
+
+The binding is written in the GIL-optional API shape throughout: blocking
+waits run under `py.detach`, Python values are constructed under
+`Python::attach`, and no `Python<'py>` token is stored beyond a call.
+Shared mutable state is held behind Rust synchronization (`Mutex`,
+`Condvar`, `AtomicBool`, `OnceLock`), not behind the GIL.
+
+Two consequences are visible to user code and are part of the supported
+contract:
+
+- **User callbacks are not serialized.** A trace callback
+  (`extensions={"trace": ...}`) and a request-body iterator supplied by the
+  caller are invoked from transport threads. Under a GIL-enabled build
+  those calls were implicitly serialized against all other Python
+  execution; under `Py_GIL_DISABLED` two in-flight requests on one
+  `Client` can enter the same callable concurrently. State shared between
+  those entries must carry its own synchronization. The contract is pinned
+  by `crates/eggfetch-python/tests/test_free_threading.py`.
+- **Sub-interpreters are not supported.** The process-global `NOOP_ACLOSE`
+  cache in `response.rs` is not interpreter-keyed, so a sub-interpreter
+  that calls `Response.aclose()` could observe an object owned by another
+  interpreter. The binding makes no sub-interpreter claim.
+
+Free-threaded coverage is qualified on CPython 3.14t and 3.15t. The
+release matrix includes `cp314-cp314t` and `cp315-cp315t` wheels for Linux
+x86_64, Linux aarch64, macOS arm64, and Windows x86_64, and
+`scripts/validate_wheel_coverage.py` keys coverage on the Python tag and
+the ABI tag so a free-threaded wheel never stands in for its GIL-enabled
+twin.
+
+The distribution declares the trove classifier
+`Programming Language :: Python :: Free Threading :: 3 - Stable`: free-threaded
+use is supported, multithreaded use is tested, and the thread-safety
+constraints above are documented. It does not claim the highest level — the
+binding is not fully thread-safe, because it does not serialize user
+callbacks.
+
 ## Response Surface
 
 `PyResponse` presents a requests/httpx-compatible surface:

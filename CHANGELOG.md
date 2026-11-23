@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `eggfetch` Python bindings: free-threaded CPython (PEP 703) support for
+  Python 3.14t and 3.15t. The release matrix ships separate `cp314-cp314t`
+  and `cp315-cp315t` wheels for Linux x86_64, Linux aarch64, macOS arm64
+  and Windows x86_64, and importing `eggfetch` leaves the interpreter's GIL
+  disabled. Python 3.13 has no free-threaded wheel: the supported PyO3
+  release dropped 3.13t.
+- `eggfetch` Python bindings: the free-threading contract is documented and
+  pinned by an in-tree test. On a free-threaded interpreter the binding does
+  **not** serialize the Python callbacks it invokes: a trace callback or a
+  request-body iterator supplied by the caller may be entered by two
+  requests at the same time, so state shared between those entries must
+  carry its own synchronization. Sub-interpreters are not supported.
+
+### Changed
+
+- The release wheel set grows from 24 to 32 wheels (25 to 33 distributions).
+  `scripts/validate_wheel_coverage.py` now keys coverage on the platform,
+  the Python tag **and** the ABI tag, so a free-threaded wheel can never
+  stand in for its GIL-enabled twin and a Stable ABI (`abi3`) wheel no
+  longer passes as coverage for a specific CPython version.
+- The free-threaded Linux wheels target glibc 2.34 (`manylinux_2_34`)
+  rather than the `manylinux2014` baseline of the GIL-enabled wheels,
+  because the free-threaded CPython interpreters require that glibc. The
+  free-threaded wheels are therefore usable on a narrower set of Linux
+  distributions than the GIL-enabled ones.
+
 ## [0.4.0] - 2026-11-20
 
 ### Added

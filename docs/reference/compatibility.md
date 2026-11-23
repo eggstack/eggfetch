@@ -110,7 +110,13 @@ The HTTPX 0.28.1 and HTTPX2 2.12.0 facades are Stage C qualified on frozen
 executable SHA `48ff1a39733c295906fd873cae757cc9eb149d6c` (2026-11-21), where the
 full compatibility, extended, package, and live security gates passed — both
 facades at 2082 passed / 1 skipped, identical to the 0.3.0 figures. Earlier
-bindings are historical. Current evidence is in
+bindings are historical.
+
+That qualification is the last completed one, but the executable-input changes
+that followed it — the `rustix`/`url`/`cookie` dependency bumps, two core
+fixture determinism fixes, and the free-threaded (PEP 703) wheel work —
+invalidate the binding, and a fresh exact-SHA qualification is outstanding.
+Current evidence is in
 `plans/httpx-parity-correction-status.md`; exact facade scopes are recorded in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.
 

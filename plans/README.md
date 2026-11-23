@@ -1,9 +1,11 @@
 # eggfetch Planning System
 
 > **Current status:** TLS/protocols M006–M012 closed (H3 **experimental
-> retained**). Core transport M011 (#31–#33) is conditionally closed and its
-> changes **invalidated** the exact-SHA Stage C binding last renewed on
-> `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d`; requalification is outstanding.
+> retained**). Core transport M011 (#31–#33) is conditionally closed. The
+> exact-SHA Stage C binding last renewed on
+> `48ff1a39733c295906fd873cae757cc9eb149d6c` is invalidated by the
+> executable-input changes that followed it, including the free-threaded
+> wheel work; requalification is outstanding.
 > The current release, roadmap statuses, and maintainer actions are tracked in
 > `plans/registry.md`. The live Stage C state is recorded in
 > `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`.
@@ -21,9 +23,11 @@ These stay visible until they are done. The same list, with owners, is in
    the high-level and native paths produce different keys for the same IPv6
    origin. Resolving it changes pool keying and needs a separate plan; see
    `docs/residual-differences.md`.
-3. **Decide free-threaded Python support:** adopt, defer, or scope
-   free-threaded (PEP 703) wheel support; the investigation and the open
-   questions are in `plans/python-free-threaded-support-investigation.md`.
+3. **Decide the `abi3t` / PEP 803 question:** whether the Stable ABI for
+   free-threaded builds should be revisited separately from free-threading.
+   The free-threaded wheel-support decision itself is closed — Option A was
+   adopted on 2026-11-23 — and the investigation and the remaining open
+   question are in `plans/python-free-threaded-support-investigation.md`.
 
 The current list above is the short view for maintainers. `plans/registry.md`
 tracks current status and resolution history.

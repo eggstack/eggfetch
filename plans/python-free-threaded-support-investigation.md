@@ -13,9 +13,11 @@ Determine how much work would be required to run `eggfetch`'s Python bindings on
 a free-threaded (PEP 703, `Py_GIL_DISABLED`) CPython build, and whether the
 resulting capability justifies registering a milestone.
 
-This document is a research record. It proposes no implementation, changes no CI
-matrix combination, publishes no wheel, and makes **no** free-threaded
-qualification claim.
+This document started as a research record and now also tracks the work that
+followed the maintainer decisions in §9: free-threaded wheels for CPython
+3.14t and 3.15t (Option A), the in-tree contract tests, and the qualification
+evidence for both. It publishes no wheel and cuts no release; publication
+remains a manual, tagged step.
 
 ## Scope
 
@@ -27,9 +29,9 @@ In scope:
 - The packaging and CI surface that a free-threaded wheel would change.
 - A ranked risk inventory with the evidence each risk rests on.
 
-Out of scope: implementation, CI edits, wheel builds, publication, and any
-statement that the current binding is or is not safe under `Py_GIL_DISABLED`
-without a runtime qualification.
+Out of scope: publication, release cutting, and any statement that the binding
+is safe under `Py_GIL_DISABLED` beyond what the recorded qualification
+establishes. Sub-interpreter support remains out of scope (§10).
 
 ## 1. Upstream support matrix
 
@@ -85,9 +87,11 @@ rather than the older `allow_threads` / `with_gil` spelling. No
   Every row selects a GIL-enabled interpreter; there is no `t` row.
 - `scripts/validate_wheel_coverage.py` hard-codes
   `EXPECTED_PYTHON_VERSIONS = {cp310, cp311, cp312, cp313, cp314, cp315}`
-  and `EXPECTED_PLATFORMS` (4 platforms), and rejects `abi3` tags
-  explicitly. `.github/workflows/pypi.yml` additionally asserts exactly 24
-  wheels and 25 distributions.
+  and `EXPECTED_PLATFORMS` (4 platforms). Although its comment says it rejects
+  `abi3`, the validator currently never reads the ABI-tag field, so that
+  rejection does not work for normal `cp310-abi3-...` wheel filenames.
+  `.github/workflows/pypi.yml` additionally asserts exactly 24 wheels and 25
+  distributions.
 - `crates/eggfetch-python/tests/native_api_manifest.json` and the typing
   guards describe the public surface, not the interpreter ABI, so they are
   ABI-agnostic.
@@ -218,13 +222,19 @@ targets and is a sub-interpreter concern only.
 
 ### F5 - The packaging and CI gates currently forbid free-threaded wheels (fact)
 
-Established in 2.3. `scripts/validate_wheel_coverage.py` accepts only
-`cp310`-`cp315` and rejects `abi3`; `pypi.yml` asserts exactly 24 wheels
-and 25 distributions. A free-threaded wheel set (`cp314t`, `cp315t`) would
-fail the coverage validator and the count assertions. Note that a `t` tag
-also fails `normalize_python`, which only recognises `cpNNN` of length 5 -
-so the validator needs an explicit `t`-aware rule, not just a wider
-`EXPECTED_PYTHON_VERSIONS` set.
+Established in 2.3. The workflow currently builds 24 GIL-enabled wheels
+and asserts exactly 24 wheels (25 distributions including the sdist).
+Version-specific free-threaded wheel filenames use tags such as
+`cp314-cp314t` and `cp315-cp315t`: `cp314`/`cp315` is the Python tag; the
+`cp314t`/`cp315t` part is the ABI tag. The validator reads `info["py"]`
+but never inspects `info["abi"]`, so it collapses GIL and free-threaded
+wheels for the same platform/Python version into one coverage key. Its
+claimed `abi3` rejection is also ineffective: it looks for `abi3` in the
+Python tag rather than the ABI tag, so a normal `cp310-abi3-...` filename
+passes that check. A 32-wheel release set would fail the current count;
+changing the count alone would still not validate ABI coverage. The validator
+needs explicit Python-plus-ABI coverage and tests for allowed/rejected ABI
+tags before adding free-threaded wheels.
 
 ### F6 - 3.13t is not a viable target for this PyO3 version (fact)
 
@@ -232,14 +242,17 @@ PyO3 0.29 dropped 3.13t support (PR #5865) because CPython declared
 free-threading supported starting with 3.14. The realistic free-threaded
 matrix is 3.14t and 3.15t.
 
-### F7 - `abi3t` is available but conflicts with current policy (fact)
+### F7 - `abi3t` is available but requires a separate policy decision (fact)
 
-PyO3 0.29 exposes `abi3t` / `abi3t-py315` for the PEP 803 Stable ABI.
-However `scripts/validate_wheel_coverage.py` rejects `abi3` tags by
-explicit plan decision, and a single `abi3t` wheel would replace the
-per-version wheel matrix rather than extend it. Adopting `abi3t` would
-reverse an existing documented decision and is a separate decision from
-"support free-threaded builds".
+PyO3 0.29 exposes the PEP 803 `abi3t` / `abi3t-py315` feature. PEP 803
+distinguishes the free-threaded-only `abi3t` tag from the combined
+`abi3.abi3t` wheel tag for extensions built to support both GIL-enabled and
+free-threaded CPython 3.15+. The `abi3t` Stable ABI does not cover 3.14t,
+which still needs a version-specific `cp314-cp314t` wheel. The current
+validator's intended no-`abi3` policy is not actually enforced because it
+never checks the ABI field. Reconsidering a Stable-ABI strategy is therefore
+a separate policy and packaging decision, and the pinned PyO3/maturin toolchain
+must be shown to emit and install the intended tags.
 
 ## 5. Work classification
 
@@ -282,9 +295,12 @@ in the binding itself, but that is an argument, not evidence.
 
 ## 7. Options
 
-Presented for a maintainer decision. None has been implemented.
+**Decision (2026-11-23): Option A adopted.** Free-threaded wheels ship
+alongside the GIL-enabled ones for CPython 3.14t and 3.15t on the four
+release platforms. Options B and C are kept below for the record; C remains
+an open question in its own right (§9.4).
 
-### Option A - Free-threaded wheels alongside the GIL wheels (recommended)
+### Option A - Free-threaded wheels alongside the GIL wheels (adopted)
 
 Keep the 24 GIL-enabled wheels unchanged and add a parallel free-threaded set
 for 3.14t and 3.15t on the same 4 platforms.
@@ -298,6 +314,8 @@ for 3.14t and 3.15t on the same 4 platforms.
   therefore 8 more CI jobs, which the current one-job CI policy and the
   "no new matrix combinations without maintainer approval" rule make an
   explicit decision rather than a default.
+- **Adopted as that explicit decision** (2026-11-23). The extra rows live in
+  the release workflow; the one-job CI is unchanged.
 
 ### Option B - Defer
 
@@ -312,58 +330,291 @@ published and the wheel matrix is unchanged.
 - The binding therefore cannot *claim* free-threaded support, and there is no
   free-threaded test lane that would keep such a claim honest if it were made.
 
-### Option C - `abi3t` Stable ABI
+### Option C - PEP 803 Stable ABI (`abi3t`)
 
-Target PEP 803 via PyO3's `abi3t` feature so one wheel per platform covers
-both GIL-enabled and free-threaded CPython 3.15+.
+Evaluate PyO3's `abi3t` feature and the combined `abi3.abi3t` wheel tag for
+CPython 3.15+; `abi3t` alone is free-threaded-only, while `abi3.abi3t` is
+intended to cover both GIL-enabled and free-threaded interpreters. This does
+not cover 3.14t, which still needs a `cp314-cp314t` wheel, nor does it
+replace the existing GIL-enabled 3.10-3.14 coverage by itself.
 
-- Attractive in principle: one wheel instead of N per platform.
-- Requires reversing the existing no-`abi3` decision, confirming that the
-  binding's use of the full CPython API (not the limited API) is
-  `abi3t`-compatible, and reworking the wheel matrix and validator around a
-  different tag shape.
-- Out of proportion to the problem unless the release process wants to move
-  toward the Stable ABI generally.
+- Potentially reduces per-version builds for the 3.15+ portion of the matrix.
+- Requires reversing or refining the existing no-`abi3` policy, validating
+  the exact `abi3.abi3t` support of the pinned PyO3/maturin toolchain,
+  confirming the binding is compatible with the Stable ABI, and redesigning
+  the matrix/validator to cover the distinct ABI ranges.
+- Treat as a separate packaging strategy, not a shortcut to proving
+  free-threaded runtime correctness.
 
 ## 8. Evidence required before any support claim
 
 The repository's verification policy requires evidence, not reasoning. A
 free-threaded claim would need, at minimum:
 
-1. A wheel built against a free-threaded interpreter, imported, and shown to
-   report the GIL as disabled at runtime (rather than relying on the
-   `Py_MOD_GIL_NOT_USED` declaration alone).
-2. The existing Python suite run on that interpreter, including the sync and
-   async request, streaming, cookie, and network-stream paths.
-3. A concurrency test that exercises F3 directly: two threads issuing requests
-   against one `Client` with a shared trace callback and a shared request-body
-   iterator, asserting the callback's own synchronization rather than relying
-   on the GIL.
-4. A sub-interpreter test (or an explicit statement that sub-interpreters are
-   unsupported) covering F2.
-5. The exact-SHA qualification rules in `.skills/verification-qualification.md`
-   applied to the SHA that carries the change.
+1. A wheel built against each supported free-threaded interpreter/target,
+   with the expected Python, ABI, and platform tags; install the wheel in a
+   clean environment and confirm the installer selected that artifact.
+2. Confirm `sysconfig.get_config_var("Py_GIL_DISABLED") == 1` and that
+   `sys._is_gil_enabled()` is false both before and after importing
+   `eggfetch._native` / `eggfetch`. The latter check proves the import did not
+   silently re-enable the GIL; the module slot declaration alone is not
+   runtime evidence.
+3. Run the existing Python suite on that interpreter, including sync and
+   async requests, streaming, cookies, and network-stream paths.
+4. Deterministic concurrency tests that exercise F3: multiple Python threads
+   issuing requests through one `Client`, with shared trace-callback state and
+   (where the API permits sharing) a request-body iterator. Define and assert
+   the intended contract: callbacks/iterators may be entered concurrently
+   unless the binding explicitly serializes them, so shared user state must
+   provide its own synchronization. Test for lost/duplicated body items,
+   exceptions, deadlocks, and unintended Rust-side races.
+5. A sub-interpreter test covering F2, or explicit documentation that
+   sub-interpreters are unsupported; this is a separate compatibility axis
+   from free-threaded execution.
+6. Apply `.skills/verification-qualification.md`'s exact-SHA rule: record the
+   source/build inputs, interpreter, wheel tags, commands, and results against
+   the exact candidate SHA; rerun qualification after executable-input changes.
 
-## 9. Open maintainer decisions
+Status against the evidence in §10 (macOS arm64, CPython 3.14.10t and
+3.15.2t):
+
+| # | Requirement | Status |
+|---|---|---|
+| 1 | Wheel per free-threaded interpreter/target, tags checked, clean install | Met on all four release platforms for 3.14t and 3.15t; Linux free-threaded wheels are manylinux_2_34 (§10) |
+| 2 | `Py_GIL_DISABLED == 1`, GIL stays off across import | Met (in-tree test, clean subprocess) |
+| 3 | Existing Python suite on that interpreter | Met inside Tier 1 locally (native 545 passed / 40 skipped; compat 134 passed) and on Linux CI (free-threaded suite jobs) |
+| 4 | Deterministic concurrency tests for F3 | Met (`crates/eggfetch-python/tests/test_free_threading.py`) |
+| 5 | Sub-interpreter test, or explicit non-support documentation | Met by documentation (see §10) |
+| 6 | Exact-SHA record against the candidate SHA | Met for the recorded tree; re-run required after any further executable-input change |
+
+## 9. Maintainer decisions
 
 1. Adopt, defer, or scope free-threaded wheel support (F5, Options A/B/C).
+   **Resolved 2026-11-23: Option A adopted.** Free-threaded wheels for 3.14t
+   and 3.15t ship on the four release platforms; the release set grows from
+   24 to 32 wheels.
 2. Whether the 8 extra wheel builds and CI jobs are acceptable under the
    one-job CI policy and the no-new-matrix-combinations rule.
+   **Resolved 2026-11-23: accepted** as part of Option A. The extra rows are
+   release-workflow rows; the one-job CI stays as it is, and the
+   free-threaded test lane is the scratch-branch qualification recorded in
+   §10.
 3. Whether F3's concurrency semantics change is acceptable to document, or
    whether the binding should add explicit serialization around user
-   callbacks.
+   callbacks. The current behaviour is now pinned by an in-tree contract test
+   (§10); explicit serialization would change that test.
+   **Resolved 2026-11-23: document the current semantics.** The binding does
+   not serialize user callbacks; the contract is written up in
+   `docs/architecture/python-bindings.md` and `docs/python/guide.md`.
 4. Whether `abi3t` / PEP 803 should be revisited as a separate question from
-   free-threading (F7).
+   free-threading (F7). **Still open.** Option A does not depend on it.
 
-## 10. References
+## 10. Runtime validation follow-up (evidence only)
 
-- PyO3 user guide, "Supporting Free-Threaded CPython".
+This follow-up records local runtime evidence without changing the document's
+no-support-claim status. No runtime code or CI configuration was changed. The
+host was macOS 26.6.2 arm64. The qualified interpreters are CPython 3.14.10t
+and CPython 3.15.2t — *release* free-threaded builds from
+python-build-standalone `20261123` — with PyO3 0.29.2 and maturin 1.14.1.
+The same interpreter versions were qualified on Linux and Windows runners
+through `setup-python` (§10).
+
+Executable source tree: HEAD `edf098ccb466491a041ee3b7607e5b3fd4fdfb91`
+plus the changes recorded below. No Rust source changed, so the built
+artifact is identical to the HEAD build; the exact-SHA rule still covers the
+added test module and the packaging changes, and the gates below were re-run
+against that tree. The changed inputs are:
+
+- `crates/eggfetch-python/tests/test_free_threading.py` (added): the in-tree
+  free-threading contract tests.
+- `scripts/validate_wheel_coverage.py`: ABI-aware coverage plus a
+  `--self-test`, wired into Tier 1 through `scripts/check.sh`.
+- `scripts/wheel_smoke.py`: free-threaded-aware wheel resolution.
+- `.github/workflows/pypi.yml`: the eight free-threaded rows, the
+  `container: "off"` setting for the free-threaded Linux rows, and the
+  updated wheel/distribution counts.
+- `README.md`, `docs/architecture/python-bindings.md`,
+  `docs/getting-started/installation.md`, `docs/python/guide.md`: the
+  supported free-threaded range and the F3 concurrency contract.
+
+### Correction: the earlier CPython 3.15.0b1t typing-gate failure
+
+An earlier round of this investigation recorded a CPython **3.15.0b1** *beta*
+build whose full Tier 1 attempt stopped at the Python typing-fixture step,
+because the pinned `mypy==2.3.1` process died with SIGSEGV even on
+`mypy --version`. That failure is **not** an eggfetch defect and it is not
+evidence about the binding on 3.15:
+
+- `mypy` ships a mypyc-compiled extension for free-threaded builds
+  (`__mypyc.cpython-315t-darwin.so`). A `faulthandler` run places the crash
+  inside that extension — `CPyExec_mypy___util`, during the import of
+  `mypy.util` — before any eggfetch source is read. The same crash reproduces
+  on a one-line file, so it is independent of the binding's stubs.
+- The wheel is tagged `cp315-cp315t-macosx_11_0_arm64`: it is built against
+  the 3.15 *release* ABI, which the `3.15.0b1+freethreaded` beta interpreter
+  predates. The two disagree, and the disagreement is fatal at import.
+- On CPython 3.15.2t — the 3.15 *release* free-threaded build — the same
+  pinned `mypy==2.3.1` runs normally (`mypy 2.3.1 (compiled: yes)`) and the
+  strict typing fixtures pass.
+
+Consequence: the typing-gate blocker was an artifact of the beta interpreter.
+It is recorded here so the beta result is not later read as a binding defect,
+and so the qualification is not re-run against a 3.15 beta.
+
+### CPython 3.14.10t and CPython 3.15.2t
+
+- `./scripts/check.sh` exited **0** on both interpreters: all routine checks
+  passed. The Node JS surface was explicitly skipped on both because
+  `crates/eggfetch-node/eggfetch.node` is absent on this host.
+- The Python suites run inside that gate: native tests `545 passed, 40
+  skipped`, compat tests `134 passed`.
+- GIL state: `sysconfig.get_config_var("Py_GIL_DISABLED") == 1` and
+  `sys._is_gil_enabled() == False` before and after importing `eggfetch` and
+  `eggfetch._native`.
+
+### New in-tree free-threading contract tests
+
+`crates/eggfetch-python/tests/test_free_threading.py` turns the ad-hoc
+concurrency probes into a repeatable in-tree contract (§8.4):
+
+| Test | Asserts | GIL build | Free-threaded build |
+|---|---|---|---|
+| `test_import_does_not_reenable_the_gil` | In a clean subprocess, importing the binding leaves the interpreter's GIL state unchanged, and a free-threaded interpreter stays free-threaded across the import. | pass | pass |
+| `test_concurrent_requests_through_one_client` | Eight threads issuing requests through one `Client` each receive their own response body: no cross-talk, no hung threads. | pass | pass |
+| `test_trace_callback_is_entered_concurrently_on_free_threaded_builds` | A trace callback that blocks until a second invocation is in flight completes, proving user callbacks are **not** serialized (F3). | skipped — a GIL build cannot express this without deadlocking | pass |
+| `test_shared_request_body_iterator_neither_loses_nor_duplicates_chunks` | Two concurrent requests sharing one body iterator deliver every chunk exactly once across both bodies: no loss, no duplication. | pass | pass |
+
+On this host the module reports 4 passed on each free-threaded interpreter and
+3 passed / 1 skipped on the GIL-enabled CPython 3.14.2 build. The
+trace-callback test pins the F3 contract; if the binding later adds explicit
+serialization around user callbacks, that test is the place to update.
+
+### Cross-platform qualification (scratch branch)
+
+The one-job CI runs GIL-enabled interpreters on one platform, so the
+cross-platform free-threaded evidence was collected on a scratch branch
+(scratch/free-threaded-crossplatform) carrying a temporary workflow. The
+branch and its workflow were deleted after the runs; no permanent CI lane
+was added. Run 45276582176 passed every job:
+
+| Job | Combinations | Result |
+|---|---|---|
+| contract | Linux x86_64, Linux aarch64, macOS arm64, Windows x86_64, each on 3.14t and 3.15t | 8/8 passed |
+| suite | ubuntu-latest and ubuntu-24.04-arm, each on 3.14t and 3.15t | 4/4 passed |
+| release path | Linux x86_64 on 3.14t, Linux aarch64 on 3.15t | 2/2 passed |
+
+Every contract job asserted Py_GIL_DISABLED == 1 on the interpreter
+setup-python installed for the t-suffixed version spec, that the versioned
+name python3.14t / python3.15t resolves (the release workflow selects the
+interpreter by that name), that the GIL stayed disabled across the imports
+of eggfetch and eggfetch._native, that the four contract tests passed, and
+that a release wheel carried the free-threaded tag. The suite jobs ran the
+native Python suite and the focused compat suite. The free-threaded wheel
+names produced were:
+
+- eggfetch-0.4.0-cp314-cp314t-manylinux_2_34_x86_64.whl
+- eggfetch-0.4.0-cp314-cp314t-manylinux_2_34_aarch64.whl
+- eggfetch-0.4.0-cp314-cp314t-macosx_11_0_arm64.whl
+- eggfetch-0.4.0-cp314-cp314t-win_amd64.whl
+- eggfetch-0.4.0-cp315-cp315t-manylinux_2_34_x86_64.whl
+- eggfetch-0.4.0-cp315-cp315t-manylinux_2_34_aarch64.whl
+- eggfetch-0.4.0-cp315-cp315t-macosx_11_0_arm64.whl
+- eggfetch-0.4.0-cp315-cp315t-win_amd64.whl
+
+### The free-threaded Linux wheels need glibc 2.34
+
+maturin-action builds Linux wheels inside a manylinux container, and the
+container glibc - not the interpreter one - decides the platform tag. The
+free-threaded CPython interpreters require glibc 2.34, and no available
+manylinux container provides it: the 2014 image has glibc 2.17. The
+free-threaded Linux rows therefore set container: off and build on the host
+runner, which lets maturin derive the tag from the interpreter.
+
+The consequence is that the free-threaded Linux wheels are manylinux_2_34,
+not manylinux2014: they need a newer glibc than the GIL-enabled wheels and
+so cover a narrower set of Linux distributions. The release path jobs
+verified this through the real maturin-action invocation (manylinux: auto,
+container: off).
+
+
+### Superseded: CPython 3.15.0b1t
+
+The beta-build results (extension built as `cp315-cp315t`; GIL disabled
+before and after import; native tests 541 passed / 40 skipped; focused compat
+tests 21 passed; concurrency probes passed) are superseded by the 3.15.2t
+release-build results above. The beta's Tier 1 attempt did **not** pass — it
+exited 245 at the typing-fixture step for the upstream reason recorded in the
+correction above — and it is not counted as a Tier 1 pass.
+
+### Local wheel build and clean-install evidence
+
+Release wheels were built with `maturin build --release` and installed with
+`uv pip install --no-deps` into fresh project-local venvs:
+
+- `eggfetch-0.4.0-cp314-cp314t-macosx_11_0_arm64.whl` (CPython 3.14.10t)
+- `eggfetch-0.4.0-cp315-cp315t-macosx_11_0_arm64.whl` (CPython 3.15.2t)
+
+In each clean environment the installed distribution's tag matched the target
+interpreter, the installed extension filename matched
+`sysconfig.get_config_var("EXT_SUFFIX")`
+(`_native.cpython-314t-darwin.so` / `_native.cpython-315t-darwin.so`), the GIL
+stayed disabled across the import, and a loopback HTTP GET returned 200. The
+wheels were not uploaded or published. Build and test logs are under
+`target/free-threaded-*` in the local worktree.
+
+### Sub-interpreters (F2)
+
+Sub-interpreters are **not supported** by the binding and are not qualified
+here, so the §8.5 qualifier is the documentation branch rather than a test:
+F2's `NOOP_ACLOSE` cache is not interpreter-keyed, and the binding makes no
+sub-interpreter claim. The qualified interpreters ship neither `interpreters`
+(PEP 734) nor `_xxsubinterpreters`, so no sub-interpreter exercise was
+possible on this host either. Sub-interpreter behaviour remains a separate
+compatibility axis from free-threaded execution.
+
+### Remote CI readback and remaining limits
+
+The existing [CI run 45242054629](https://github.com/eggstack/eggfetch/actions/runs/45242054629)
+passed at the same source SHA using the regular GIL-enabled CI configuration.
+The existing [build-only PyPI workflow 45246499235](https://github.com/eggstack/eggfetch/actions/runs/45246499235)
+also passed at that SHA; publication was skipped. Its Python matrix uses
+GIL-enabled interpreters, so neither run is a remote free-threaded test. No
+free-threaded CI lane or wheel-matrix row was added.
+
+Evidence now covers all four release platforms. The permanent CI is still a
+single GIL-enabled job on one platform, so the free-threaded lanes live only
+in the release workflow and in the scratch-branch qualification above; no
+permanent free-threaded test lane was added (§9.2). The release set grows
+from 24 to 32 wheels, and no wheel has been published: publication remains a
+manual, tagged step.
+
+### Where the work landed
+
+The implementation landed on `main` in `06d21f93` (`feat(python): add
+free-threaded CPython wheel support`), with the documentation and packaging
+metadata in the follow-up commit. That work changed executable inputs — the
+release workflow, the wheel-coverage validator, the wheel-smoke script, the
+Tier 1 entry point and a new Python test target — so it invalidated the
+exact-SHA Stage C binding. `plans/httpx-parity-correction-status.md` records
+the resulting state. The evidence collected here is free-threading and
+packaging evidence; it is not an exact-SHA renewal of the HTTPX Stage C
+binding.
+
+## 11. References
+
+- [PyO3 0.29 free-threading guide](https://pyo3.rs/v0.29.0/free-threading).
+- [PEP 803](https://peps.python.org/pep-0803/) (`abi3t`, compatibility tags,
+  and the distinction between `abi3t` and `abi3.abi3t`).
+- [PyPA platform compatibility tags](https://packaging.python.org/en/latest/specifications/platform-compatibility-tags/)
+  (wheel tag fields).
+- [CPython free-threading HOWTO](https://docs.python.org/3/howto/free-threading-python.html)
+  (checking `Py_GIL_DISABLED` and `sys._is_gil_enabled()`).
+- [Maturin bindings guide](https://www.maturin.rs/bindings) and [Python
+  Free-Threading Guide CI notes](https://py-free-threading.github.io/ci/)
+  (free-threaded interpreter and wheel-tag examples).
 - PyO3 0.29.0 CHANGELOG: PR #5564 (opt-out free-threading), PR #5865 (drop
   3.13t), PR #5807 (`abi3t`).
 - `pyo3-macros-backend-0.29.2/src/module.rs:394,551`; `pyo3-ffi-0.29.2/src/moduleobject.rs:121`;
   `pyo3-0.29.0/src/impl_/pymodule.rs:349`; `pyo3-0.29.0/src/marker.rs:413`.
-- CPython HOWTO: "Python support for free threading" and "C API Extension
-  Support for Free Threading".
-- maturin user guide, "Bindings"; `PyO3/maturin` PR #2310.
 - `docs/verification-policy.md`, `.skills/verification-qualification.md`.
 - `docs/architecture/python-bindings.md` (the GIL release/acquire contract).

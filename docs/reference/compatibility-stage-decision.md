@@ -9,6 +9,11 @@ qualification on frozen executable SHA
 qualification), where the full compatibility, extended, package, and live
 security gates passed. That renewal re-established the binding Core Transport
 M011 had invalidated. Earlier bindings are historical.
+
+That qualification is the last completed one, but the executable-input changes
+that followed it — the `rustix`/`url`/`cookie` dependency bumps, two core
+fixture determinism fixes, and the free-threaded (PEP 703) wheel work —
+invalidate the binding, and a fresh exact-SHA qualification is outstanding.
 Current evidence and binding history are in
 `plans/httpx-parity-correction-status.md`; the exact facade scopes are in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.

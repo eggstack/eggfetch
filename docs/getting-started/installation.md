@@ -10,6 +10,18 @@ Requires Python 3.10 through 3.15. Binary wheels are available for
 Linux, macOS, and Windows. There is no pure-Python fallback; the package
 compiles a native Rust extension via maturin.
 
+Free-threaded CPython (PEP 703) is supported for Python 3.14 and 3.15.
+The release matrix includes separate `cp314-cp314t` and `cp315-cp315t`
+wheels for the same platforms as the GIL-enabled wheels, and importing
+`eggfetch` leaves the interpreter's GIL disabled. Python 3.13 has no
+free-threaded wheel: the supported PyO3 release dropped 3.13t.
+
+The free-threaded Linux wheels target glibc 2.34 (`manylinux_2_34`) rather
+than the `manylinux2014` baseline of the GIL-enabled wheels, because the
+free-threaded CPython interpreters themselves require that glibc. The
+free-threaded wheels are therefore usable on a narrower set of Linux
+distributions than the GIL-enabled ones.
+
 ### Development install
 
 ```bash
@@ -96,10 +108,14 @@ The binary is placed in `target/release/eggfetch`.
 | Platform | Status |
 | --- | --- |
 | Linux x86_64 | Fully supported, wheel + smoke tested at release |
+| Linux aarch64 | Fully supported, wheel + smoke tested at release |
 | macOS arm64 (Apple silicon) | Fully supported, wheel + smoke tested at release |
 | Windows x86_64 | Fully supported, wheel + smoke tested at release |
-| macOS x86_64, Linux aarch64 | Build from source; no prebuilt wheels |
+| macOS x86_64 | Build from source; no prebuilt wheels |
 | Other platforms | May work, not release-tested |
+
+Each of these platforms also receives free-threaded wheels for Python 3.14
+and 3.15.
 
 ## Rust version
 

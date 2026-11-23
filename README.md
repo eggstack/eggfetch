@@ -20,12 +20,13 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Retries and redirects**: backoff with `Retry-After`, replayable-body redirect handling
 - **URL-free native builder**: `Client::get_uri`/`post_uri`/`request_uri` build from an `http::Uri` in every feature profile, for embeddings that omit `url`/IDNA/ICU
 - **Python**: requests/HTTPX-compatible sync and async APIs plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](docs/reference/compatibility.md))
+- **Free-threaded CPython** (PEP 703) on Python 3.14t and 3.15t: the GIL stays disabled while `eggfetch` is imported ([details](docs/architecture/python-bindings.md#free-threaded-execution))
 - **CLI** with streaming output, machine-readable formats, and shell completions ([guide](docs/cli/guide.md))
 
 ## Installation
 
 ```bash
-pip install eggfetch                        # Python 3.10–3.15
+pip install eggfetch                        # Python 3.10–3.15, incl. free-threaded 3.14t/3.15t
 cargo install eggfetch-cli                  # CLI
 ```
 

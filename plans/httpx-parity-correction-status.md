@@ -4,7 +4,61 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Recorded state — Stage C binding invalidated by the free-threaded wheel work (2026-11-23)
+
+> **Supersedes 2026-11-23.** The renewal below (2026-11-21) is the last
+> completed qualification. This section records that the binding it
+> established no longer describes the tree.
+
+**The live Stage C binding is invalidated.** The free-threaded (PEP 703)
+wheel work changed executable inputs: the release workflow
+(`.github/workflows/pypi.yml`), the wheel-coverage validator and the
+wheel-smoke script (`scripts/validate_wheel_coverage.py`,
+`scripts/wheel_smoke.py`), the Tier 1 entry point (`scripts/check.sh`), and
+a new Python test target
+(`crates/eggfetch-python/tests/test_free_threading.py`). Under
+`.skills/verification-qualification.md` the binding at
+`48ff1a39733c295906fd873cae757cc9eb149d6c` no longer describes the tree.
+
+That SHA remains the **last completed qualification**: Tier 1, Tier 2, Tier 3
+and the live security preflight are green at `48ff1a39…`. The current tree
+is **unqualified**, and no publication may cite the previous Stage C binding
+until a fresh exact-SHA qualification runs at the new freeze.
+
+### What changed after the `48ff1a39…` freeze
+
+| Commit | Change | Class |
+|---|---|---|
+| `e377b0b8` | `rustix` and `url` dependency bumps (`Cargo.lock`) | executable input |
+| `44bfcf6b` | core UDS fixture race fix (`crates/eggfetch-core/tests/direct_transport_tests.rs`) | executable input |
+| `3664bbbc` | `cookie` dependency bump (`Cargo.lock`) | executable input |
+| `edf098cc` | stale-idle classification fixture determinism (`crates/eggfetch-core/tests/native_transport_failure_classification.rs`) | executable input |
+| `06d21f93` | free-threaded wheel support: release workflow, wheel-coverage validator, wheel smoke, Tier 1 self-test and a new Python test target | executable input |
+| `272c8221`, `d338eba3` | planning and release records only | docs-only |
+
+`compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
+are deliberately **unchanged**: they carry machine-readable binding fields, and
+their `qualification-sha` still names the last SHA that was actually
+qualified. This ledger, not the profiles, records whether that binding is
+currently live.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding. The
+free-threaded wheel work is qualified at Tier 1 on CPython 3.14t and 3.15t,
+and its cross-platform wheel and tag evidence is recorded in
+`plans/python-free-threaded-support-investigation.md` §10. That evidence is
+free-threading and packaging evidence; it is not an exact-SHA renewal of the
+HTTPX Stage C binding.
+
+---
+
 ## Stage C renewed after the 0.4.0 release qualification (2026-11-21)
+
+> **Superseded 2026-11-23.** The section above records that the
+> executable-input changes since this freeze invalidate the binding it
+> established. The renewal below is the history of that binding, not the live
+> state.
 
 Both documented facades are **Stage C qualified (renewal)** on executable
 freeze `48ff1a39733c295906fd873cae757cc9eb149d6c` — the merge of PR #34 into
@@ -13,8 +67,8 @@ Transport M011 changed executable inputs; this renewal is the requalification
 that change required.
 
 The freeze's tree is byte-identical to the qualified freeze `873cf2a3…`; the
-only paths changed since are two planning documents, which the exact-SHA rule
-treats as non-invalidating for executable inputs.
+paths changed between the two freezes are two planning documents, which the
+exact-SHA rule treats as non-invalidating for executable inputs.
 
 | Gate | Result |
 |---|---|
