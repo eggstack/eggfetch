@@ -387,6 +387,10 @@ Status against the evidence in §10 (macOS arm64, CPython 3.14.10t and
 | 5 | Sub-interpreter test, or explicit non-support documentation | Met by documentation (see §10) |
 | 6 | Exact-SHA record against the candidate SHA | Met for the recorded tree; re-run required after any further executable-input change |
 
+Performance is not a precondition for a support claim, so it is not a row
+above. It is measured separately, and §10 records the GIL-versus-free-
+threaded concurrency comparison.
+
 ## 9. Maintainer decisions
 
 1. Adopt, defer, or scope free-threaded wheel support (F5, Options A/B/C).
@@ -405,7 +409,10 @@ Status against the evidence in §10 (macOS arm64, CPython 3.14.10t and
    (§10); explicit serialization would change that test.
    **Resolved 2026-11-23: document the current semantics.** The binding does
    not serialize user callbacks; the contract is written up in
-   `docs/architecture/python-bindings.md` and `docs/python/guide.md`.
+   `docs/architecture/python-bindings.md` and `docs/python/guide.md`. The
+   measured consequence is in §10: that missing serialization is also what
+   limits GIL-enabled scaling once the application does Python work per
+   response.
 4. Whether `abi3t` / PEP 803 should be revisited as a separate question from
    free-threading (F7). **Still open.** Option A does not depend on it.
 
@@ -587,6 +594,65 @@ in the release workflow and in the scratch-branch qualification above; no
 permanent free-threaded test lane was added (§9.2). The release set grows
 from 24 to 32 wheels, and no wheel has been published: publication remains a
 manual, tagged step.
+
+### Concurrency scaling: GIL versus free-threaded
+
+The free-threaded qualification above establishes correctness. It does not
+establish performance, and nothing in the repository measured it: the
+Criterion suites in `crates/eggfetch-bench` measure `eggfetch-core` in Rust,
+so the interpreter's GIL state cannot appear in them, and the API-safe
+campaign harness was single-client and sequential.
+
+The `--concurrency` group of `scripts/performance_benchmark.py` closes that
+gap. Several threads share one `Client` against a minimal loopback server in
+a separate process of the same interpreter. Two workloads are measured: `io`
+(request plus body read) and `io_cpu` (the same, plus repeated hashing of the
+body, modelling CPU-bound Python work around network calls). The method and
+its reading rules are in `docs/architecture/benchmarks.md`.
+
+Measured on this repository, macOS arm64 (Apple silicon), CPython 3.14.2
+(GIL-enabled) against CPython 3.14.10t and 3.15.2t (free-threaded), all three
+on the same commit, with `--repeats 3 --threads 1,2,4,8`:
+
+| Workload | Threads | GIL 3.14.2 | FT 3.14.10 | FT 3.15.2 |
+|---|---|---|---|---|
+| `io` | 1 | 11,392 req/s (1.00x) | 11,143 req/s (1.00x) | 10,491 req/s (1.00x) |
+| `io` | 8 | 38,002 req/s (3.34x) | 47,861 req/s (4.30x) | 56,420 req/s (5.38x) |
+| `io_cpu` | 1 | 9,802 req/s (1.00x) | 9,149 req/s (1.00x) | 10,713 req/s (1.00x) |
+| `io_cpu` | 4 | 25,010 req/s (2.55x) | 25,364 req/s (2.77x) | 32,092 req/s (3.00x) |
+| `io_cpu` | 8 | 20,047 req/s (2.05x) | 36,861 req/s (4.03x) | 48,445 req/s (4.52x) |
+
+The scaling factor is relative to the 1-thread result of the same run.
+
+Three findings:
+
+- **Single-client cost is the same on both builds.** The existing campaign
+  cases move within run-to-run noise between a GIL-enabled and a
+  free-threaded interpreter, so there is no per-request penalty for the
+  free-threaded build.
+- **The engine already parallelizes on a GIL-enabled build.** The `io`
+  workload — where the Python side does almost nothing — reaches 3.34x at 8
+  threads under the GIL, because the binding releases the GIL for the
+  network wait. Free-threading does not change that; it is not a throughput
+  fix for I/O-bound use.
+- **Free-threading pays off in the Python work around the network call.**
+  Under the GIL, adding per-response Python work makes throughput *fall*
+  from 4 to 8 threads (25,010 to 20,047 req/s): the Python side serializes,
+  so the extra threads add contention without adding throughput. The
+  free-threaded builds keep scaling to 4.03x and 4.52x, which is 1.84x and
+  2.42x the GIL-enabled throughput at 8 threads.
+
+A server ceiling would show up as the same plateau in every run, so a
+free-threaded run that out-scales the GIL-enabled run is evidence that the
+ceiling was the client rather than the server.
+
+These are host-specific local measurements, not performance budgets: the
+machine was under load from an unrelated project, the GIL interpreter is
+3.14.2 against free-threaded 3.14.10, and the server is loopback with no
+network latency. The repository rule stands — `scripts/performance_benchmark.py`
+stays non-CI timing evidence, and only a fresh measurement on the same
+commit, toolchains, target, feature set, server fixture and repeat settings
+is the basis for a comparison.
 
 ### Where the work landed
 

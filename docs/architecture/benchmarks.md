@@ -148,6 +148,47 @@ The harness is deliberately outside routine CI. Compare runs only when the
 commit, toolchains, target, feature set, server fixture, and repeat settings
 are identical. Timing is evidence, not a hard CI threshold.
 
+### Concurrency scaling (GIL versus free-threaded)
+
+The `--concurrency` group measures how throughput scales when several threads
+share one `Client`. It exists because the Rust Criterion suites cannot answer
+the free-threading question at all: they measure `eggfetch-core` in Rust, so
+the interpreter's GIL state cannot appear in them.
+
+```sh
+source .venv/bin/activate
+python scripts/performance_benchmark.py --repeats 3 --concurrency --threads 1,2,4,8
+```
+
+Two workloads are measured:
+
+| Workload | What it does |
+|---|---|
+| `io` | Request plus body read, with no extra Python-level CPU work. |
+| `io_cpu` | The same, plus repeated hashing of the body — the "CPU-bound Python work around network calls" shape. |
+
+The engine already releases the GIL for the network wait, so the `io`
+workload is expected to scale similarly on both builds. The `io_cpu`
+workload is the one that separates them: on a GIL-enabled build the Python
+side of each response serializes, while a free-threaded build does not.
+
+The server runs in a separate process of the same interpreter, with a
+deliberately minimal per-request Python cost. Two consequences matter when
+reading the numbers:
+
+- The meaningful comparison is the **scaling factor between thread counts
+  within one run**, not absolute throughput between runs. Absolute throughput
+  is host- and load-dependent, exactly as the campaign evidence above is.
+- A server ceiling would appear as the *same* plateau in both runs. A
+  free-threaded run that out-scales the GIL-enabled run is therefore evidence
+  that the ceiling was the client, not the server.
+
+The group reports `gil_enabled` for the running interpreter, so a result file
+is self-describing. To compare the two builds, run the same command with the
+same repeat and thread settings on each interpreter and compare the scaling
+factors. The measured result for this repository is recorded in
+`plans/python-free-threaded-support-investigation.md`.
+
 The second-pass ownership campaign extends the same harness with paired
 controls for 8/50/200-header request construction, native request ownership,
 8/50/80-header buffered and streaming response conversion (80 is the largest

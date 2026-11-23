@@ -222,6 +222,19 @@ constraints above are documented. It does not claim the highest level — the
 binding is not fully thread-safe, because it does not serialize user
 callbacks.
 
+### Performance under free-threading
+
+The engine already releases the GIL for the network wait, so the binding's
+I/O path parallelizes on a GIL-enabled build too. What free-threading adds is
+parallelism for the *Python* work that surrounds a request. On a GIL-enabled
+build two threads cannot execute Python bytecode at the same time, so
+per-response Python work serializes and throughput can fall as threads are
+added; on a free-threaded build that work runs concurrently.
+
+The repository measures this with the `--concurrency` group of
+`scripts/performance_benchmark.py`. The method and the recorded result are in
+[benchmarks.md](benchmarks.md#concurrency-scaling-gil-versus-free-threaded).
+
 ## Response Surface
 
 `PyResponse` presents a requests/httpx-compatible surface:

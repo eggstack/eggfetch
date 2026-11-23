@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   request-body iterator supplied by the caller may be entered by two
   requests at the same time, so state shared between those entries must
   carry its own synchronization. Sub-interpreters are not supported.
+- `eggfetch` Python bindings: the binding releases the GIL for the network
+  wait, so the I/O path already parallelizes on a GIL-enabled build.
+  Free-threading additionally parallelizes the Python work that surrounds a
+  request, which is where per-response processing in an application stops
+  serializing.
 
 ### Changed
 
