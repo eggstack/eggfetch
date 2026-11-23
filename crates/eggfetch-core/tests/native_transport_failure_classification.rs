@@ -114,13 +114,20 @@ async fn native_dispatch_tls_verification_failure_classifies_tls() {
 }
 
 #[tokio::test]
-async fn native_dispatch_stale_idle_cancellation_classifies_cancelled() {
-    // Deterministic stale-idle pattern mirroring the retry-integration
-    // fixture: complete one keep-alive request, close the idle connection
-    // server-side, then dispatch again immediately (no sleep, so the pool
-    // still hands out the stale entry) with Hyper's transparent retry
-    // disabled. The reuse attempt surfaces typed Hyper cancellation
-    // evidence before any byte is sent.
+async fn native_dispatch_stale_idle_reuse_surfaces_typed_failure() {
+    // A pooled idle connection that the origin closes server-side must never
+    // turn into a silent success: the reuse attempt fails, the failure is
+    // never retried, and the origin never serves a second request.
+    //
+    // Hyper's *internal* category for that failure is scheduling dependent.
+    // The pool either hands out the stale entry - the reuse is then either
+    // cancelled before a byte is sent or fails mid-request once the closed
+    // connection resets - or observes the close first and opens a fresh
+    // connection to the now-closed origin. This is the same stale-idle
+    // pattern the retry fixtures in `retry_integration.rs` already retired
+    // for exactly that reason ("on unmodified `main` as well as here"), so
+    // this fixture pins the contract eggfetch owns instead of Hyper's
+    // internal classification.
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::sync::oneshot;
 
@@ -179,23 +186,92 @@ async fn native_dispatch_stale_idle_cancellation_classifies_cancelled() {
     assert_eq!(first.into_body().collect().await.unwrap().to_bytes(), "ok");
     close_tx.send(()).unwrap();
     closed_rx.await.unwrap();
-    let error = client
-        .execute_http_body_default(empty_request(&url))
-        .await
-        .unwrap_err();
-    // Strict mode must surface typed Hyper cancellation evidence: the pooled
-    // idle connection was closed server-side, so the reuse attempt is
-    // canceled before any byte is sent and no second request is served.
-    assert_eq!(
-        error.transport_failure_kind(),
-        Some(TransportFailureKind::Cancelled),
-        "stale-idle kind={} debug={error:?}",
+    let error = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.execute_http_body_default(empty_request(&url)),
+    )
+    .await
+    .expect("the stale-idle reuse must fail instead of hanging")
+    .unwrap_err();
+    // The reuse failure surfaces as a transport failure, never as a timeout,
+    // and the origin never sees a second request.
+    assert!(
+        !error.kind().contains("timeout"),
+        "stale-idle reuse kind={} debug={error:?}",
         error.kind()
     );
     assert_eq!(
         request_count.load(Ordering::SeqCst),
         1,
-        "cancelled reuse must not reach the origin again"
+        "stale-idle reuse must not reach the origin again"
+    );
+    server.await.unwrap();
+}
+
+#[cfg(feature = "transport-http1")]
+#[tokio::test]
+async fn native_cancelled_hyper_error_classifies_cancelled() {
+    // Hyper's documented HTTP/1 cancellation: dropping an in-flight request
+    // closes the shared connection, and every later request on the same
+    // `SendRequest` fails with Hyper's typed "canceled" error.
+    //
+    // This is the deterministic source of the typed cancellation fact. The
+    // stale-idle reuse above cannot force it, because Hyper picks between
+    // "canceled" and "incomplete message" by scheduling.
+    use hyper_util::rt::TokioIo;
+    use std::future::Future;
+    use std::task::Poll;
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0_u8; 1024];
+        let _ = socket.read(&mut buf).await;
+        // Never answer: the client cancels the request that is in flight.
+        let mut sink = [0_u8; 64];
+        loop {
+            match socket.read(&mut sink).await {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+        }
+    });
+
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(tcp))
+        .await
+        .unwrap();
+    let connection = tokio::spawn(connection);
+    {
+        // Start the request, then drop its future: Hyper cancels the in-flight
+        // request and closes the connection.
+        let mut in_flight =
+            Box::pin(sender.send_request(empty_request(&format!("http://{addr}/"))));
+        let () = futures_util::future::poll_fn(|cx| {
+            let _ = in_flight.as_mut().poll(cx);
+            Poll::Ready(())
+        })
+        .await;
+    }
+    // The connection task must finish: Hyper closes the connection of a
+    // cancelled request.
+    let _closed = tokio::time::timeout(Duration::from_secs(5), connection)
+        .await
+        .expect("Hyper must close the connection of a cancelled request");
+    let error = sender
+        .send_request(empty_request(&format!("http://{addr}/")))
+        .await
+        .unwrap_err();
+    assert!(
+        error.is_canceled(),
+        "a cancelled connection must report Hyper's typed cancellation: {error:?}"
+    );
+    let classified = eggfetch_core::Error::Hyper(Arc::new(error)).transport_failure_kind();
+    assert_eq!(
+        classified,
+        Some(TransportFailureKind::Cancelled),
+        "cancelled-hyper kind={classified:?}"
     );
     server.await.unwrap();
 }
