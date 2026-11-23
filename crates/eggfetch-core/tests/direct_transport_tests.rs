@@ -278,6 +278,13 @@ async fn test_pool_isolation_uds_vs_tcp() {
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    // On macOS an accepted Unix socket inherits the
+                    // nonblocking state of its listener. A nonblocking read
+                    // reports WouldBlock as a spurious EOF, so the fixture
+                    // would drop the connection while the client is still
+                    // writing and the client would fail with BrokenPipe.
+                    // Make the blocking-read contract explicit.
+                    stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 4096];
                     let mut request = Vec::new();
                     while !request.windows(4).any(|window| window == b"\r\n\r\n")
@@ -412,6 +419,10 @@ async fn test_uds_total_timeout() {
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    // On macOS an accepted Unix socket inherits the
+                    // nonblocking state of its listener; make the
+                    // blocking-read contract explicit.
+                    stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 4096];
                     let _ = stream.read(&mut buf).unwrap_or(0);
                     // Delay response beyond timeout.
@@ -514,6 +525,10 @@ async fn test_uds_cancellation() {
         while !sd.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    // On macOS an accepted Unix socket inherits the
+                    // nonblocking state of its listener; make the
+                    // blocking-read contract explicit.
+                    stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 4096];
                     let _ = stream.read(&mut buf).unwrap_or(0);
                     std::thread::sleep(Duration::from_millis(300));
