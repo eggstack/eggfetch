@@ -14,9 +14,12 @@ and referenced plans; counts below are only from the runs named here.
 wheel work changed executable inputs: the release workflow
 (`.github/workflows/pypi.yml`), the wheel-coverage validator and the
 wheel-smoke script (`scripts/validate_wheel_coverage.py`,
-`scripts/wheel_smoke.py`), the Tier 1 entry point (`scripts/check.sh`), and
-a new Python test target
-(`crates/eggfetch-python/tests/test_free_threading.py`). Under
+`scripts/wheel_smoke.py`), the Tier 1 entry point (`scripts/check.sh`), the
+package metadata (`crates/eggfetch-python/pyproject.toml`, which gained the
+free-threading trove classifier), and a new Python test target
+(`crates/eggfetch-python/tests/test_free_threading.py`). The performance
+harness then gained a concurrency-scaling group
+(`scripts/performance_benchmark.py`). Under
 `.skills/verification-qualification.md` the binding at
 `48ff1a39733c295906fd873cae757cc9eb149d6c` no longer describes the tree.
 
@@ -34,6 +37,8 @@ until a fresh exact-SHA qualification runs at the new freeze.
 | `3664bbbc` | `cookie` dependency bump (`Cargo.lock`) | executable input |
 | `edf098cc` | stale-idle classification fixture determinism (`crates/eggfetch-core/tests/native_transport_failure_classification.rs`) | executable input |
 | `06d21f93` | free-threaded wheel support: release workflow, wheel-coverage validator, wheel smoke, Tier 1 self-test and a new Python test target | executable input |
+| `732321ca` | free-threaded documentation, the free-threading trove classifier in the package metadata, and the qualification-record corrections | executable input (packaging metadata) |
+| `b5ef9c25` | concurrency-scaling group in the performance harness | executable input |
 | `272c8221`, `d338eba3` | planning and release records only | docs-only |
 
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`

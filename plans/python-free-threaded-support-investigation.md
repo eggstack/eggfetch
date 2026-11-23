@@ -658,13 +658,15 @@ is the basis for a comparison.
 
 The implementation landed on `main` in `06d21f93` (`feat(python): add
 free-threaded CPython wheel support`), with the documentation and packaging
-metadata in the follow-up commit. That work changed executable inputs — the
-release workflow, the wheel-coverage validator, the wheel-smoke script, the
-Tier 1 entry point and a new Python test target — so it invalidated the
-exact-SHA Stage C binding. `plans/httpx-parity-correction-status.md` records
-the resulting state. The evidence collected here is free-threading and
-packaging evidence; it is not an exact-SHA renewal of the HTTPX Stage C
-binding.
+metadata in the follow-up commit, and the concurrency-scaling measurement in
+`b5ef9c25` (`feat(bench): add a GIL-versus-free-threaded concurrency-scaling
+group`). That work changed executable inputs — the release workflow, the
+wheel-coverage validator, the wheel-smoke script, the Tier 1 entry point, the
+package metadata and a new Python test target, plus the performance harness
+afterwards — so it invalidated the exact-SHA Stage C binding.
+`plans/httpx-parity-correction-status.md` records the resulting state. The
+evidence collected here is free-threading and packaging evidence; it is not
+an exact-SHA renewal of the HTTPX Stage C binding.
 
 ## 11. References
 
