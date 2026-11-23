@@ -21,6 +21,9 @@ These stay visible until they are done. The same list, with owners, is in
    the high-level and native paths produce different keys for the same IPv6
    origin. Resolving it changes pool keying and needs a separate plan; see
    `docs/residual-differences.md`.
+3. **Decide free-threaded Python support:** adopt, defer, or scope
+   free-threaded (PEP 703) wheel support; the investigation and the open
+   questions are in `plans/python-free-threaded-support-investigation.md`.
 
 The current list above is the short view for maintainers. `plans/registry.md`
 tracks current status and resolution history.
