@@ -41,8 +41,14 @@ then completed at `873cf2a3…` with `TIER2_EXIT=0`, 6909 Rust tests and zero
 failures, and one policy-defined optional skip (the Node JS surface, whose
 native artifact is not built here). §10 F1 and F2 record the diagnoses.
 
-The remaining closure condition is unchanged: the exact-SHA Stage C
-requalification that these executable changes invalidated.
+The closure condition was the exact-SHA Stage C requalification that these
+executable changes invalidated. That requalification has since run green:
+Tier 1, Tier 2, Tier 3 and the live security preflight at freeze
+`e389fcb0…` on 2026-11-24, whose tree contains this milestone. The milestone
+remains **conditionally closed** because Tier 2 and Tier 3 have not run at the
+milestone's own freeze `49f8910d…`; accepting the later green freeze as
+covering it is the remaining maintainer decision. The live binding is
+recorded in `plans/httpx-parity-correction-status.md`.
 
 The milestone delivers the three capability changes requested by
 eggstack/eggfetch#31, #32 and #33:

@@ -32,13 +32,17 @@ crates resolve at 0.4.1 on crates.io; PyPI carries 33 distributions for the
 version — 32 wheels including the free-threaded 3.14t and 3.15t rows, plus
 one sdist; the GitHub Release is live.
 
-**The Stage C binding is not advanced by this release.** It was last renewed
-on `48ff1a39…` for 0.4.0, and the executable-input changes since then — the
-free-threaded wheel work, the benchmark harness changes and the version bump —
-invalidate it. A fresh exact-SHA requalification is outstanding. The
-build-only PyPI rehearsal also caught a Windows wheel-smoke defect in the
-unreleased free-threaded work; it was fixed before any wheel was published,
-and the record is in the 0.4.1 closure document.
+**The Stage C binding has since been renewed.** The 0.4.1 release did not
+advance it — the free-threaded wheel work, the benchmark harness changes and
+the version bump invalidate a binding, so a fresh exact-SHA requalification
+was outstanding. That requalification ran green on 2026-11-24 and also
+corrected the required-profile skip auditor, which had
+printed a FAIL line for an unapproved skip without changing the session exit
+status. The binding is live again; the record is in
+`plans/httpx-parity-correction-status.md`. The build-only PyPI rehearsal
+also caught a Windows wheel-smoke defect in the unreleased free-threaded
+work; it was fixed before any wheel was published, and the record is in the
+0.4.1 closure document.
 
 Validation tiers are defined in `.skills/verification-qualification.md`; the
 normative policy is `docs/verification-policy.md`.
@@ -59,9 +63,9 @@ normative policy is `docs/verification-policy.md`.
 
 | Subsystem | Roadmap status | Roadmap | Current state |
 |---|---|---|---|
-| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification is outstanding. |
+| Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification it required has since run green (2026-11-24), leaving the closure acceptance with the maintainer. |
 | Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. Free-threaded (PEP 703) wheel support was adopted (Option A) and shipped in 0.4.1: `cp314-cp314t` and `cp315-cp315t` wheels ship for 3.14t and 3.15t on the four release platforms, and the release set grew from 24 to 32 wheels (25 to 33 distributions). The evidence is in `plans/python-free-threaded-support-investigation.md` and `docs/architecture/free-threading-performance.md`; the separate `abi3t`/PEP 803 question is still open. |
-| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work; requalification is outstanding. |
+| TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding was renewed on 2026-11-24 after the free-threaded wheel work invalidated the previous binding. |
 | Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.4.1 publication is closed (`plans/closure/release-verification/010-0-4-1-publication.md`); 0.4.0 is `009-0-4-0-publication.md`. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
@@ -77,7 +81,7 @@ No new plan for upstream h3 #338 — remains a gated graduation blocker (M008/M0
 
 | Plan | Status | Condition |
 |---|---|---|
-| `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | conditionally closed | Tier 2 and Tier 3 have not run at the freeze `49f8910d45414b51937a28857e57c68bcf2413d7`, and the exact-SHA Stage C requalification this change invalidated is outstanding. Closure record: `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` |
+| `plans/implementation/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` | conditionally closed | The exact-SHA Stage C requalification this change invalidated has run green (2026-11-24) on a freeze whose tree contains this milestone. Tier 2 and Tier 3 have not run at the milestone's own freeze `49f8910d…`; accepting the later green freeze as covering it is the remaining maintainer decision. Closure record: `plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md` |
 | `plans/implementation/tls-proxy-protocols/006-h3-server-controlled-corpus.md` | closed | Stage C rebound on `cef0e7aa5c23ef92f4a378f370516d9dfbaa466d` |
 | `plans/implementation/tls-proxy-protocols/007-h3-impairment-runner.md` | closed | Stage C rebound; privileged Linux matrix remains operational evidence for graduation |
 | `plans/implementation/tls-proxy-protocols/009-h3-resource-soak-and-platform-scope.md` | closed | Stage C rebound; Darwin + ubuntu-latest CI Linux soak rows recorded |
@@ -119,8 +123,8 @@ None of these is unblocked by the closed milestones.
 
 | Area | Blocker |
 |---|---|
-| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. Separately, the Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work, so a fresh exact-SHA qualification is required before any binding can be cited. |
-| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. TLS/proxy M011–M012 closed. The Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work. |
+| HTTPX qualification | HTTPX 1.0 has not met its upstream trigger. The Stage C binding is live as of 2026-11-24; any further executable-input change invalidates it again and requires a fresh exact-SHA qualification before it can be cited. |
+| H3 | Experimental retained (M010). Open rows: independent non-Quinn servers, privileged impairment, public origins, upstream h3 #338. TLS/proxy M011–M012 closed. The Stage C binding was renewed on 2026-11-24. |
 | Tier 2 downstream fixtures | The gate requires `target/downstream-qualification/artifact-manifest.json` and fails closed if it is absent. |
 
 Closure records hold milestone-specific evidence and decisions. The live

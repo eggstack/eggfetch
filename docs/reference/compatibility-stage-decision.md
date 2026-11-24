@@ -5,15 +5,13 @@
 The documented asyncio-supported public surfaces for `eggfetch.compat.httpx`
 (HTTPX 0.28.1) and `eggfetch.compat.httpx2` (HTTPX2 2.12.0) passed Stage C
 qualification on frozen executable SHA
-`48ff1a39733c295906fd873cae757cc9eb149d6c` (2026-11-21, the 0.4.0 release
-qualification), where the full compatibility, extended, package, and live
-security gates passed. That renewal re-established the binding Core Transport
-M011 had invalidated. Earlier bindings are historical.
-
-That qualification is the last completed one, but the executable-input changes
-that followed it — the `rustix`/`url`/`cookie` dependency bumps, two core
-fixture determinism fixes, and the free-threaded (PEP 703) wheel work —
-invalidate the binding, and a fresh exact-SHA qualification is outstanding.
+`e389fcb05737a75de6b70bf482274ed9da5fa8e2` (2026-11-24, the compatibility-gate
+renewal), where the full compatibility, extended, package, and live
+security gates passed. That renewal requalified the tree after the
+free-threaded (PEP 703) wheel work changed executable inputs, and it
+corrected the required-profile skip auditor so that an unapproved skip fails
+the compatibility gate instead of only printing a FAIL line. Earlier bindings
+are historical.
 Current evidence and binding history are in
 `plans/httpx-parity-correction-status.md`; the exact facade scopes are in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.

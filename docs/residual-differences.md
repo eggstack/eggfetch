@@ -1,15 +1,14 @@
 # Residual Differences from HTTPX 0.28.1
 
 The HTTPX 0.28.1 and httpx2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `48ff1a39733c295906fd873cae757cc9eb149d6c` (2026-11-21, the 0.4.0
-release qualification). That renewal re-established the binding Core Transport
-M011 had invalidated, and the record is in
-`plans/httpx-parity-correction-status.md`.
-That qualification is the last completed one, but the executable-input changes
-that followed it — the `rustix`/`url`/`cookie` dependency bumps, two core
-fixture determinism fixes, and the free-threaded (PEP 703) wheel work —
-invalidate the binding, and a fresh exact-SHA qualification is outstanding.
-`plans/httpx-parity-correction-status.md` records the live state. The
+executable SHA `e389fcb05737a75de6b70bf482274ed9da5fa8e2` (2026-11-24, the
+compatibility-gate renewal). That renewal requalified the tree after the
+free-threaded (PEP 703) wheel work changed executable inputs, and it
+corrected the required-profile skip auditor, which had printed a FAIL line
+for an unapproved skip without changing the session exit status. The record
+is in `plans/httpx-parity-correction-status.md`, which also holds the live
+state.
+The
 M011–M012 security correctives (H3 dial-path trust + qualification hygiene)
 passed Tier 1/2/3 and the live security preflight. Its dependency policy
 retains the audited Tokio, zstd and brotli pins and carries quinn 0.11.12 /

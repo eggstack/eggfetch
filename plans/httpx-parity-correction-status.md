@@ -4,11 +4,74 @@ This record is the exact-SHA-bound status for the HTTPX 0.28.1 compatibility
 facade. Historical phase and corrective-pass records remain in the git history
 and referenced plans; counts below are only from the runs named here.
 
+## Stage C renewed after the compatibility-gate correction (2026-11-24)
+
+> **Supersedes 2026-11-23.** The section below records the invalidation the
+> free-threaded wheel work caused; this renewal is the live binding.
+
+Both documented facades are **Stage C qualified (renewal)** on executable
+freeze `e389fcb05737a75de6b70bf482274ed9da5fa8e2` — the tip of `main`
+after the compatibility-gate correction. The preceding binding
+`48ff1a39733c295906fd873cae757cc9eb149d6c` is historical: the
+free-threaded wheel work changed executable inputs, and this renewal also
+corrects the gate that was meant to catch exactly that class of change.
+
+### What this renewal corrects
+
+The required-profile skip auditor printed a FAIL line for an unapproved skip
+but never changed the session exit status, so a compatibility profile
+carrying any skip passed the gate. The verdict was recorded in
+`pytest_terminal_summary` and applied in `pytest_sessionfinish`, but pytest
+runs the session-finish hook before the terminal reporter's own session
+finish, so the attribute was never set when the exit status was applied.
+Under the pinned pytest 9.1.1 every unapproved skip was silently tolerated.
+
+The verdict is now computed and applied in `pytest_sessionfinish`, where the
+audited lists are already complete. Approved skips are an explicit list
+carrying the reason each one cannot run in the qualification environment,
+and every other skip, xfail, or collection error fails the required profile.
+Tier 1 runs `scripts/test_compat_skip_auditor.py`, which drives the same
+conftest against synthetic sessions and asserts only the gate verdict, so
+the fail-closed behavior cannot silently stop failing again.
+
+The optional SDK construction fixtures are pinned (`openai==3.58.0`,
+`ollama==0.6.3`) so they run instead of skipping, and the httpx2 profile
+environment pins the reference client the shared fixture builds.
+
+### Qualification evidence
+
+| Gate | Result |
+|---|---|
+| Tier 1 | `./scripts/check.sh` exit 0 — 1828 Rust workspace tests, 0 failed; 584 Python behaviour tests passed with 1 documented skip (the free-threading target on a GIL interpreter); 134 compatibility smoke tests passed |
+| Tier 2 | `./scripts/check.sh extended` exit 0 — 6915 Rust test results, 0 failed; both compatibility profiles **2082 passed, 1 skipped**; Rust public-surface oracle `223 checks: 223 pass, 30 skip` with `no semver update required`; downstream portfolio `overall_pass: true` with 4 of 4 required packages; one policy-defined skip (the Node JS surface, whose native artifact is not built in this environment) |
+| HTTPX compat (both facades) | **2082 passed, 1 skipped** each — identical to the 0.3.0 and 0.4.0 figures; the skip is the approved `google-genai` construction fixture |
+| API manifest oracle | clean for both facades |
+| Rust public API oracle | 8 profiles, `223 checks: 223 pass, 30 skip`, `no semver update required` |
+| Tier 3 | `./scripts/check.sh package` exit 0 |
+| Live security preflight | exit 0 — `advisories ok, bans ok, licenses ok, sources ok`; 273 crate dependencies scanned |
+
+The single skip in each profile is the approved `google-genai` construction
+fixture. That SDK is absent from the qualification environment because the
+current upstream release constructs `SyncHttpx2Client`, so the
+`httpx.Client` isinstance check fails. It is upstream API drift, not an
+eggfetch regression, and it is now recorded as an approved skip rather than
+an unapproved one.
+
+The qualification ran on CPython 3.14.2, so the httpx2 profile's Python
+version bound is unchanged: the facade remains qualified for 3.10–3.14
+until it is renewed on a 3.15-tested executable SHA.
+
+### The condition for the next renewal
+
+Unchanged: any change to executable inputs invalidates this binding and
+requires a fresh exact-SHA qualification, with the downstream artifact
+manifest re-supplied for that run.
+
 ## Recorded state — Stage C binding invalidated by the free-threaded wheel work (2026-11-23)
 
-> **Supersedes 2026-11-23.** The renewal below (2026-11-21) is the last
-> completed qualification. This section records that the binding it
-> established no longer describes the tree.
+> **Superseded 2026-11-24.** The renewal above (2026-11-24) is the live
+> binding. This section records the invalidation the free-threaded wheel work
+> caused, and the requalification that answered it.
 
 **The live Stage C binding is invalidated.** The free-threaded (PEP 703)
 wheel work changed executable inputs: the release workflow

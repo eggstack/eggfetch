@@ -2,10 +2,10 @@
 
 > **Current status:** TLS/protocols M006–M012 closed (H3 **experimental
 > retained**). Core transport M011 (#31–#33) is conditionally closed. The
-> exact-SHA Stage C binding last renewed on
-> `48ff1a39733c295906fd873cae757cc9eb149d6c` is invalidated by the
-> executable-input changes that followed it, including the free-threaded
-> wheel work; requalification is outstanding.
+> exact-SHA Stage C binding was renewed on 2026-11-24, which requalified the
+> tree after the free-threaded wheel work and corrected the required-profile
+> skip auditor. The bound SHA is recorded in the ledger and the two
+> compatibility profiles, not here.
 > The current release, roadmap statuses, and maintainer actions are tracked in
 > `plans/registry.md`. The live Stage C state is recorded in
 > `plans/httpx-parity-correction-status.md` and `compat/*/profile.toml`.

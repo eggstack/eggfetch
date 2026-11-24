@@ -107,15 +107,15 @@ the GIL.
 ## Qualification status
 
 The HTTPX 0.28.1 and HTTPX2 2.12.0 facades are Stage C qualified on frozen
-executable SHA `48ff1a39733c295906fd873cae757cc9eb149d6c` (2026-11-21), where the
-full compatibility, extended, package, and live security gates passed — both
-facades at 2082 passed / 1 skipped, identical to the 0.3.0 figures. Earlier
-bindings are historical.
+executable SHA `e389fcb05737a75de6b70bf482274ed9da5fa8e2` (2026-11-24),
+where the full compatibility, extended, package, and live security gates
+passed — both facades at 2082 passed / 1 skipped, identical to the 0.3.0 and
+0.4.0 figures. Earlier bindings are historical.
 
-That qualification is the last completed one, but the executable-input changes
-that followed it — the `rustix`/`url`/`cookie` dependency bumps, two core
-fixture determinism fixes, and the free-threaded (PEP 703) wheel work —
-invalidate the binding, and a fresh exact-SHA qualification is outstanding.
+That renewal requalified the tree after the free-threaded (PEP 703) wheel
+work changed executable inputs, and it corrected the required-profile skip
+auditor so that an unapproved skip now fails the compatibility gate instead
+of only printing a FAIL line.
 Current evidence is in
 `plans/httpx-parity-correction-status.md`; exact facade scopes are recorded in
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`.
