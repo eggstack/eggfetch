@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-24
+
 ### Added
 
 - `eggfetch` Python bindings: free-threaded CPython (PEP 703) support for
@@ -45,6 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   because the free-threaded CPython interpreters require that glibc. The
   free-threaded wheels are therefore usable on a narrower set of Linux
   distributions than the GIL-enabled ones.
+
+### Fixed
+
+- The README dependency snippet named `eggfetch-core = "0.3"`, which
+  resolves the 0.3.x release rather than the current 0.4 line. It now
+  reads `"0.4"`, matching the snippets in the installation guide, the Rust
+  guide, the feature matrix and the FFI documentation.
+- `scripts/validate_wheel_coverage.py` read the release version from a
+  hardcoded literal in its fixtures. It now reads the coordinated version
+  from the Python package metadata, so a version bump cannot leave a stale
+  version behind in the validator.
 
 ## [0.4.0] - 2026-11-20
 
@@ -414,7 +427,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Multipart boundary validation
 - Proxy authentication boundary enforcement
 
-[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/eggstack/eggfetch/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/eggstack/eggfetch/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/eggstack/eggfetch/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/eggstack/eggfetch/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/eggstack/eggfetch/releases/tag/v0.2.2

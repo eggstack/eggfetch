@@ -513,10 +513,10 @@ Dependency policy (audits, bans, licenses): [dependency-policy.md](dependency-po
 
 Milestone scope (A–Z) is complete; the workspace is in corrective/maintenance
 mode with current maintainer actions tracked in `plans/README.md`. The
-coordinated 0.2.2 release is published (six crates, PyPI, signed `v0.2.2`,
-GitHub Release) and includes the Python 3.15 wheel rows. Test counts change
-with every commit; the
-evidence bound to the qualified executable SHA is recorded in
+coordinated 0.4.0 release is published (six crates, PyPI, signed `v0.4.0`,
+GitHub Release) and includes the Python 3.15 and free-threaded 3.14t/3.15t
+wheel rows. Test counts change with every commit; the evidence bound to the
+qualified executable SHA is recorded in
 `plans/httpx-parity-correction-status.md`. MSRV is Rust 1.89
 (`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for
 development, while Tier 2 validates exact Rust 1.89.0). CI enforces

@@ -55,6 +55,33 @@ KNOWN_PYTHON_TAGS = {version for version, _ in EXPECTED_PAIRS}
 
 EXPECTED_WHEEL_COUNT = len(EXPECTED_PLATFORMS) * len(EXPECTED_PAIRS)
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PYPROJECT_PATH = REPO_ROOT / "crates" / "eggfetch-python" / "pyproject.toml"
+
+
+def release_version() -> str:
+    """The coordinated version the release set carries.
+
+    It is read from the Python package metadata rather than hardcoded, so a
+    version bump never leaves a stale literal in the fixtures below. The
+    coverage rules themselves are version-independent: they key on the
+    platform, Python tag and ABI tag.
+    """
+    in_project = False
+    for line in PYPROJECT_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped == "[project]":
+            in_project = True
+            continue
+        if stripped.startswith("[") and in_project:
+            break
+        if in_project:
+            match = re.match(r'^version\s*=\s*["\']([^"\']+)["\']', stripped)
+            if match:
+                return match.group(1)
+    raise RuntimeError(f"no version found in {PYPROJECT_PATH}")
+
+
 # Wheel filename pattern: {distribution}-{version}(-{build tag})?-{python tag}-{abi tag}-{platform tag}.whl
 WHEEL_RE = re.compile(
     r"^(?P<name>.+?)-(?P<version>[^-]+)"
@@ -176,10 +203,11 @@ def validate_wheel_names(names: list[str]) -> tuple[list[str], set[tuple[str, st
 
 def _complete_wheel_set() -> list[str]:
     """Every wheel the release set is expected to contain."""
+    version = release_version()
     names = []
     for platform in sorted(EXPECTED_PLATFORMS):
         for py, abi in sorted(EXPECTED_PAIRS):
-            names.append(f"eggfetch-0.4.0-{py}-{abi}-{PLATFORM_TAGS[platform]}.whl")
+            names.append(f"eggfetch-{version}-{py}-{abi}-{PLATFORM_TAGS[platform]}.whl")
     return names
 
 
@@ -204,12 +232,14 @@ def self_test() -> int:
             f"expected {name} to be rejected with {needle!r}, got {errors}",
         )
 
+    version = release_version()
+
     # Accepted tags.
     for name in (
-        "eggfetch-0.4.0-cp310-cp310-manylinux2014_x86_64.whl",
-        "eggfetch-0.4.0-cp314-cp314-macosx_11_0_arm64.whl",
-        "eggfetch-0.4.0-cp314-cp314t-macosx_11_0_arm64.whl",
-        "eggfetch-0.4.0-cp315-cp315t-win_amd64.whl",
+        f"eggfetch-{version}-cp310-cp310-manylinux2014_x86_64.whl",
+        f"eggfetch-{version}-cp314-cp314-macosx_11_0_arm64.whl",
+        f"eggfetch-{version}-cp314-cp314t-macosx_11_0_arm64.whl",
+        f"eggfetch-{version}-cp315-cp315t-win_amd64.whl",
     ):
         _, _, _, errors = classify_wheel(name)
         expect(not errors, f"expected {name} to be accepted, got {errors}")
@@ -217,24 +247,26 @@ def self_test() -> int:
     # Rejected tags: the Stable ABI, a mismatched ABI, an unsupported
     # free-threaded target, an unknown Python tag, an unknown platform.
     expect_rejected(
-        "eggfetch-0.4.0-cp310-abi3-manylinux2014_x86_64.whl", "ABI3"
+        f"eggfetch-{version}-cp310-abi3-manylinux2014_x86_64.whl", "ABI3"
     )
     expect_rejected(
-        "eggfetch-0.4.0-cp314-cp313-manylinux2014_x86_64.whl",
+        f"eggfetch-{version}-cp314-cp313-manylinux2014_x86_64.whl",
         "Python/ABI combination",
     )
     expect_rejected(
-        "eggfetch-0.4.0-cp313-cp313t-manylinux2014_x86_64.whl",
+        f"eggfetch-{version}-cp313-cp313t-manylinux2014_x86_64.whl",
         "Python/ABI combination",
     )
     expect_rejected(
-        "eggfetch-0.4.0-cp39-cp39-manylinux2014_x86_64.whl", "Unexpected Python tag"
+        f"eggfetch-{version}-cp39-cp39-manylinux2014_x86_64.whl",
+        "Unexpected Python tag",
     )
     expect_rejected(
-        "eggfetch-0.4.0-py3-none-any.whl", "Unexpected Python tag"
+        f"eggfetch-{version}-py3-none-any.whl", "Unexpected Python tag"
     )
     expect_rejected(
-        "eggfetch-0.4.0-cp314-cp314t-macosx_10_9_x86_64.whl", "Unexpected platform"
+        f"eggfetch-{version}-cp314-cp314t-macosx_10_9_x86_64.whl",
+        "Unexpected platform",
     )
 
     # A complete set passes; a set missing one free-threaded wheel fails.

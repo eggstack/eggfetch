@@ -32,7 +32,7 @@ cargo install eggfetch-cli                  # CLI
 
 ```toml
 [dependencies]
-eggfetch-core = "0.3"                       # Rust (MSRV 1.89)
+eggfetch-core = "0.4"                       # Rust (MSRV 1.89)
 ```
 
 See [installation](docs/getting-started/installation.md) for wheels, feature recipes, and platform support.
