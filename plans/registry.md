@@ -19,24 +19,26 @@ Live compatibility binding:
 
 ## Current release
 
-The current public version is **0.4.0** across the six publishable crates and
+The current public version is **0.4.1** across the six publishable crates and
 the Python distribution. The publication evidence is in
-`plans/closure/release-verification/009-0-4-0-publication.md`; the 0.3.0 record
-is `plans/closure/release-verification/008-0-3-0-publication.md`.
+`plans/closure/release-verification/010-0-4-1-publication.md`; the 0.4.0 record
+is `plans/closure/release-verification/009-0-4-0-publication.md`.
 
-**0.4.0 is published.** Qualified at `873cf2a3…`, merged as `48ff1a39…`
-(PR [#34](https://github.com/eggstack/eggfetch/pull/34)) and released from
-`c9ddf4c2…` under signed tag `v0.4.0`. All four gates were green before
-publication — Tier 1 (1828 Rust tests), Tier 2 (`./scripts/check.sh extended`,
-6909 Rust tests, 0 failed, one policy-defined Node skip), Tier 3, and the live
-security preflight. All six crates resolve at 0.4.0 on crates.io; PyPI carries
-25 distributions for the version; the GitHub Release is live.
+**0.4.1 is published.** Released from `dc0f580f…` under signed tag `v0.4.1`.
+All four gates were green before publication — Tier 1, Tier 2
+(`./scripts/check.sh extended`, 6915 Rust test results, 0 failed, one
+policy-defined Node skip), Tier 3, and the live security preflight. All six
+crates resolve at 0.4.1 on crates.io; PyPI carries 33 distributions for the
+version — 32 wheels including the free-threaded 3.14t and 3.15t rows, plus
+one sdist; the GitHub Release is live.
 
-The Stage C binding was renewed on `48ff1a39…` as part of this release, so it
-is current rather than invalidated. The two fixture races that had blocked
-Tier 2 are fixed and recorded in
-`plans/closure/core-transport-policy/011-profile-independent-request-policy-and-native-uri-builder.md`
-§10.
+**The Stage C binding is not advanced by this release.** It was last renewed
+on `48ff1a39…` for 0.4.0, and the executable-input changes since then — the
+free-threaded wheel work, the benchmark harness changes and the version bump —
+invalidate it. A fresh exact-SHA requalification is outstanding. The
+build-only PyPI rehearsal also caught a Windows wheel-smoke defect in the
+unreleased free-threaded work; it was fixed before any wheel was published,
+and the record is in the 0.4.1 closure document.
 
 Validation tiers are defined in `.skills/verification-qualification.md`; the
 normative policy is `docs/verification-policy.md`.
@@ -58,9 +60,9 @@ normative policy is `docs/verification-policy.md`.
 | Subsystem | Roadmap status | Roadmap | Current state |
 |---|---|---|---|
 | Core transport and request policy | active | `plans/subsystems/core-transport-policy-roadmap.md` | M011 (profile-independent request policy and native `http::Uri` builder) is conditionally closed; the oracle baseline advanced to `05f14f44`, and the exact-SHA Stage C requalification is outstanding. |
-| Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. Free-threaded (PEP 703) wheel support was adopted (Option A) and implemented: `cp314-cp314t` and `cp315-cp315t` wheels ship for 3.14t and 3.15t on the four release platforms, and the release set grows from 24 to 32 wheels. The evidence is in `plans/python-free-threaded-support-investigation.md`; the separate `abi3t`/PEP 803 question is still open. |
+| Python bindings and HTTPX compatibility | active | `plans/subsystems/python-httpx-compat-roadmap.md` | No implementation milestone is registered. HTTPX 1.0 remains gated on its upstream trigger. Free-threaded (PEP 703) wheel support was adopted (Option A) and shipped in 0.4.1: `cp314-cp314t` and `cp315-cp315t` wheels ship for 3.14t and 3.15t on the four release platforms, and the release set grew from 24 to 32 wheels (25 to 33 distributions). The evidence is in `plans/python-free-threaded-support-investigation.md` and `docs/architecture/free-threading-performance.md`; the separate `abi3t`/PEP 803 question is still open. |
 | TLS, proxy, and protocols | active | `plans/subsystems/tls-proxy-protocols-roadmap.md` | M006–M012 closed (H3 experimental retained). The Stage C binding last renewed at `48ff1a39…` is invalidated by the executable-input changes that followed it, including the free-threaded wheel work; requalification is outstanding. |
-| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.4.0 publication is closed (`plans/closure/release-verification/009-0-4-0-publication.md`). |
+| Release and verification | active | `plans/subsystems/release-verification-roadmap.md` | 0.4.1 publication is closed (`plans/closure/release-verification/010-0-4-1-publication.md`); 0.4.0 is `009-0-4-0-publication.md`. |
 | Performance and footprint | closed | `plans/subsystems/performance-footprint-roadmap.md` | Completed campaigns and repaired fixtures. |
 
 Closed plans are historical evidence, not active requirements or release gates.
