@@ -156,8 +156,8 @@ milliseconds:
 The GIL-enabled build's median user-visible latency at eight threads is
 **0.96-0.97 ms against 0.24-0.35 ms** free-threaded - 2.8x-3.9x lower. Its
 p99 is 1.4x-4.6x higher. The GIL-enabled runs' worst single request reached
-44 ms and 10 ms. Three of the four free-threaded runs peaked at 0.84 ms and
-1.01 ms; the fourth, FT 3.14.10 run 2, peaked at 39.4 ms in a run that was
+44 ms and 10 ms. Three of the four free-threaded runs peaked at 0.84-1.01 ms;
+the fourth, FT 3.14.10 run 2, peaked at 39.4 ms in a run that was
 noisier throughout (p99 0.994 ms, 21,486 req/s against 29,754 in run 1). That
 figure is included rather than dropped, and it is why every comparison here
 is quoted as a range.
