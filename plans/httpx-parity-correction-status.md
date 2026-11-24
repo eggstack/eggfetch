@@ -42,6 +42,7 @@ until a fresh exact-SHA qualification runs at the new freeze.
 | `a1ae5b8e` | latency percentiles and the `json` application mix in the performance harness | executable input |
 | `2dfa54f6` | coordinated version bump to 0.4.1 across the six publishable crates, the Python package metadata and the Node prototype metadata, plus the release-state documentation corrections | executable input (packaging metadata) |
 | `f497ad52` | release-state documentation corrections, including the release workflow's interpreter-selection comment | executable input (release workflow comment) |
+| `f02a3751` | release workflow: portable interpreter selection in the wheel smoke step, fixing the GIL-enabled Windows rows | executable input (release workflow) |
 | `272c8221`, `d338eba3` | planning and release records only | docs-only |
 
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`
