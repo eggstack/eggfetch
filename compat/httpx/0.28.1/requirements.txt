@@ -9,6 +9,10 @@ pytest-timeout>=2.0.0
 # Keep the SDK integration check aligned with AInews's pinned dependency. Newer
 # Anthropic SDK major versions use the separately versioned httpx2 client.
 anthropic==0.87.0
+# Optional SDK construction fixtures: these SDKs build their own httpx client,
+# so the fixture asserts the eggfetch transport survives that construction.
+openai==3.58.0
+ollama==0.6.3
 httpx-sse>=0.4.0
 respx>=0.21.0
 starlette>=0.27.0

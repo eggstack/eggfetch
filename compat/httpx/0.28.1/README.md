@@ -11,6 +11,7 @@ changes.
 ## Files
 
 - `profile.toml` — Defines the reference package, supported surfaces, and categories
+- `requirements.txt` — Pinned compatibility environment: reference client, downstream fixtures, and the optional SDKs the SDK-construction fixture needs
 - `allowed-differences.toml` — Registry of reviewed, allowed behavioral differences with exact typed tuples
 - `resolved-differences.toml` — Historical ledger of resolved differences (audit trail only)
 - `reference-api.json` — Golden manifest of HTTPX 0.28.1 public API (generated)

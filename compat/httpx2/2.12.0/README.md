@@ -18,7 +18,7 @@ and the ledger. See `profile.toml` and
 ## Files
 
 - `profile.toml` — reference package, surfaces, extras, categories
-- `requirements.txt` — pinned `httpx2==2.12.0` + `httpcore2==2.12.0`
+- `requirements.txt` — pinned `httpx2==2.12.0` + `httpcore2==2.12.0`, plus the reference client and optional SDKs the shared SDK-construction fixture needs
 - `reference-api.json` — golden manifest of httpx2 2.12.0 public API (generated;
   do not hand-edit; regenerate with `scripts/generate_httpx_api_manifest.py --package httpx2`)
 - `allowed-differences.toml` — reviewed intentional differences (exact typed tuples)
