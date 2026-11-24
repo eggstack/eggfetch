@@ -605,54 +605,46 @@ campaign harness was single-client and sequential.
 
 The `--concurrency` group of `scripts/performance_benchmark.py` closes that
 gap. Several threads share one `Client` against a minimal loopback server in
-a separate process of the same interpreter. Two workloads are measured: `io`
-(request plus body read) and `io_cpu` (the same, plus repeated hashing of the
-body, modelling CPU-bound Python work around network calls). The method and
-its reading rules are in `docs/architecture/benchmarks.md`.
+a separate process of the same interpreter. Three workloads are measured:
+`io` (request and body read only), `io_cpu` (the same plus repeated body
+hashing) and `json` (a JSON decode plus a summary, the application mix).
+Each configuration also reports the user-visible latency distribution.
 
-Measured on this repository, macOS arm64 (Apple silicon), CPython 3.14.2
-(GIL-enabled) against CPython 3.14.10t and 3.15.2t (free-threaded), all three
-on the same commit, with `--repeats 3 --threads 1,2,4,8`:
+**The full evidence is in `docs/architecture/free-threading-performance.md`** -
+method, per-build numbers, the reading rules, and the threats to validity.
+The headline, from two independent runs of the full matrix on macOS arm64:
 
-| Workload | Threads | GIL 3.14.2 | FT 3.14.10 | FT 3.15.2 |
-|---|---|---|---|---|
-| `io` | 1 | 11,392 req/s (1.00x) | 11,143 req/s (1.00x) | 10,491 req/s (1.00x) |
-| `io` | 8 | 38,002 req/s (3.34x) | 47,861 req/s (4.30x) | 56,420 req/s (5.38x) |
-| `io_cpu` | 1 | 9,802 req/s (1.00x) | 9,149 req/s (1.00x) | 10,713 req/s (1.00x) |
-| `io_cpu` | 4 | 25,010 req/s (2.55x) | 25,364 req/s (2.77x) | 32,092 req/s (3.00x) |
-| `io_cpu` | 8 | 20,047 req/s (2.05x) | 36,861 req/s (4.03x) | 48,445 req/s (4.52x) |
-
-The scaling factor is relative to the 1-thread result of the same run.
+| `json` workload at 8 threads | GIL 3.14.2 | FT 3.14.10 | FT 3.15.2 |
+|---|---|---|---|
+| Throughput | 8,425 / 8,507 req/s | 29,754 / 21,486 req/s | 32,229 / 28,691 req/s |
+| Scaling from 1 thread | 1.95x / 1.59x | 5.23x / 4.03x | 5.60x / 5.65x |
+| User-visible p50 | 0.957 / 0.970 ms | 0.263 / 0.345 ms | 0.243 / 0.283 ms |
+| User-visible p99 | 1.826 / 1.427 ms | 0.470 / 0.994 ms | 0.399 / 0.533 ms |
 
 Three findings:
 
-- **Single-client cost is the same on both builds.** The existing campaign
-  cases move within run-to-run noise between a GIL-enabled and a
-  free-threaded interpreter, so there is no per-request penalty for the
-  free-threaded build.
+- **Single-client cost is the same on both builds.** The one-thread row moves
+  within run-to-run variance between a GIL-enabled and a free-threaded
+  interpreter, so there is no per-request penalty for the free-threaded
+  build and no single-caller performance claim.
 - **The engine already parallelizes on a GIL-enabled build.** The `io`
-  workload — where the Python side does almost nothing — reaches 3.34x at 8
-  threads under the GIL, because the binding releases the GIL for the
-  network wait. Free-threading does not change that; it is not a throughput
-  fix for I/O-bound use.
+  workload - where the Python side does almost nothing - reaches 2.6x-3.2x at
+  8 threads under the GIL, because the binding releases the GIL for the
+  network wait. Free-threading is not a throughput fix for I/O-bound use.
 - **Free-threading pays off in the Python work around the network call.**
-  Under the GIL, adding per-response Python work makes throughput *fall*
-  from 4 to 8 threads (25,010 to 20,047 req/s): the Python side serializes,
-  so the extra threads add contention without adding throughput. The
-  free-threaded builds keep scaling to 4.03x and 4.52x, which is 1.84x and
-  2.42x the GIL-enabled throughput at 8 threads.
-
-A server ceiling would show up as the same plateau in every run, so a
-free-threaded run that out-scales the GIL-enabled run is evidence that the
-ceiling was the client rather than the server.
+  Under the GIL, the `json` workload plateaus at about two threads
+  (8,325-8,774 req/s) while its p50 quadruples to 0.957-0.970 ms at eight.
+  The free-threaded builds keep scaling to 4.0x-5.7x and hold p50 at
+  0.24-0.35 ms, which is 2.5x-3.8x the GIL-enabled throughput at eight
+  threads.
 
 These are host-specific local measurements, not performance budgets: the
 machine was under load from an unrelated project, the GIL interpreter is
 3.14.2 against free-threaded 3.14.10, and the server is loopback with no
-network latency. The repository rule stands — `scripts/performance_benchmark.py`
-stays non-CI timing evidence, and only a fresh measurement on the same
-commit, toolchains, target, feature set, server fixture and repeat settings
-is the basis for a comparison.
+network latency. The repository rule stands -
+`scripts/performance_benchmark.py` stays non-CI timing evidence, and only a
+fresh measurement on the same commit, toolchains, target, feature set, server
+fixture and repeat settings is the basis for a comparison.
 
 ### Where the work landed
 

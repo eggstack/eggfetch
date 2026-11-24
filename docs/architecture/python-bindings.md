@@ -233,7 +233,7 @@ added; on a free-threaded build that work runs concurrently.
 
 The repository measures this with the `--concurrency` group of
 `scripts/performance_benchmark.py`. The method and the recorded result are in
-[benchmarks.md](benchmarks.md#concurrency-scaling-gil-versus-free-threaded).
+[free-threading-performance.md](free-threading-performance.md).
 
 ## Response Surface
 

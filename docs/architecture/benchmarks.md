@@ -160,17 +160,23 @@ source .venv/bin/activate
 python scripts/performance_benchmark.py --repeats 3 --concurrency --threads 1,2,4,8
 ```
 
-Two workloads are measured:
+Three workloads are measured:
 
 | Workload | What it does |
 |---|---|
 | `io` | Request plus body read, with no extra Python-level CPU work. |
 | `io_cpu` | The same, plus repeated hashing of the body — the "CPU-bound Python work around network calls" shape. |
+| `json` | Request plus a JSON decode and a summary of the decoded records — a realistic JSON-API application mix. |
 
 The engine already releases the GIL for the network wait, so the `io`
-workload is expected to scale similarly on both builds. The `io_cpu`
-workload is the one that separates them: on a GIL-enabled build the Python
-side of each response serializes, while a free-threaded build does not.
+workload is expected to scale similarly on both builds. The `io_cpu` and
+`json` workloads are the ones that separate them: on a GIL-enabled build the
+Python side of each response serializes, while a free-threaded build does
+not.
+
+Each configuration also reports the user-visible latency distribution (p50,
+p95, p99 and maximum) pooled over the repetitions, and the scaling factor
+against the first thread count of the same run.
 
 The server runs in a separate process of the same interpreter, with a
 deliberately minimal per-request Python cost. Two consequences matter when
@@ -187,6 +193,8 @@ The group reports `gil_enabled` for the running interpreter, so a result file
 is self-describing. To compare the two builds, run the same command with the
 same repeat and thread settings on each interpreter and compare the scaling
 factors. The measured result for this repository is recorded in
+[free-threading-performance.md](free-threading-performance.md), with the
+decision and qualification record in
 `plans/python-free-threaded-support-investigation.md`.
 
 The second-pass ownership campaign extends the same harness with paired

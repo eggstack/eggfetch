@@ -20,7 +20,7 @@ eggfetch is a Rust-native async HTTP client engine (tokio + hyper) with Python b
 - **Retries and redirects**: backoff with `Retry-After`, replayable-body redirect handling
 - **URL-free native builder**: `Client::get_uri`/`post_uri`/`request_uri` build from an `http::Uri` in every feature profile, for embeddings that omit `url`/IDNA/ICU
 - **Python**: requests/HTTPX-compatible sync and async APIs plus versioned `eggfetch.compat.httpx` (0.28.1) and `eggfetch.compat.httpx2` (2.12.0) facades ([compatibility](docs/reference/compatibility.md))
-- **Free-threaded CPython** (PEP 703) on Python 3.14t and 3.15t: the GIL stays disabled while `eggfetch` is imported ([details](docs/architecture/python-bindings.md#free-threaded-execution))
+- **Free-threaded CPython** (PEP 703) on Python 3.14t and 3.15t: the GIL stays disabled while `eggfetch` is imported, and concurrent callers are not serialized by the interpreter ([contract](docs/architecture/python-bindings.md#free-threaded-execution), [measured](docs/architecture/free-threading-performance.md))
 - **CLI** with streaming output, machine-readable formats, and shell completions ([guide](docs/cli/guide.md))
 
 ## Installation
@@ -111,6 +111,35 @@ Runnable starting points (each takes an optional base URL, default `https://http
 - `python examples/python_async.py`: async client with concurrent requests
 
 More patterns are in [`docs/cookbook/`](docs/cookbook/).
+
+## Free-threaded Python
+
+eggfetch ships free-threaded wheels for CPython 3.14t and 3.15t. Importing
+eggfetch leaves the interpreter's GIL disabled, so concurrent callers in your
+application are not serialized by the interpreter.
+
+That matters when your application does Python work between responses, which
+is the normal case for a JSON API. Measured on macOS arm64 with eight
+concurrent callers and a realistic per-response mix (decode a 20 KB JSON
+payload and extract the fields you need), over two independent runs:
+
+| | GIL 3.14.2 | Free-threaded 3.14.10 / 3.15.2 |
+|---|---|---|
+| Throughput at 8 callers | 8.4-8.5 k req/s | 21.5-32.2 k req/s |
+| Scaling from 1 to 8 callers | 1.6x-2.0x | 4.0x-5.7x |
+| User-visible p50 latency | 0.96-0.97 ms | 0.24-0.35 ms |
+| User-visible p99 latency | 1.43-1.83 ms | 0.40-0.99 ms |
+
+The GIL-enabled build plateaus at about two callers, because eggfetch already
+releases the GIL for the network wait but the interpreter still serializes the
+Python work around it. A single caller sees no difference either way, and an
+application that does nothing in Python between responses sees little.
+
+Full method, per-build numbers and the threats to validity are in
+[the free-threading performance evidence](docs/architecture/free-threading-performance.md).
+The free-threading contract — GIL stays off, callbacks are not serialized,
+sub-interpreters unsupported — is in
+[the Python bindings deep dive](docs/architecture/python-bindings.md#free-threaded-execution).
 
 ## Documentation
 

@@ -395,6 +395,7 @@ Each component has a dedicated document for detailed review:
 | **FFI & Node** | [ffi-and-node.md](ffi-and-node.md) | C ABI handles, runtime bridge, N-API prototype |
 | **Testing & Fuzzing** | [testing-fuzzing.md](testing-fuzzing.md) | Unit/integration tests, property tests, fuzz targets, compat suites |
 | **Benchmarks** | [benchmarks.md](benchmarks.md) | Criterion suites, BenchServer harness, RSS regression monitor |
+| **Free-Threaded Performance** | [free-threading-performance.md](free-threading-performance.md) | Measured GIL-versus-free-threaded throughput, scaling and latency evidence |
 | **Embedded Footprint** | [embedded-footprint.md](embedded-footprint.md) | Downstream size/dependency evidence (manual, not CI) |
 | **Build & CI** | [build-ci.md](build-ci.md) | CI pipeline, lint policy, MSRV, release process |
 

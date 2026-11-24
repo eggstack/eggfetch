@@ -296,20 +296,43 @@ async def measure_async(fn, repeats: int) -> dict[str, float]:
 CONCURRENCY_BODY_SIZE = 8 * 1024
 CONCURRENCY_REQUESTS_PER_THREAD = 2000
 CONCURRENCY_CPU_PASSES = 4
+CONCURRENCY_JSON_RECORDS = 200
+CONCURRENCY_WORKLOADS = ("io", "io_cpu", "json")
 
 CONCURRENCY_SERVER_SOURCE = r"""
+import json
 import socket
 import sys
 import threading
 
 body_size = int(sys.argv[1])
-port_file = sys.argv[2]
+record_count = int(sys.argv[2])
+port_file = sys.argv[3]
+
 body = b"x" * body_size
-head = (
+binary_head = (
     "HTTP/1.1 200 OK\r\n"
     "Content-Length: %d\r\n"
     "Content-Type: application/octet-stream\r\n"
     "\r\n" % body_size
+).encode()
+
+records = [
+    {
+        "id": index,
+        "name": "widget-%d" % index,
+        "price": round(index * 1.5, 2),
+        "tags": ["alpha", "beta", "gamma"],
+        "active": index % 3 != 0,
+    }
+    for index in range(record_count)
+]
+json_body = json.dumps(records).encode()
+json_head = (
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Length: %d\r\n"
+    "Content-Type: application/json\r\n"
+    "\r\n" % len(json_body)
 ).encode()
 
 
@@ -323,8 +346,13 @@ def handle(connection):
                 if not chunk:
                     return
                 buffer += chunk
-            buffer = buffer[buffer.index(b"\r\n\r\n") + 4 :]
-            connection.sendall(head + body)
+            separator = buffer.index(b"\r\n\r\n")
+            request_head = buffer[:separator]
+            buffer = buffer[separator + 4 :]
+            if b"/json" in request_head:
+                connection.sendall(json_head + json_body)
+            else:
+                connection.sendall(binary_head + body)
     except OSError:
         pass
     finally:
@@ -364,6 +392,7 @@ def start_concurrency_server() -> tuple[int, subprocess.Popen, str]:
             "-c",
             CONCURRENCY_SERVER_SOURCE,
             str(CONCURRENCY_BODY_SIZE),
+            str(CONCURRENCY_JSON_RECORDS),
             port_file,
         ],
         stdout=subprocess.DEVNULL,
@@ -386,26 +415,54 @@ def start_concurrency_server() -> tuple[int, subprocess.Popen, str]:
     raise RuntimeError("concurrency server did not start")
 
 
-def concurrency_once(client, url: str, threads: int, workload: str) -> float:
-    """Run one concurrency sample and return its wall time in seconds."""
+def concurrency_application_work(payload: bytes, workload: str) -> None:
+    """The per-response application work a workload models."""
+    if workload == "io_cpu":
+        for _ in range(CONCURRENCY_CPU_PASSES):
+            hashlib.sha256(payload).hexdigest()
+    elif workload == "json":
+        records = json.loads(payload)
+        if len(records) != CONCURRENCY_JSON_RECORDS:
+            raise RuntimeError("decoded %d records" % len(records))
+        summary = [(record["id"], record["price"], record["active"]) for record in records]
+        if len(summary) != CONCURRENCY_JSON_RECORDS:
+            raise RuntimeError("summarised %d records" % len(summary))
+
+
+def concurrency_once(
+    client, url: str, threads: int, workload: str, body_size: int | None
+) -> tuple[float, list[float], list[float]]:
+    """Run one concurrency sample.
+
+    Returns the wall time in seconds plus the per-request latency samples:
+    the first series covers the request and body read, the second covers the
+    whole user-visible operation including the modelled application work.
+    """
     errors: list[Exception] = []
     barrier = Barrier(threads)
+    samples: list[tuple[list[float], list[float]]] = []
 
     def worker() -> None:
+        request_latencies: list[float] = []
+        total_latencies: list[float] = []
         try:
             barrier.wait(timeout=120)
             for _ in range(CONCURRENCY_REQUESTS_PER_THREAD):
+                started = time.perf_counter()
                 response = client.get(url)
                 if response.status_code != 200:
                     raise RuntimeError("status %s" % response.status_code)
                 payload = response.content
-                if len(payload) != CONCURRENCY_BODY_SIZE:
+                if body_size is not None and len(payload) != body_size:
                     raise RuntimeError("body length %d" % len(payload))
-                if workload == "io_cpu":
-                    for _ in range(CONCURRENCY_CPU_PASSES):
-                        hashlib.sha256(payload).hexdigest()
+                received = time.perf_counter()
+                concurrency_application_work(payload, workload)
+                finished = time.perf_counter()
+                request_latencies.append(received - started)
+                total_latencies.append(finished - started)
         except Exception as exc:  # pragma: no cover - re-raised by the caller
             errors.append(exc)
+        samples.append((request_latencies, total_latencies))
 
     workers = [Thread(target=worker) for _ in range(threads)]
     started = time.perf_counter()
@@ -418,35 +475,74 @@ def concurrency_once(client, url: str, threads: int, workload: str) -> float:
         raise RuntimeError("concurrency workers did not finish")
     if errors:
         raise errors[0]
-    return elapsed
+    request_all = [value for request, _ in samples for value in request]
+    total_all = [value for _, total in samples for value in total]
+    return elapsed, request_all, total_all
 
 
-def concurrency_cases(repeats: int, thread_counts: list[int]) -> dict[str, object]:
-    """Measure throughput and scaling at each thread count."""
+def percentile(sorted_values: list[float], fraction: float) -> float | None:
+    """Nearest-rank percentile of an already sorted sample."""
+    if not sorted_values:
+        return None
+    index = int(round(fraction * (len(sorted_values) - 1)))
+    return sorted_values[min(max(index, 0), len(sorted_values) - 1)]
+
+
+def latency_summary(values: list[float]) -> dict[str, float | None]:
+    """Latency distribution in milliseconds."""
+    if not values:
+        return {"p50_ms": None, "p95_ms": None, "p99_ms": None, "max_ms": None}
+    ordered = sorted(values)
+    return {
+        "p50_ms": percentile(ordered, 0.50) * 1000,
+        "p95_ms": percentile(ordered, 0.95) * 1000,
+        "p99_ms": percentile(ordered, 0.99) * 1000,
+        "max_ms": ordered[-1] * 1000,
+    }
+
+
+def concurrency_cases(
+    repeats: int, thread_counts: list[int], workloads: list[str]
+) -> dict[str, object]:
+    """Measure throughput, scaling and latency at each thread count."""
     port, server, directory = start_concurrency_server()
     try:
-        url = f"http://127.0.0.1:{port}/payload"
-        results: dict[str, dict[str, float]] = {}
+        results: dict[str, dict[str, object]] = {}
         with eggfetch.Client() as client:
-            for workload in ("io", "io_cpu"):
+            for workload in workloads:
+                if workload == "json":
+                    url = f"http://127.0.0.1:{port}/json"
+                    body_size = None
+                else:
+                    url = f"http://127.0.0.1:{port}/binary"
+                    body_size = CONCURRENCY_BODY_SIZE
                 for threads in thread_counts:
-                    samples = [
-                        concurrency_once(client, url, threads, workload)
-                        for _ in range(repeats)
-                    ]
-                    best = min(samples)
+                    wall: list[float] = []
+                    request_latencies: list[float] = []
+                    total_latencies: list[float] = []
+                    for _ in range(repeats):
+                        elapsed, requests, totals = concurrency_once(
+                            client, url, threads, workload, body_size
+                        )
+                        wall.append(elapsed)
+                        request_latencies.extend(requests)
+                        total_latencies.extend(totals)
+                    best = min(wall)
                     total = threads * CONCURRENCY_REQUESTS_PER_THREAD
                     results[f"{workload}/{threads}"] = {
                         "best_seconds": best,
-                        "median_seconds": statistics.median(samples),
+                        "median_seconds": statistics.median(wall),
                         "throughput_rps": total / best,
+                        "request_latency": latency_summary(request_latencies),
+                        "total_latency": latency_summary(total_latencies),
+                        "samples": len(total_latencies),
                     }
     finally:
         server.kill()
         shutil.rmtree(directory, ignore_errors=True)
 
     baseline: dict[str, float] = {}
-    for workload in ("io", "io_cpu"):
+    for workload in workloads:
         first = results.get(f"{workload}/{thread_counts[0]}")
         if first is not None:
             baseline[workload] = first["throughput_rps"]
@@ -460,9 +556,12 @@ def concurrency_cases(repeats: int, thread_counts: list[int]) -> dict[str, objec
         "interpreter": sys.version.split()[0],
         "gil_enabled": gil_enabled(),
         "body_size": CONCURRENCY_BODY_SIZE,
+        "json_records": CONCURRENCY_JSON_RECORDS,
         "requests_per_thread": CONCURRENCY_REQUESTS_PER_THREAD,
         "cpu_passes": CONCURRENCY_CPU_PASSES,
         "thread_counts": thread_counts,
+        "workloads": workloads,
+        "repeats": repeats,
         "results": results,
     }
 
@@ -483,12 +582,30 @@ def main() -> None:
         default="1,2,4,8",
         help="comma-separated thread counts for the --concurrency group",
     )
+    parser.add_argument(
+        "--workloads",
+        default=",".join(CONCURRENCY_WORKLOADS),
+        help=(
+            "comma-separated workloads for the --concurrency group: "
+            "io (request and body read only), io_cpu (adds repeated hashing), "
+            "json (adds a JSON decode and summary, the application mix)"
+        ),
+    )
     args = parser.parse_args()
     thread_counts = [
         int(value) for value in args.threads.split(",") if value.strip()
     ]
     if not thread_counts:
         raise SystemExit("--threads needs at least one thread count")
+    workloads = [value.strip() for value in args.workloads.split(",") if value.strip()]
+    unknown = [value for value in workloads if value not in CONCURRENCY_WORKLOADS]
+    if unknown:
+        raise SystemExit(
+            "unknown workload(s): %s (known: %s)"
+            % (", ".join(unknown), ", ".join(CONCURRENCY_WORKLOADS))
+        )
+    if not workloads:
+        raise SystemExit("--workloads needs at least one workload")
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -499,7 +616,9 @@ def main() -> None:
             "async": asyncio.run(async_cases(url, args.repeats)),
         }
         if args.concurrency:
-            report["concurrency"] = concurrency_cases(args.repeats, thread_counts)
+            report["concurrency"] = concurrency_cases(
+                args.repeats, thread_counts, workloads
+            )
         print(json.dumps(report, indent=2))
     finally:
         server.shutdown()

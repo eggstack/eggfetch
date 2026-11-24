@@ -25,7 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   wait, so the I/O path already parallelizes on a GIL-enabled build.
   Free-threading additionally parallelizes the Python work that surrounds a
   request, which is where per-response processing in an application stops
-  serializing.
+  serializing. Measured on macOS arm64 with eight concurrent callers and a
+  realistic per-response workload, the free-threaded build sustained
+  **2.5x-3.8x** the throughput of the GIL-enabled build and held the
+  user-visible p50 latency at **0.24-0.35 ms against 0.96-0.97 ms**, while
+  the GIL-enabled build plateaued at about two callers. The method, the
+  per-build numbers and the threats to validity are in
+  `docs/architecture/free-threading-performance.md`.
 
 ### Changed
 
