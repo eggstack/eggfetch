@@ -155,11 +155,12 @@ milliseconds:
 
 The GIL-enabled build's median user-visible latency at eight threads is
 **0.96-0.97 ms against 0.24-0.35 ms** free-threaded - 2.8x-3.9x lower. Its
-p99 is 1.4x-4.6x higher. The single worst request in the GIL-enabled runs
-reached 44 ms, against 0.84-1.01 ms in the free-threaded runs that were not
-disturbed by host scheduling; the 39.4 ms maximum in FT 3.14.10 run 2 is a
-host-scheduling artifact of the same kind, and is included rather than
-dropped.
+p99 is 1.4x-4.6x higher. The GIL-enabled runs' worst single request reached
+44 ms and 10 ms. Three of the four free-threaded runs peaked at 0.84 ms and
+1.01 ms; the fourth, FT 3.14.10 run 2, peaked at 39.4 ms in a run that was
+noisier throughout (p99 0.994 ms, 21,486 req/s against 29,754 in run 1). That
+figure is included rather than dropped, and it is why every comparison here
+is quoted as a range.
 
 ### The other two workloads
 
@@ -172,9 +173,10 @@ At eight threads, same format as above (`run 1 / run 2`):
 
 `io_cpu` user-visible p99 at eight threads: 1.341 / 0.828 ms on the
 GIL-enabled build against 0.269 / 0.376 ms (3.14.10) and 0.240 / 1.293 ms
-(3.15.2). The 1.293 ms figure is the same host-scheduling artifact seen
-above rather than a property of the build: the same build measured 0.240 ms
-in run 1, and its p50 stayed low in both runs.
+(3.15.2). The 1.293 ms figure comes from the noisier of the two FT 3.15.2
+runs - that run was slower across the board, with p50 0.227 ms against
+0.144 ms and 38,824 req/s against 54,565 - so it reflects host load rather
+than a property of the build. It is included rather than dropped.
 
 ### Single-caller cost
 
