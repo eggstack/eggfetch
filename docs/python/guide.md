@@ -19,6 +19,13 @@ Python callbacks it invokes: a trace callback or a request-body iterator
 supplied by the caller may be entered by two requests at the same time, so
 state shared between them must be synchronized by the caller.
 
+A free-threaded interpreter also stops serializing the Python work your
+application does between responses. With eight concurrent callers and a
+realistic per-response workload, the free-threaded build sustained 2.5x-3.8x
+the throughput of the GIL-enabled build, which plateaus at about two callers
+because it still serializes that work. The measurement, its method and its
+limits are in [the free-threading performance evidence](../architecture/free-threading-performance.md).
+
 The native package ships a PEP 561 `py.typed` marker and reviewed stubs for
 the public `eggfetch` surface. `Client` accepts lazy synchronous iterable
 request bodies; `AsyncClient` also accepts lazy asynchronous iterables of
