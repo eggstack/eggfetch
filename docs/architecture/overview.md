@@ -521,6 +521,6 @@ qualified executable SHA is recorded in
 (`workspace.package.rust-version`; `rust-toolchain.toml` pins stable for
 development, while Tier 2 validates exact Rust 1.89.0). CI enforces
 `RUSTFLAGS=-D warnings` with pedantic clippy. Python support is 3.10–3.15
-(asyncio only; Trio/AnyIO out of scope).
+plus free-threaded 3.14t and 3.15t (asyncio only; Trio/AnyIO out of scope).
 
 The `test-util` feature enables `tokio/test-util` for deterministic time testing in timeout-related tests.

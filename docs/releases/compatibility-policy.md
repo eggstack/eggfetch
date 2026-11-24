@@ -11,13 +11,16 @@ The minimum supported Rust version (MSRV) is declared in `workspace.package.rust
 
 ## Python Supported Versions
 
-The supported Python versions are **3.10 through 3.15**. The PyPI release workflow builds interpreter-specific wheels for all six versions on Linux, macOS, and Windows.
+The supported Python versions are **3.10 through 3.15** with the GIL enabled,
+plus **free-threaded CPython 3.14t and 3.15t** (PEP 703). The PyPI release
+workflow builds an interpreter-specific wheel for each of them: 24
+GIL-enabled wheels and 8 free-threaded wheels, 32 in total, on Linux x86_64,
+Linux aarch64, macOS arm64 and Windows x86_64.
 
-Python 3.15 is included in the implementation and release matrix. Until
-3.15.0 final ships, the release workflow resolves the current 3.15 prerelease
-for the 3.15 wheel rows only; 3.10–3.14 always select stable interpreters.
-The same matrix row resolves a stable 3.15.x automatically once the final
-release is available, so the published wheel matrix does not change.
+Python 3.15.0 final shipped on 2026-10-09, so the 3.15 rows resolve a stable
+3.15.x interpreter. `allow-prereleases` stays set on those rows only, so a
+prerelease remains selectable if no stable 3.15.x is available on a runner;
+3.10-3.14 always select stable interpreters.
 
 - New Python versions are supported as soon as their stable release is compatible with PyO3.
 - Dropped Python versions receive a deprecation notice at least one minor release before removal.

@@ -40,6 +40,7 @@ until a fresh exact-SHA qualification runs at the new freeze.
 | `732321ca` | free-threaded documentation, the free-threading trove classifier in the package metadata, and the qualification-record corrections | executable input (packaging metadata) |
 | `b5ef9c25` | concurrency-scaling group in the performance harness | executable input |
 | `a1ae5b8e` | latency percentiles and the `json` application mix in the performance harness | executable input |
+| `2dfa54f6` | coordinated version bump to 0.4.1 across the six publishable crates, the Python package metadata and the Node prototype metadata, plus the release-state documentation corrections | executable input (packaging metadata) |
 | `272c8221`, `d338eba3` | planning and release records only | docs-only |
 
 `compat/httpx/0.28.1/profile.toml` and `compat/httpx2/2.12.0/profile.toml`

@@ -59,7 +59,7 @@ record, not a proposal to hide or redesign existing public items.
   retry-only dependencies.
 
 Historical compatibility re-exports and feature-specific availability are
-covered by the six profile snapshots in `compat/rust-public-api/`. The exact
+covered by the eight profile snapshots in `compat/rust-public-api/`. The exact
 public API oracle is the authoritative guard; no second source-level API
 manifest is maintained here. The representative compile contracts remain a
 fast check for the intended paths and feature boundaries.
