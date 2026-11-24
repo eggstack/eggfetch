@@ -348,7 +348,26 @@ jobs:
           # The interpreter must match the matrix row: the "t"-suffixed rows
           # build free-threaded wheels, which only install into a
           # free-threaded environment of the same version.
-          python${{ matrix.python }} -m venv .venv-test
+          #
+          # The version-suffixed name is not available on every platform.
+          # The Windows runner images expose the interpreter setup-python
+          # selected as "python"; the "pythonX.Y" name exists there only for
+          # the free-threaded builds. Prefer the versioned name, then "python"
+          # and "python3": each is the interpreter setup-python selected for
+          # the row. A mismatch fails closed rather than silently: pip refuses
+          # to install a free-threaded wheel into a GIL-enabled environment.
+          PY_CMD=""
+          for candidate in "python${{ matrix.python }}" python python3; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              PY_CMD="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$PY_CMD" ]]; then
+            echo "FAIL: no interpreter found for matrix row ${{ matrix.python }}" >&2
+            exit 1
+          fi
+          "$PY_CMD" -m venv .venv-test
           WHEEL_PATH="${WHEEL//\\//}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             .venv-test/Scripts/pip install "$WHEEL_PATH"
