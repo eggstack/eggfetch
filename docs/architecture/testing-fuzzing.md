@@ -137,7 +137,7 @@ The compatibility test suite lives in `crates/eggfetch-python/tests/compat/` and
 | `test_ssl_context_translation.py` | Fail-closed `SSLContext` translation |
 | `test_corrective_*.py` + `test_corrective_kernel.py` | Corrective suites + Tier 1 smoke kernel |
 | `fixtures.py` (+ `native_fixtures.py`) | Reusable test server and `BehaviorCase` dataclass |
-| `conftest.py` | Skip auditor; fails CI on unexplained skips |
+| `conftest.py` | Skip auditor; fails a required profile on any unapproved skip/xfail/collection error |
 
 The directory holds ~80 files (transport, proxy/env-precedence, redirect,
 retry, typing-surface, downstream-portfolio, and upstream-derived cases
@@ -148,6 +148,13 @@ than enumerating every file. Tier 1 runs only the smoke kernel
 versioned profiles: `httpx/0.28.1` and `httpx2/2.12.0`.
 
 Run with `EGGFETCH_COMPAT_REQUIRED=1` for fail-closed behavior. Tier 2 (`tier2_full_compat`) enforces this.
+
+The auditor keeps a list of approved skips, each with the reason it cannot
+run in the qualification environment. Every other skip, xfail, or collection
+error fails the required profile run. Tier 1 runs
+`scripts/test_compat_skip_auditor.py`, which drives the same conftest
+against synthetic sessions and asserts only that gate verdict, so the
+fail-closed behavior cannot silently stop failing.
 
 Compatibility profiles and allowed differences live in `compat/httpx/0.28.1/` and `compat/httpx2/2.12.0/`. The corrective kernel also covers buffered/one-shot redirect replay, disabled and structured timeout conversion, request-local cookies, single query serialization, incremental response decoding, raw stream lifecycle (consumed state, byte accounting, chunk-size adaptation, exactly-once close), and fail-closed lint tooling.
 

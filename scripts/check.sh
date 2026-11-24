@@ -249,6 +249,14 @@ tier1_node_binding() {
     (cd "$node_dir" && node test.js)
 }
 
+tier1_compat_skip_auditor_self_test() {
+    info "Compatibility skip auditor self-test (gate verdict only — not a compatibility result)"
+    # The full compatibility profiles run in Tier 2. This self-test asserts
+    # only that a required profile carrying an unapproved skip still fails
+    # the gate, so a silent regression in the auditor is caught here.
+    "$PYTHON_BIN" "$SCRIPT_DIR/test_compat_skip_auditor.py"
+}
+
 run_tier1() {
     check_tools
     require_python_env
@@ -272,6 +280,7 @@ run_tier1() {
     tier1_python_typing_surface
     tier1_python_typing
     tier1_python_tests
+    tier1_compat_skip_auditor_self_test
     tier1_compat_smoke
     tier1_node_binding
 }
